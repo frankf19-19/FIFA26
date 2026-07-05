@@ -189,6 +189,10 @@
   .refresh-btn .ri{display:inline-block;font-size:14px;line-height:1}
   .refresh-btn.loading .ri{animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
+  .auto-ind{display:inline-flex;align-items:center;gap:6px;font-family:var(--num);font-size:11.5px;color:var(--muted-2)}
+  .auto-ind.on{color:var(--home)}
+  .auto-ind .dot{width:7px;height:7px;border-radius:50%;background:var(--home);animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
   .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(18px);background:var(--surface-3);border:1px solid var(--line);color:var(--text);font-size:13px;font-weight:500;padding:11px 20px;border-radius:12px;box-shadow:0 10px 34px #000a;opacity:0;pointer-events:none;transition:.25s;z-index:200;max-width:88%;text-align:center}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .toast.ok{border-color:#34d39955} .toast.err{border-color:#fb718555}
@@ -273,7 +277,7 @@
     <h1><span class="yr">2026</span> 世界盃<br>每日預測與情報</h1>
     <div class="sub"><span>淘汰賽階段</span><span class="dot-sep"></span>
       <span>資料更新 <b id="upd">—</b></span><span class="dot-sep"></span><span>時間為 <b>台灣時間</b></span></div>
-    <div style="margin-top:12px"><button class="refresh-btn" id="refreshBtn"><span class="ri">⟳</span> 更新結果</button></div>
+    <div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="refresh-btn" id="refreshBtn"><span class="ri">⟳</span> 更新結果</button><span class="auto-ind" id="autoInd">檢查自動更新中…</span></div>
 
     <div class="scorecard" id="scorecard"></div>
 
@@ -311,241 +315,10 @@
 <div class="overlay" id="overlay"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 
-<script>
-/* =====================================================================
-   data.js — 每天更新這個檔案即可(比賽結果、頭條、先發/傷兵狀態)
-   欄位說明:
-     MATCH_DATA:比賽與預測
-       pred   賽前預測 { prob:{h,d,a}, score:[主,客], advance:"晉級隊", conf:'hi'|'mid'|'lo', reason }
-       result 完賽後填入 { score:[主,客], advanced:"實際晉級隊", pk:true } → 系統自動計分
-       review 賽後檢討
-     SQUADS:球員名單
-       r  角色:'key'=⭐重要 / 'prospect'=💎潛力 / ''=一般
-       x  狀態(選填):'停賽' / '傷兵' / '存疑' / '先發'  ← 每日更新這裡即可
-       s  強項陣列   w  弱項陣列   note 一句話說明   cap 生涯/國家隊(選填)
-   ===================================================================== */
-const UPDATED = "2026/07/04";
-const TODAY   = "2026-07-04";
-
-/* ---------------- 比賽與預測 ---------------- */
-const MATCH_DATA = [
-  // ===== 32強(已完賽) =====
-  { id:"ned-mar", round:32, date:"2026-06-30", time:"09:00", home:{code:"NED",zh:"荷蘭",flag:"🇳🇱"}, away:{code:"MAR",zh:"摩洛哥",flag:"🇲🇦"},
-    pred:{prob:{h:55,d:27,a:18}, score:[2,1], advance:"荷蘭", conf:"mid", reason:"荷蘭控球與整體實力占優,看好主場拿下。"},
-    result:{score:[1,1], advanced:"摩洛哥", pk:true}, missTag:"高估主隊破防能力",
-    review:"高估荷蘭破解鐵桶陣的能力,低估摩洛哥低位防守與 PK 韌性。教訓:面對防守紀律強的球隊,主隊控球優勢不等於得分,應下修主勝、上調和局。" },
-  { id:"civ-nor", round:32, date:"2026-07-01", time:"01:00", home:{code:"CIV",zh:"象牙海岸",flag:"🇨🇮"}, away:{code:"NOR",zh:"挪威",flag:"🇳🇴"},
-    pred:{prob:{h:30,d:26,a:44}, score:[1,2], advance:"挪威", conf:"lo", reason:"挪威鋒線(哈蘭德)效率較高,客場略被看好。"},
-    result:{score:[1,2], advanced:"挪威"}, review:"方向、晉級、比分全中。哈蘭德效率如預期兌現,球星單點決勝的鋒線評級可維持。" },
-  { id:"fra-swe", round:32, date:"2026-07-01", time:"05:00", home:{code:"FRA",zh:"法國",flag:"🇫🇷"}, away:{code:"SWE",zh:"瑞典",flag:"🇸🇪"},
-    pred:{prob:{h:68,d:20,a:12}, score:[2,0], advance:"法國", conf:"hi", reason:"法國個人能力全面領先,應輕鬆過關。"},
-    result:{score:[3,0], advanced:"法國"}, review:"方向與晉級正確,但低估火力(預測 2-0、實際 3-0)。頂級強隊對弱旅的預期進球可再上調。" },
-  { id:"mex-ecu", round:32, date:"2026-07-01", time:"10:00", home:{code:"MEX",zh:"墨西哥",flag:"🇲🇽"}, away:{code:"ECU",zh:"厄瓜多",flag:"🇪🇨"},
-    pred:{prob:{h:44,d:29,a:27}, score:[1,0], advance:"墨西哥", conf:"lo", reason:"地主墨西哥主場加持,略占上風。"},
-    result:{score:[2,0], advanced:"墨西哥"}, review:"晉級與方向命中。地主主場優勢略被低估,實際多進一球——主場加成係數可微調上修。" },
-  { id:"eng-cod", round:32, date:"2026-07-02", time:"00:00", home:{code:"ENG",zh:"英格蘭",flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿"}, away:{code:"COD",zh:"剛果",flag:"🇨🇩"},
-    pred:{prob:{h:72,d:18,a:10}, score:[2,0], advance:"英格蘭", conf:"hi", reason:"英格蘭紙面實力遠勝,預期穩定晉級。"},
-    result:{score:[2,1], advanced:"英格蘭"}, review:"凱恩梅開二度晉級,但被剛果攻進一球暴露後防問題。已納入 7/6 對墨西哥的預測,下修英格蘭零封機率。" },
-  { id:"bel-sen", round:32, date:"2026-07-02", time:"04:00", home:{code:"BEL",zh:"比利時",flag:"🇧🇪"}, away:{code:"SEN",zh:"塞內加爾",flag:"🇸🇳"},
-    pred:{prob:{h:48,d:27,a:25}, score:[2,1], advance:"比利時", conf:"lo", reason:"比利時經驗與火力較足,主場小勝。"},
-    result:{score:[3,2], advanced:"比利時"}, review:"延長賽 3-2 驚險晉級,雙方防線都比預期鬆散。已下修比利時防守評級,反映在對美國的預測。" },
-  { id:"usa-bih", round:32, date:"2026-07-02", time:"08:00", home:{code:"USA",zh:"美國",flag:"🇺🇸"}, away:{code:"BIH",zh:"波士尼亞",flag:"🇧🇦"},
-    pred:{prob:{h:58,d:26,a:16}, score:[2,0], advance:"美國", conf:"mid", reason:"地主美國主場加實力雙重優勢。"},
-    result:{score:[2,0], advanced:"美國"}, review:"方向、比分、晉級全中。實力差距明確時基準模型最可靠。(註:巴洛根賽中領紅,16 強停賽)" },
-  { id:"esp-aut", round:32, date:"2026-07-03", time:"03:00", home:{code:"ESP",zh:"西班牙",flag:"🇪🇸"}, away:{code:"AUT",zh:"奧地利",flag:"🇦🇹"},
-    pred:{prob:{h:70,d:20,a:10}, score:[2,0], advance:"西班牙", conf:"hi", reason:"西班牙傳控壓迫壓制,大幅看好。"},
-    result:{score:[3,0], advanced:"西班牙"}, review:"方向與晉級正確,實際更具壓迫性。西班牙狀態正熱,攻擊評級上調——影響 7/7 對葡萄牙的預測。" },
-  { id:"por-cro", round:32, date:"2026-07-03", time:"07:00", home:{code:"POR",zh:"葡萄牙",flag:"🇵🇹"}, away:{code:"CRO",zh:"克羅埃西亞",flag:"🇭🇷"},
-    pred:{prob:{h:45,d:28,a:27}, score:[2,1], advance:"葡萄牙", conf:"lo", reason:"老將對決膠著,葡萄牙效率略勝。"},
-    result:{score:[2,1], advanced:"葡萄牙"}, review:"膠著程度與 2-1 比分完全命中,C 羅補時罰球建功。葡萄牙效率評級準確。" },
-  { id:"sui-dza", round:32, date:"2026-07-03", time:"11:00", home:{code:"SUI",zh:"瑞士",flag:"🇨🇭"}, away:{code:"DZA",zh:"阿爾及利亞",flag:"🇩🇿"},
-    pred:{prob:{h:55,d:27,a:18}, score:[1,0], advance:"瑞士", conf:"mid", reason:"瑞士紀律性與組織壓過對手。"},
-    result:{score:[2,0], advanced:"瑞士"}, review:"方向與晉級正確,僅低估進球數。比分模型對防守型球隊仍略保守。" },
-  { id:"aus-egy", round:32, date:"2026-07-04", time:"02:00", home:{code:"AUS",zh:"澳洲",flag:"🇦🇺"}, away:{code:"EGY",zh:"埃及",flag:"🇪🇬"},
-    pred:{prob:{h:26.9,d:33.4,a:39.7}, score:[1,1], advance:"埃及", conf:"lo", reason:"勢均力敵,埃及靠薩拉赫稍占上風,澳洲以組織抗衡。預期低比分僵局,不排除 PK。"},
-    result:{score:[1,1], advanced:"埃及", pk:true}, review:"方向、晉級、比分全中!五五波賽事抓對『傾向平手 + 誰晉級』,埃及 PK 晉級與預測完全吻合,價值極高。" },
-  { id:"arg-cpv", round:32, date:"2026-07-04", time:"06:00", home:{code:"ARG",zh:"阿根廷",flag:"🇦🇷"}, away:{code:"CPV",zh:"維德角",flag:"🇨🇻"},
-    pred:{prob:{h:85.2,d:10.8,a:4.0}, score:[3,0], advance:"阿根廷", conf:"hi", reason:"阿根廷壓倒性實力,梅西世代經驗差距明顯,應能穩定拿下。"},
-    result:{score:[3,2], advanced:"阿根廷"}, review:"如期晉級,但維德角比預期頑強,實際 3-2 驚險。模型低估黑馬抵抗,強隊對黑馬的『淨勝球』預期可略收斂。" },
-  { id:"col-gha", round:32, date:"2026-07-04", time:"09:30", home:{code:"COL",zh:"哥倫比亞",flag:"🇨🇴"}, away:{code:"GHA",zh:"迦納",flag:"🇬🇭"},
-    pred:{prob:{h:69.2,d:20.3,a:10.5}, score:[2,0], advance:"哥倫比亞", conf:"mid", reason:"哥倫比亞狀態穩健,路易斯迪亞斯邊路突破是關鍵。"},
-    result:{score:[1,0], advanced:"哥倫比亞"}, review:"小勝晉級,方向正確但進攻不如預期銳利(僅 1-0)。中量級強隊的預期進球可略下修。" },
-
-  // ===== 16強(預測中) =====
-  { id:"can-mar", round:16, date:"2026-07-05", time:"01:00", home:{code:"CAN",zh:"加拿大",flag:"🇨🇦"}, away:{code:"MAR",zh:"摩洛哥",flag:"🇲🇦"},
-    pred:{prob:{h:18.8,d:27.5,a:53.7}, score:[1,2], advance:"摩洛哥", conf:"mid",
-      reason:"地主加拿大氣勢可觀,但摩洛哥挾 2022 四強底蘊與 PK 淘汰荷蘭之勢,模型看好客隊 53.7%。哈基米與布努領軍的防守組織是加拿大最大難題(注意中衛 Aguerd 傷退)。"} },
-  { id:"par-fra", round:16, date:"2026-07-05", time:"05:00", home:{code:"PAR",zh:"巴拉圭",flag:"🇵🇾"}, away:{code:"FRA",zh:"法國",flag:"🇫🇷"},
-    pred:{prob:{h:5.7,d:12.8,a:81.5}, score:[0,2], advance:"法國", conf:"hi",
-      reason:"法國實力全面領先(81.5%),登貝萊近期火燙、姆巴佩壓陣。巴拉圭闖進 16 強已超水準,但板凳深度差距懸殊。"} },
-  { id:"bra-nor", round:16, date:"2026-07-06", time:"04:00", home:{code:"BRA",zh:"巴西",flag:"🇧🇷"}, away:{code:"NOR",zh:"挪威",flag:"🇳🇴"},
-    pred:{prob:{h:52.6,d:25.3,a:22.1}, score:[2,1], advance:"巴西", conf:"mid",
-      reason:"焦點對決。巴西 52.6% 略占優,內馬爾回歸添火力(Raphinha 傷缺是隱憂);挪威有哈蘭德與厄德高,具爆冷本錢。關鍵在巴西後防能否鎖死哈蘭德——冷門警戒。"} },
-  { id:"mex-eng", round:16, date:"2026-07-06", time:"08:00", home:{code:"MEX",zh:"墨西哥",flag:"🇲🇽"}, away:{code:"ENG",zh:"英格蘭",flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿"},
-    pred:{prob:{h:30.3,d:30.1,a:39.6}, score:[1,2], advance:"英格蘭", conf:"lo",
-      reason:"五五波,英格蘭 39.6% 微幅領先,墨西哥挾阿茲特克主場緊追,平手也達 30.1%。英格蘭後防不穩(對剛果失球),但凱恩與貝林厄姆火力較強,傾向一球之差過關。"} },
-  { id:"por-esp", round:16, date:"2026-07-07", time:"03:00", home:{code:"POR",zh:"葡萄牙",flag:"🇵🇹"}, away:{code:"ESP",zh:"西班牙",flag:"🇪🇸"},
-    pred:{prob:{h:23.5,d:26.3,a:50.2}, score:[1,2], advance:"西班牙", conf:"mid",
-      reason:"伊比利德比。西班牙以歐國盃冠軍之姿獲 50.2% 看好(對奧地利 3-0 狀態火熱),葡萄牙靠 C 羅與 B 費效率一擊。本輪最高含金量對決。"} },
-  { id:"usa-bel", round:16, date:"2026-07-07", time:"08:00", home:{code:"USA",zh:"美國",flag:"🇺🇸"}, away:{code:"BEL",zh:"比利時",flag:"🇧🇪"},
-    pred:{prob:{h:35.1,d:28.2,a:36.7}, score:[1,1], advance:"比利時", conf:"lo",
-      reason:"近五五波:比利時 36.7% 微幅領先美國 35.1%。關鍵變數:美國前鋒巴洛根紅牌停賽,鋒線大減,普利西奇需獨挑大樑;比利時有德布勞內與盧卡庫。已因停賽下修美國勝率,傾向 PK 分勝負、比利時微幅看好。"} },
-  { id:"arg-egy", round:16, date:"2026-07-08", time:"00:00", home:{code:"ARG",zh:"阿根廷",flag:"🇦🇷"}, away:{code:"EGY",zh:"埃及",flag:"🇪🇬"},
-    pred:{prob:{h:71.7,d:18.6,a:9.7}, score:[2,0], advance:"阿根廷", conf:"hi",
-      reason:"阿根廷紙面壓倒(71.7%),梅西與勞塔羅火力充足。埃及靠薩拉赫單點威脅,需嚴防其反擊,但整體差距明顯。"} },
-  { id:"sui-col", round:16, date:"2026-07-08", time:"04:00", home:{code:"SUI",zh:"瑞士",flag:"🇨🇭"}, away:{code:"COL",zh:"哥倫比亞",flag:"🇨🇴"},
-    pred:{prob:{h:27.9,d:29.5,a:42.6}, score:[1,2], advance:"哥倫比亞", conf:"mid",
-      reason:"哥倫比亞 42.6% 略占優,J羅與路易斯迪亞斯的攻擊組合較具威脅;瑞士靠扎卡與阿坎吉的紀律性抗衡。傾向哥倫比亞小勝。"} },
-
-  // ===== 8強(待定) =====
-  { id:"qf1", round:8, date:"2026-07-10", time:"04:00", tbd:true, home:{code:"W89",zh:"待定",flag:"🏆"}, away:{code:"W90",zh:"待定",flag:"🏆"},
-    pred:{reason:"八強對戰待 16 強賽果底定後更新,晉級隊伍確定即補上完整預測。"} },
-  { id:"qf2", round:8, date:"2026-07-11", time:"03:00", tbd:true, home:{code:"W93",zh:"待定",flag:"🏆"}, away:{code:"W94",zh:"待定",flag:"🏆"},
-    pred:{reason:"八強對戰待 16 強賽果底定後更新,晉級隊伍確定即補上完整預測。"} },
-];
-
-/* ---------------- 頭條新聞(每日更新) ---------------- */
-const HEADLINES = [
-  { tag:"injury", t:"巴洛根紅牌停賽,美國 16 強對比利時鋒線受創", d:"07/04", team:"USA" },
-  { tag:"upset",  t:"巴拉圭 PK 淘汰德國,睽違 2010 再闖淘汰賽", d:"07/03", team:"PAR" },
-  { tag:"result", t:"C 羅補時罰球破門,葡萄牙 2-1 逆轉克羅埃西亞", d:"07/03", team:"POR" },
-  { tag:"adv",    t:"摩洛哥 PK 淘汰荷蘭,連兩屆闖進淘汰賽", d:"06/30", team:"MAR" },
-  { tag:"focus",  t:"內馬爾感性回歸,巴西鋒線添變數迎戰挪威", d:"07/04", team:"BRA" },
-  { tag:"result", t:"維德角首征世界盃寫童話,3-2 惜敗阿根廷出局", d:"07/04", team:"ARG" },
-  { tag:"focus",  t:"登貝萊火燙狀態領軍,法國攻擊火力驚人", d:"07/03", team:"FRA" },
-];
-
-/* ---------------- 球員名單(重點精選,每日核對更新) ---------------- */
-function P(n,e,p,r,a,c,s,w,note,cap,x,img){return{n,e,p,r,a,c,s,w,note,cap,x,img};}
-const SQUADS = {
-  FRA:{zh:"法國",flag:"🇫🇷",rank:3,profile:"全隊身價本屆最高,鋒線火力驚人,務實高效。奪冠大熱門。",players:[
-    P("姆巴佩","Mbappé","前鋒","key",27,"皇家馬德里",["速度與終結頂尖","一對一無解"],["回防態度","盤帶偶爾過度"],"隊長與招牌,法國進攻的絕對核心。","法國隊史射手榜前段,2018 世界盃冠軍"),
-    P("登貝萊","Dembélé","前鋒","key",29,"巴黎聖日耳曼",["雙腳突破","近期狀態火燙"],["終結效率起伏","傷病史"],"右路爆點,本屆火力全開。","2018 世界盃冠軍成員"),
-    P("楚阿梅尼","Tchouaméni","中場","",26,"皇家馬德里",["攔截與護球","長傳調度"],["前場創造有限"],"中場屏障,攻守轉換樞紐。"),
-    P("薩利巴","Saliba","後衛","",25,"兵工廠",["速度與對抗兼備","出球冷靜"],["偶爾分心"],"頂級中衛,防線速度保證。"),
-    P("邁尼昂","Maignan","門將","",30,"AC米蘭",["反應與指揮","腳下出球"],["偶有起伏"],"主力門將,後防組織者。"),
-    P("巴科拉","Barcola","前鋒","prospect",23,"巴黎聖日耳曼",["速度","直塞跑位"],["經驗尚淺","終結待加強"],"新生代邊路快馬,替補奇兵。"),
-  ]},
-  BRA:{zh:"巴西",flag:"🇧🇷",rank:5,profile:"個人天賦滿溢,但整體性待磨合。Ancelotti 帶隊,內馬爾回歸、Raphinha 傷缺是變數。",players:[
-    P("小維尼修斯","Vinícius Jr","前鋒","key",26,"皇家馬德里",["左路突破無解","製造犯規與得分"],["情緒管理","決策偶失"],"世界級邊鋒,巴西進攻頭號威脅。"),
-    P("拉菲尼亞","Raphinha","前鋒","key",29,"巴塞隆納",["兩翼與中路皆可","定位球與進球"],["本屆拉傷腿後肌,出賽存疑"],"賽季狀態火熱,但小組賽受傷。",null,"存疑"),
-    P("內馬爾","Neymar","前鋒","key",34,"桑托斯",["創造力與技術","定位球"],["傷病史","體能下滑"],"感性回歸的招牌,狀態好時仍是頂級。","巴西隊史頭號射手"),
-    P("卡塞米羅","Casemiro","中場","",34,"曼徹斯特聯",["防守攔截","經驗與領導"],["速度下滑"],"中場屏障,防線前的保護。"),
-    P("馬奇尼奧斯","Marquinhos","後衛","",32,"巴黎聖日耳曼",["補位與預判","出球穩健"],["對抗強力中鋒吃力"],"後防隊長,經驗豐富。"),
-    P("恩德里克","Endrick","前鋒","prospect",20,"皇家馬德里",["禁區嗅覺","爆發力"],["經驗與穩定不足"],"新生代中鋒,超級替補潛力股。"),
-  ]},
-  ARG:{zh:"阿根廷",flag:"🇦🇷",rank:1,profile:"衛冕冠軍,圍繞梅西打造的傳控體系,深度與韌性兼備。",players:[
-    P("梅西","Messi","前鋒","key",39,"國際邁阿密",["視野與傳球頂尖","定位球","閱讀比賽"],["防守回追少","體能受年齡影響"],"隊長,本屆已進 7 球,世界盃史上頭號射手。","第 6 屆世界盃 · 2022 冠軍"),
-    P("勞塔羅","Lautaro Martínez","前鋒","key",28,"國際米蘭",["禁區嗅覺","無球跑位"],["大賽把握度起伏"],"鋒線第一終結點,2024 美洲盃金靴。"),
-    P("J·阿爾瓦雷斯","Julián Álvarez","前鋒","",26,"馬德里競技",["多位置適應","逼搶積極"],["制空一般"],"全能前鋒,可搭配或替補梅西。"),
-    P("麥卡利斯特","Mac Allister","中場","key",27,"利物浦",["節奏掌控","定位球"],["絕對速度普通"],"2022 冠軍中場,攻防串聯樞紐。"),
-    P("恩佐","Enzo Fernández","中場","",25,"切爾西",["長傳調度","後插上"],["回防紀律"],"中場指揮官,2022 最佳年輕球員。"),
-    P("E·馬丁尼茲","Emiliano Martínez","門將","key",33,"阿斯頓維拉",["撲 PK 心理戰","反應神速"],["情緒偶爾失控"],"2022 金手套,PK 大戰之王。"),
-  ]},
-  ESP:{zh:"西班牙",flag:"🇪🇸",rank:2,profile:"歐國盃衛冕軍,高位傳控壓迫。年輕與經驗平衡,狀態火熱。",players:[
-    P("亞馬爾","Lamine Yamal","前鋒","key",18,"巴塞隆納",["內切與創造力驚人","大心臟"],["身體對抗吃虧","防守貢獻少"],"18 歲已是西班牙進攻招牌,本屆最受矚目球星之一。"),
-    P("佩德里","Pedri","中場","key",23,"巴塞隆納",["控球與節奏","視野串聯"],["進球偏少","體能需管理"],"傳控體系的靈魂。"),
-    P("羅德里","Rodri","中場","key",30,"曼城",["控場世界頂尖","傳球精準"],["傷後狀態待觀察"],"2024 金球獎,中場節拍器。"),
-    P("尼可·威廉斯","Nico Williams","前鋒","",24,"畢爾包競技",["邊路爆發速度","一對一突破"],["最後一傳待加強"],"歐國盃決賽破門功臣,右路快馬。"),
-    P("烏奈·西蒙","Unai Simón","門將","",29,"畢爾包競技",["腳下出球佳","高空球穩健"],["偶有低級失誤"],"歐國盃冠軍主力門將。"),
-    P("庫巴西","Cubarsí","後衛","prospect",19,"巴塞隆納",["出球冷靜","位置感早熟"],["速度與經驗不足"],"19 歲中衛新星,未來防線核心。"),
-  ]},
-  ENG:{zh:"英格蘭",flag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿",rank:4,profile:"資格賽全勝,人才厚實。攻擊多點開花,但後防在強度考驗下略不穩。",players:[
-    P("凱恩","Harry Kane","前鋒","key",33,"拜仁慕尼黑",["禁區終結頂尖","回撤組織"],["絕對速度不足"],"隊長與頭號射手,對剛果梅開二度。","英格蘭隊史頭號射手"),
-    P("貝林厄姆","Bellingham","中場","key",23,"皇家馬德里",["後插上得分","身體與技術兼備"],["情緒與吃牌"],"中場王牌,攻守全能。"),
-    P("薩卡","Saka","前鋒","key",25,"兵工廠",["右路內切與傳中","定位球"],["左腳終結偏弱"],"右路核心,穩定的進攻輸出。"),
-    P("賴斯","Rice","中場","",27,"兵工廠",["攔截與護球","定位球威脅"],["創造性一般"],"中場防守基石。"),
-    P("皮克福","Pickford","門將","",32,"埃弗頓",["撲 PK 佳","反應快"],["長傳精度普通"],"大賽經驗豐富的主力門將。"),
-    P("梅努","Kobbie Mainoo","中場","prospect",21,"曼徹斯特聯",["控球沉穩","護球出色"],["出場經驗少"],"新生代中場,冷靜度超齡。"),
-  ]},
-  POR:{zh:"葡萄牙",flag:"🇵🇹",rank:6,profile:"史上最完整陣容,鋒線與中場人才濟濟,唯整體發揮不穩。",players:[
-    P("羅納度","Cristiano Ronaldo","前鋒","key",41,"利雅德勝利",["禁區終結與制空","經驗與領導","定位球"],["活動範圍縮小","體能受限"],"隊長,對克羅埃西亞補時罰球破門。","史上首位六朝世界盃元老 · 國家隊 143 球世界紀錄"),
-    P("B·費南德斯","Bruno Fernandes","中場","key",31,"曼徹斯特聯",["致命直塞與遠射","定位球"],["選擇球偶爾冒險"],"進攻組織核心。"),
-    P("萊奧","Rafael Leão","前鋒","",26,"AC米蘭",["速度與盤帶","身體條件佳"],["穩定度起伏"],"左路爆點,狀態好時無人可擋。"),
-    P("魯本·迪亞斯","Rúben Dias","後衛","key",29,"曼城",["防守組織與領導","對抗強"],["轉身速度一般"],"後防指揮官,防線基石。"),
-    P("迪奧戈·科斯塔","Diogo Costa","門將","",27,"波爾圖",["撲 PK 專家","反應快"],["出擊判斷偶失"],"年輕世界級門將。"),
-    P("J·內維斯","João Neves","中場","prospect",21,"巴黎聖日耳曼",["覆蓋與攔截","傳球推進"],["身材較小、經驗尚淺"],"新生代中場,歐冠冠軍成員。"),
-  ]},
-  MAR:{zh:"摩洛哥",flag:"🇲🇦",rank:7,profile:"2022 四強班底,鐵血防守與快速反擊,越大場面表現越好,PK 韌性強。",players:[
-    P("哈基米","Hakimi","後衛","key",27,"巴黎聖日耳曼",["右路助攻與速度","定位球"],["防守一對一偶失位"],"當家邊後衛,攻守兩端的引擎,近期火熱。"),
-    P("布努","Bounou","門將","key",35,"阿爾希拉爾",["撲 PK 名將","大賽神撲"],["出擊偶失"],"2022 世界盃英雄門將。"),
-    P("恩內斯里","En-Nesyri","前鋒","",29,"費內巴切",["頭球與制空","禁區搶點"],["腳下技術一般"],"支點中鋒,空戰威脅。"),
-    P("布拉罕·迪亞茲","Brahim Díaz","前鋒","",27,"皇家馬德里",["盤帶與靈巧","內切"],["身體對抗弱"],"技術型進攻手,連結中前場。"),
-    P("阿姆拉巴特","Amrabat","中場","",30,"費內巴切",["攔截與跑動","護球"],["向前創造有限"],"中場攔截者,防線前屏障。"),
-    P("埃爾坎努斯","El Khannouss","中場","prospect",22,"狼隊",["創造與盤帶","定位球"],["經驗尚淺"],"新生代組織核心。"),
-  ]},
-  BEL:{zh:"比利時",flag:"🇧🇪",rank:8,profile:"黃金一代經驗與個人能力仍在,進攻火力足,但防線老化、漏洞不少。",players:[
-    P("德布勞內","De Bruyne","中場","key",35,"那不勒斯",["致命傳球世界頂尖","遠射與定位球"],["體能下滑","防守貢獻少"],"隊長與進攻大腦,一傳定江山。"),
-    P("盧卡庫","Lukaku","前鋒","key",33,"那不勒斯",["支點作球","禁區終結"],["第一觸球起伏"],"頭號中鋒,對塞內加爾破門。","比利時隊史頭號射手"),
-    P("多庫","Doku","前鋒","",24,"曼城",["爆發突破","一對一過人"],["最後一傳與終結"],"左路爆點,速度與盤帶兼備。"),
-    P("蒂勒曼斯","Tielemans","中場","",29,"阿斯頓維拉",["調度與遠射","定位球"],["絕對速度一般"],"中場組織核心,對塞內加爾建功。"),
-    P("卡斯特爾斯","Casteels","門將","",34,"阿爾卡迪西亞",["撲救穩定","高空球"],["出球一般"],"主力門將。"),
-    P("巴卡約科","Bakayoko","前鋒","prospect",23,"巴黎聖日耳曼",["速度與突破","邊路衝擊"],["終結效率待加強"],"新生代邊路快馬。"),
-  ]},
-  MEX:{zh:"墨西哥",flag:"🇲🇽",rank:14,profile:"地主之一,主場氣勢是第 12 人。經驗與新血並存,鋒線效率是課題。",players:[
-    P("勞爾·希門尼斯","Raúl Jiménez","前鋒","key",35,"富勒姆",["支點作球","制空"],["速度下滑"],"經驗型中鋒,回撤串聯。"),
-    P("洛薩諾","Hirving Lozano","前鋒","key",31,"聖地牙哥",["速度與邊路","一對一"],["穩定度起伏"],"邊路爆點,反擊利器。"),
-    P("艾德森·阿爾瓦雷斯","Edson Álvarez","中場","",28,"費內巴切",["攔截與覆蓋","領導"],["向前創造有限"],"隊長與中場防守核心。"),
-    P("奧喬亞","Guillermo Ochoa","門將","",41,"AEL利馬索爾",["大賽神撲","經驗與領導"],["年齡","出球一般"],"傳奇門將,第 6 屆世界盃。"),
-    P("聖地牙哥·希門尼斯","Santiago Giménez","前鋒","prospect",25,"AC米蘭",["禁區搶點","跑位積極"],["背身與組織弱"],"當家射手,主要得分點。"),
-  ]},
-  USA:{zh:"美國",flag:"🇺🇸",rank:16,profile:"地主優勢與體能是本錢,普利西奇領軍。板凳深度是隱憂,防守待穩定。",players:[
-    P("普利西奇","Pulisic","前鋒","key",27,"AC米蘭",["盤帶與創造","中外皆可得分"],["體能分配"],"隊長與招牌,4 屆美國年度最佳球員。"),
-    P("巴洛根","Balogun","前鋒","key",24,"摩納哥",["跑位與速度","禁區把握"],["16 強對比利時紅牌停賽"],"速度型終結者,因紅牌缺席 16 強,美國鋒線受創。",null,"停賽"),
-    P("麥肯尼","McKennie","中場","",28,"尤文圖斯",["後插上得分","身體對抗"],["紀律偶失"],"全能中場,攻守兼備。"),
-    P("亞當斯","Tyler Adams","中場","",27,"伯恩茅斯",["攔截與跑動","領導"],["進攻貢獻少"],"隊長與中場引擎。"),
-    P("特納","Matt Turner","門將","",32,"諾丁漢森林",["反應撲救","門線技術"],["出球與身高"],"主力門將。"),
-    P("提爾曼","Malik Tillman","中場","prospect",24,"勒沃庫森",["創造與跑位","禁區嗅覺"],["穩定度"],"上升期進攻中場,對波士尼亞表現亮眼。"),
-  ]},
-  NOR:{zh:"挪威",flag:"🇳🇴",rank:20,profile:"以哈蘭德與厄德高兩大巨星為核心,鋒線火力足,板凳深度有限。",players:[
-    P("哈蘭德","Haaland","前鋒","key",26,"曼城",["禁區殺手、爆發力驚人","制空與衝刺"],["參與組織少","依賴隊友餵球"],"世界頂級中鋒,挪威一切進攻的終點。"),
-    P("厄德高","Ødegaard","中場","key",27,"兵工廠",["創造與最後一傳","控球節奏"],["身體對抗弱"],"隊長與大腦,連結中前場。"),
-    P("索爾洛特","Sørloth","前鋒","",30,"馬德里競技",["制空與搶點","身體強壯"],["腳下技術一般"],"第二中鋒,空戰支點。"),
-    P("艾耶爾","Ajer","後衛","",28,"布倫特福德",["速度與對抗","出球"],["專注度偶失"],"後防主力。"),
-    P("尼蘭","Nyland","門將","",36,"塞維利亞",["撲救穩定","經驗"],["出球一般"],"資深主力門將。"),
-    P("努薩","Antonio Nusa","前鋒","prospect",21,"萊比錫",["盤帶與速度","一對一"],["穩定度不足"],"新生代邊路快馬,替補奇兵。"),
-  ]},
-  SUI:{zh:"瑞士",flag:"🇨🇭",rank:19,profile:"紀律嚴明、組織穩定的歐洲勁旅,大賽韌性強,唯進攻火力偏保守。",players:[
-    P("扎卡","Xhaka","中場","key",33,"勒沃庫森",["調度與長傳","領導"],["轉身與速度","紀律"],"隊長與中場節拍器。"),
-    P("阿坎吉","Akanji","後衛","key",31,"曼城",["出球與位置感","對抗"],["絕對速度一般"],"後防核心,冷靜出球。"),
-    P("恩博洛","Embolo","前鋒","",29,"摩納哥",["身體與支點","搶點"],["把握度起伏"],"中鋒,進攻支點。"),
-    P("索默","Sommer","門將","",37,"國際米蘭",["撲救與指揮","大賽穩定"],["身高與年齡"],"經驗豐富的主力門將。"),
-    P("恩多耶","Dan Ndoye","前鋒","prospect",25,"諾丁漢森林",["邊路速度","突破"],["終結效率"],"邊路快馬,反擊點。"),
-  ]},
-  COL:{zh:"哥倫比亞",flag:"🇨🇴",rank:12,profile:"技術流南美勁旅,路易斯迪亞斯與詹姆斯是進攻雙核,中場控制佳。",players:[
-    P("詹姆斯·羅德里格斯","James Rodríguez","中場","key",34,"墨西哥美洲",["左腳創造與定位球","最後一傳"],["體能與速度下滑"],"隊長與進攻大腦,2014 世界盃金靴。"),
-    P("路易斯·迪亞斯","Luis Díaz","前鋒","key",29,"利物浦",["邊路突破與速度","直接得分"],["最後決策起伏"],"當家邊鋒,頭號進攻威脅。"),
-    P("萊爾馬","Lerma","中場","",31,"水晶宮",["攔截與對抗","覆蓋"],["向前創造少"],"中場防守屏障。"),
-    P("米納","Mina","後衛","",31,"卡利亞里",["制空與頭球","身體強壯"],["轉身速度"],"防線支柱,定位球威脅。"),
-    P("杜蘭","Jhon Durán","前鋒","prospect",22,"阿爾納斯爾",["爆發力與遠射","身體條件"],["穩定度與紀律"],"新生代中鋒,潛力十足。"),
-  ]},
-  EGY:{zh:"埃及",flag:"🇪🇬",rank:33,profile:"以薩拉赫為核心的反擊球隊,防守紀律佳,鋒線高度依賴球星單點。",players:[
-    P("薩拉赫","Mohamed Salah","前鋒","key",34,"利物浦",["內切與終結世界頂尖","定位球"],["回防少","球隊過度依賴其發揮"],"隊長與絕對核心,埃及進攻的起點與終點。"),
-    P("馬穆什","Omar Marmoush","前鋒","key",27,"曼城",["速度與跑位","雙腳終結"],["把握度起伏"],"第二進攻點,速度型前鋒。"),
-    P("埃爾內尼","Elneny","中場","",34,"阿爾賈茲拉",["覆蓋與護球","經驗"],["創造性有限"],"中場經驗核心。"),
-    P("謝納維","El Shenawy","門將","",37,"阿赫利",["反應撲救","指揮"],["出擊與年齡"],"資深主力門將。"),
-    P("特里澤蓋","Trézéguet","前鋒","",31,"開羅國民",["邊路衝擊","反擊"],["終結效率"],"邊路進攻手。"),
-  ]},
-  CAN:{zh:"加拿大",flag:"🇨🇦",rank:30,profile:"地主之一,速度與體能出色,戴維斯與大衛是攻擊亮點,大賽經驗待累積。",players:[
-    P("強納森·大衛","Jonathan David","前鋒","key",26,"尤文圖斯",["禁區嗅覺","冷靜終結"],["背身作球弱"],"頭號射手,主要得分點。"),
-    P("戴維斯","Alphonso Davies","後衛","key",25,"拜仁慕尼黑",["速度冠絕、邊路衝刺","助攻能力"],["防守專注度"],"當家球星,左路引擎。"),
-    P("拉林","Cyle Larin","前鋒","",31,"馬德里競技",["頭球與支點","搶點"],["靈活度"],"支點中鋒。"),
-    P("尤斯塔基奧","Stephen Eustáquio","中場","",29,"波爾圖",["調度與定位球","覆蓋"],["爆發力一般"],"中場組織核心。"),
-    P("科內","Ismaël Koné","中場","prospect",24,"馬賽",["推進與護球","身體"],["穩定度"],"上升期中場。"),
-  ]},
-  PAR:{zh:"巴拉圭",flag:"🇵🇾",rank:40,profile:"防守穩固、拚勁十足的南美硬骨頭,擅長打亂強隊節奏(PK 淘汰德國)。",players:[
-    P("阿爾米隆","Almirón","前鋒","key",32,"亞特蘭大聯",["速度與跑動","反擊"],["終結效率"],"進攻發動機。"),
-    P("古斯塔沃·戈梅斯","Gustavo Gómez","後衛","key",33,"帕爾梅拉斯",["制空與對抗","定位球得分"],["轉身速度"],"隊長與防線支柱。"),
-    P("薩納布里亞","Sanabria","前鋒","",30,"克魯茲藍十字",["支點與頭球","搶點"],["把握度"],"中鋒,進攻支點。"),
-    P("恩西索","Julio Enciso","前鋒","prospect",22,"布萊頓",["盤帶與遠射","創造力"],["穩定度與經驗"],"22 歲新星,進攻亮點。"),
-    P("科羅內爾","Coronel","門將","",28,"紐約紅牛",["反應撲救","PK"],["出球一般"],"主力門將。"),
-  ]},
-};
-
-</script>
+<script src="data.js"></script>
 <!-- 自動化用(選填):GitHub Actions 產生的即時結果,會覆蓋 data.js 內的 result。
      單機/預覽時此檔不存在也無妨,會自動沿用 data.js 的內容。 -->
-<!-- 自包含版本:比賽結果已內含於上方 data 區 -->
+<script src="results.js" onerror="void 0"></script>
 <script>
 /* ===== 自動結果合併:results.js 若定義 MATCH_RESULTS,則覆蓋對應比賽的 result ===== */
 if(typeof MATCH_RESULTS!=="undefined"){
@@ -839,28 +612,54 @@ const sIn=document.getElementById("search");
 sIn.oninput=()=>renderSearch(sIn.value);
 document.addEventListener("click",e=>{if(!e.target.closest(".searchbox"))document.getElementById("results").classList.remove("show");});
 
-/* ===== 按鍵更新:抓最新 results.js、重新計分並刷新 ===== */
-function toast(msg,kind){const t=document.getElementById("toast");t.textContent=msg;t.className="toast show"+(kind?" "+kind:"");clearTimeout(t._h);t._h=setTimeout(()=>t.className="toast",2400);}
-async function refreshData(){
+/* ===== 更新結果:共用抓取/套用 + 手動按鈕 + 自動輪詢 ===== */
+function toast(msg,kind){const t=document.getElementById("toast");t.textContent=msg;t.className="toast show"+(kind?" "+kind:"");clearTimeout(t._h);t._h=setTimeout(()=>t.className="toast",2600);}
+let lastResultsSig=(typeof MATCH_RESULTS!=="undefined")?JSON.stringify(MATCH_RESULTS):"";
+const AUTO_MS=60000;              // 每 60 秒自動檢查一次
+let autoTimer=null;
+
+async function fetchResults(){
+  const res=await fetch("results.js?_="+Date.now(),{cache:"no-store"});
+  if(!res.ok) throw new Error("no results.js");
+  const code=await res.text();
+  return new Function(code+';return{mr:(typeof MATCH_RESULTS!=="undefined")?MATCH_RESULTS:null,ru:(typeof RESULTS_UPDATED!=="undefined")?RESULTS_UPDATED:null};')();
+}
+function applyResults(out){
+  let changed=0;
+  if(out.mr){MATCH_DATA.forEach(m=>{const r=out.mr[m.id];if(r){const b=JSON.stringify(m.result||null);m.result=r;if(JSON.stringify(r)!==b)changed++;}});}
+  if(out.ru)document.getElementById("upd").textContent=out.ru;
+  if(out.mr)lastResultsSig=JSON.stringify(out.mr);
+  renderScorecard();renderHeadlines();select(currentDate);
+  return changed;
+}
+function setAutoIndicator(on){
+  const el=document.getElementById("autoInd"); if(!el)return;
+  if(on){el.className="auto-ind on";el.innerHTML='<span class="dot"></span>自動更新中 · 每 60 秒';}
+  else{el.className="auto-ind";el.innerHTML='自動更新未啟用(需部署並設定 GitHub Actions)';}
+}
+async function refreshData(){            // 手動按鈕
   const btn=document.getElementById("refreshBtn");
   btn.classList.add("loading");btn.disabled=true;
+  try{const out=await fetchResults();const c=applyResults(out);
+    toast(c?`已更新 ${c} 場結果 · ${out.ru||""}`:`已是最新 · ${out.ru||""}`,"ok");}
+  catch(e){toast("找不到線上結果檔 results.js —— 尚未設定自動更新。請部署模組版並啟用 GitHub Actions,或直接編輯 data.js。","err");}
+  finally{btn.classList.remove("loading");btn.disabled=false;}
+}
+async function autoRefresh(){            // 背景自動輪詢
+  try{const out=await fetchResults();
+    if(out.mr){const sig=JSON.stringify(out.mr);
+      if(sig!==lastResultsSig){const c=applyResults(out);if(c)toast(`自動更新:${c} 場結果 · ${out.ru||""}`,"ok");}}
+  }catch(e){/* 靜默,下輪再試 */}
+}
+async function initAuto(){              // 開頁時判斷是否有 results.js 決定是否啟用自動更新
   try{
-    const res=await fetch("results.js?_="+Date.now(),{cache:"no-store"});
-    if(!res.ok) throw new Error("no results.js");
-    const code=await res.text();
-    const out=new Function(code+';return{mr:(typeof MATCH_RESULTS!=="undefined")?MATCH_RESULTS:null,ru:(typeof RESULTS_UPDATED!=="undefined")?RESULTS_UPDATED:null};')();
-    let changed=0;
-    if(out.mr){MATCH_DATA.forEach(m=>{const r=out.mr[m.id];if(r){const before=JSON.stringify(m.result||null);m.result=r;if(JSON.stringify(r)!==before)changed++;}});}
-    if(out.ru)document.getElementById("upd").textContent=out.ru;
-    renderScorecard();renderHeadlines();select(currentDate);
-    toast(changed?`已更新 ${changed} 場結果 · ${out.ru||""}`:`已是最新 · ${out.ru||""}`,"ok");
-  }catch(e){
-    // 離線 / 單機版:沒有 results.js,直接重新整理套用內建資料
-    toast("重新整理中…");
-    setTimeout(()=>location.reload(),450);
-  }finally{
-    btn.classList.remove("loading");btn.disabled=false;
-  }
+    const out=await fetchResults();
+    const sig=out.mr?JSON.stringify(out.mr):"";
+    if(sig&&sig!==lastResultsSig)applyResults(out);
+    setAutoIndicator(true);
+    autoTimer=setInterval(autoRefresh,AUTO_MS);
+    document.addEventListener("visibilitychange",()=>{if(!document.hidden)autoRefresh();});
+  }catch(e){setAutoIndicator(false);}   // 沒有 results.js(自包含版/尚未設定)→ 不空轉
 }
 document.getElementById("refreshBtn").onclick=refreshData;
 
@@ -868,6 +667,7 @@ renderScorecard();
 renderHeadlines();
 buildNav(defaultDate);
 select(defaultDate);
+initAuto();
 </script>
 </body>
 </html>

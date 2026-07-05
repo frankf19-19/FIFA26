@@ -1,0 +1,109 @@
+{
+  "ned-mar": {
+    "score": [
+      1,
+      1
+    ],
+    "advanced": "摩洛哥",
+    "pk": true
+  },
+  "civ-nor": {
+    "score": [
+      1,
+      2
+    ],
+    "advanced": "挪威"
+  },
+  "fra-swe": {
+    "score": [
+      3,
+      0
+    ],
+    "advanced": "法國"
+  },
+  "mex-ecu": {
+    "score": [
+      2,
+      0
+    ],
+    "advanced": "墨西哥"
+  },
+  "eng-cod": {
+    "score": [
+      2,
+      1
+    ],
+    "advanced": "英格蘭"
+  },
+  "bel-sen": {
+    "score": [
+      3,
+      2
+    ],
+    "advanced": "比利時"
+  },
+  "usa-bih": {
+    "score": [
+      2,
+      0
+    ],
+    "advanced": "美國"
+  },
+  "esp-aut": {
+    "score": [
+      3,
+      0
+    ],
+    "advanced": "西班牙"
+  },
+  "por-cro": {
+    "score": [
+      2,
+      1
+    ],
+    "advanced": "葡萄牙"
+  },
+  "sui-dza": {
+    "score": [
+      2,
+      0
+    ],
+    "advanced": "瑞士"
+  },
+  "aus-egy": {
+    "score": [
+      1,
+      1
+    ],
+    "advanced": "埃及",
+    "pk": true
+  },
+  "arg-cpv": {
+    "score": [
+      3,
+      2
+    ],
+    "advanced": "阿根廷"
+  },
+  "col-gha": {
+    "score": [
+      1,
+      0
+    ],
+    "advanced": "哥倫比亞"
+  },
+  "can-mar": {
+    "score": [
+      0,
+      3
+    ],
+    "advanced": "摩洛哥"
+  },
+  "par-fra": {
+    "score": [
+      0,
+      1
+    ],
+    "advanced": "法國"
+  }
+}

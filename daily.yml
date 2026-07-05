@@ -1,0 +1,40 @@
+# .github/workflows/daily.yml
+# 世界盃比賽結果自動更新 —— 免 API 金鑰(用 ESPN 公開比分)。
+# 每 15 分鐘自動跑,也可在 Actions 頁面手動「Run workflow」。
+name: 更新世界盃比賽結果
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"     # 每 15 分鐘(UTC)。公開 repo 的 Actions 分鐘數免費;
+                               # 想更即時可改 "*/5 * * * *"(GitHub 排程有時延遲數分鐘,屬正常)
+  workflow_dispatch:            # 手動一鍵觸發
+
+permissions:
+  contents: write               # 允許提交 results.js / results_state.json
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 取得程式碼
+        uses: actions/checkout@v4
+
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 抓取最新比分(免金鑰,ESPN)並產生 results.js
+        run: python update_matches.py --source espn --out results.js
+
+      - name: 若有變動則提交
+        run: |
+          if [[ -n "$(git status --porcelain results.js results_state.json)" ]]; then
+            git config user.name  "wc-bot"
+            git config user.email "wc-bot@users.noreply.github.com"
+            git add results.js results_state.json
+            git commit -m "自動更新比賽結果 $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          else
+            echo "結果無變動,略過提交。"
+          fi
