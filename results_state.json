@@ -140,5 +140,13 @@
       2
     ],
     "advanced": "阿根廷"
+  },
+  "sui-col": {
+    "score": [
+      0,
+      0
+    ],
+    "advanced": "瑞士",
+    "pk": true
   }
 }
