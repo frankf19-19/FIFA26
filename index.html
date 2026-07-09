@@ -377,19 +377,22 @@ function mergeAutoPredictions(){
         m.pred={prob:ap.prob,score:ap.score,advance:ap.advance,conf:ap.conf,reason:ap.reason};
         m.auto=true; n++;
       }
-    }else{                                                  // data.js 沒有這場 → 自動新增
+    }else{                                                  // data.js 沒有這場
       const [hc,ac]=id.split("-").map(s=>s.toUpperCase());
       if(!ZH[hc]||!ZH[ac]) continue;
-      MATCH_DATA.push({id,round:roundForDate(ap.date),date:ap.date,time:"—",auto:true,
-        home:{code:hc,zh:ZH[hc],flag:FLAG[hc]||"🏆"}, away:{code:ac,zh:ZH[ac],flag:FLAG[ac]||"🏆"},
-        pred:{prob:ap.prob,score:ap.score,advance:ap.advance,conf:ap.conf,reason:ap.reason}});
+      const home={code:hc,zh:ZH[hc],flag:FLAG[hc]||"🏆"};
+      const away={code:ac,zh:ZH[ac],flag:FLAG[ac]||"🏆"};
+      const pred={prob:ap.prob,score:ap.score,advance:ap.advance,conf:ap.conf,reason:ap.reason};
+      // 優先「填入」同日期尚未指派的佔位卡(保留其輪次與開賽時間),而非新增重複卡片
+      const slot=MATCH_DATA.find(x=>x.tbd && x.date===ap.date && !x.filled);
+      if(slot){
+        slot.id=id; slot.home=home; slot.away=away; slot.pred=pred;
+        slot.tbd=false; slot.filled=true; slot.auto=true;
+      }else{
+        MATCH_DATA.push({id,round:roundForDate(ap.date),date:ap.date,time:"—",auto:true,home,away,pred});
+      }
       n++;
     }
-  }
-  // 移除已被真實對戰取代的 TBD 佔位卡
-  for(let i=MATCH_DATA.length-1;i>=0;i--){
-    const m=MATCH_DATA[i];
-    if(m.tbd && MATCH_DATA.some(x=>!x.tbd&&x.date===m.date&&x.round===m.round)) MATCH_DATA.splice(i,1);
   }
   return n;
 }
@@ -613,6 +616,16 @@ function teamRowUp(t,role){
     <div>${tLink(t.code,t.zh,"")}<div class="tsub">${t.code}${role?" · "+role:""}</div></div></div>
     <div class="${role==='主'?'vs':'score'}">${role==='主'?'VS':'&nbsp;'}</div></div>`;
 }
+/* 佔位卡的文字:讓每一輪清楚顯示「在等什麼」,而不是千篇一律的「晉級隊 A/B」 */
+function tbdLabels(m){
+  // data.js 可自訂 home.zh / away.zh,若不是「待定」就直接沿用
+  const custom = m.home && m.home.zh && m.home.zh!=="待定";
+  if(custom) return {icon:m.home.flag||"🏆", a:m.home.zh, b:m.away.zh, ca:m.home.code||"TBD", cb:m.away.code||"TBD"};
+  if(m.round===1)  return {icon:"🏆", a:"四強勝者",   b:"四強勝者",   ca:"待四強", cb:"待四強"};
+  if(m.round===3)  return {icon:"🥉", a:"四強敗者",   b:"四強敗者",   ca:"待四強", cb:"待四強"};
+  if(m.round===4)  return {icon:"🎖️", a:"八強勝者",   b:"八強勝者",   ca:"待八強", cb:"待八強"};
+  return {icon:"🏆", a:"晉級隊 A", b:"晉級隊 B", ca:"TBD", cb:"TBD"};
+}
 function matchCard(m){
   const r=ROUND[m.round]||RDEF, fin=isFinal(m), g=grade(m);
   let teamsHTML="",pkHTML="";
@@ -622,8 +635,9 @@ function matchCard(m){
     teamsHTML=teamRow(m.home,hs,hw?"win":"lose")+teamRow(m.away,as,aw?"win":"lose");
     if(m.result.pk)pkHTML=`<div class="pk-note">${m.result.advanced} PK 大戰勝出晉級</div>`;
   }else if(m.tbd){
-    teamsHTML=`<div class="team-row"><div class="team-id"><span class="flag">🏆</span><div><div class="tname" style="color:var(--muted)">晉級隊 A</div><div class="tsub">TBD</div></div></div><div class="vs">VS</div></div>
-      <div class="team-row"><div class="team-id"><span class="flag">🏆</span><div><div class="tname" style="color:var(--muted)">晉級隊 B</div><div class="tsub">TBD</div></div></div><div class="score">&nbsp;</div></div>`;
+    const ph=tbdLabels(m);
+    teamsHTML=`<div class="team-row"><div class="team-id"><span class="flag">${ph.icon}</span><div><div class="tname" style="color:var(--muted)">${ph.a}</div><div class="tsub">${ph.ca}</div></div></div><div class="vs">VS</div></div>
+      <div class="team-row"><div class="team-id"><span class="flag">${ph.icon}</span><div><div class="tname" style="color:var(--muted)">${ph.b}</div><div class="tsub">${ph.cb}</div></div></div><div class="score">&nbsp;</div></div>`;
   }else{teamsHTML=teamRowUp(m.home,"主")+teamRowUp(m.away,"客");}
 
   let predHTML="";
