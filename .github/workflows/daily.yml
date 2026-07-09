@@ -1,16 +1,24 @@
 # .github/workflows/daily.yml
-# 世界盃比賽結果自動更新 —— 免 API 金鑰(用 ESPN 公開比分)。
-# 每 15 分鐘自動跑,也可在 Actions 頁面手動「Run workflow」。
-name: 更新世界盃比賽結果
+# 世界盃「全自動」流水線 —— 免 API 金鑰(ESPN 公開比分)
+#   1) update_matches.py 抓完賽結果      → results.js
+#   2) review_engine.py  自動檢討+校準評級 → reviews.js / ratings.json
+#   3) predict_engine.py 自動預測未開賽    → predictions.js(採用校準後評級)
+#   4) news_engine.py    自動產生頭條      → headlines.js
+# 順序重要:先檢討校準,預測才會用到更新後的評級(模型自我進化)。
+name: 世界盃全自動更新
 
 on:
   schedule:
-    - cron: "*/15 * * * *"     # 每 15 分鐘(UTC)。公開 repo 的 Actions 分鐘數免費;
-                               # 想更即時可改 "*/5 * * * *"(GitHub 排程有時延遲數分鐘,屬正常)
+    - cron: "*/15 * * * *"     # 每 15 分鐘(UTC)。想更即時可改 "*/5 * * * *"
+                               # (GitHub 排程有時延遲數分鐘,屬正常)
   workflow_dispatch:            # 手動一鍵觸發
 
 permissions:
-  contents: write               # 允許提交 results.js / results_state.json
+  contents: write
+
+concurrency:                    # 避免兩次排程同時跑造成推送衝突
+  group: wc-update
+  cancel-in-progress: false
 
 jobs:
   update:
@@ -24,17 +32,29 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: 抓取最新比分(免金鑰,ESPN)並產生 results.js
+      - name: 1) 抓取最新比分(免金鑰)
         run: python update_matches.py --source espn --out results.js
 
-      - name: 若有變動則提交
+      - name: 2) 自動賽後檢討 + 評級自我校準
+        run: python review_engine.py
+
+      - name: 3) 自動產生未開賽預測(使用校準後評級)
+        run: python predict_engine.py --out predictions.js
+
+      - name: 4) 自動產生頭條新聞
+        run: python news_engine.py
+
+      - name: 提交所有變動
         run: |
-          if [[ -n "$(git status --porcelain results.js results_state.json)" ]]; then
+          FILES="results.js results_state.json predictions.js predictions_log.json \
+                 reviews.js ratings.json reviewed_state.json headlines.js"
+          if [[ -n "$(git status --porcelain $FILES)" ]]; then
             git config user.name  "wc-bot"
             git config user.email "wc-bot@users.noreply.github.com"
-            git add results.js results_state.json
-            git commit -m "自動更新比賽結果 $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git add $FILES
+            git commit -m "全自動更新:結果/檢討/預測/頭條 $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git pull --rebase --autostash origin main || true
             git push
           else
-            echo "結果無變動,略過提交。"
+            echo "無變動,略過提交。"
           fi
