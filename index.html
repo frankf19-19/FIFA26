@@ -118,6 +118,9 @@
   .round-badge{font-family:var(--num);font-weight:700;font-size:12px;letter-spacing:.06em;padding:3px 9px;border-radius:7px;display:inline-flex;align-items:center;gap:6px}
   .round-badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
   .rb-32{color:var(--r32);background:#7c8ba117} .rb-16{color:var(--r16);background:#5eead417} .rb-8{color:var(--gold);background:var(--gold-dim)}
+  .rb-4{color:#F0A868;background:#f0a86818} .rb-3{color:#C68B5B;background:#c68b5b18}
+  .rb-1{color:#0C0F16;background:linear-gradient(90deg,#E9B949,#F5D67B);font-weight:800}
+  .rb-1::before{background:#0C0F16}
   .ktime{font-family:var(--num);font-weight:600;font-size:13px;color:var(--muted)}
   .status-pill{font-size:11px;font-family:var(--num);font-weight:600;letter-spacing:.06em;padding:2px 8px;border-radius:6px}
   .st-final{color:var(--muted-2);border:1px solid var(--line)} .st-up{color:var(--home);border:1px solid #34d39944}
@@ -348,6 +351,15 @@ function mergeAutoHeadlines(){
 mergeAutoHeadlines();
 /* ===== 自動預測合併:未開賽且沒有手寫預測的比賽,自動補上模型預測;
         八強等新對戰若 data.js 尚未建立,也會自動新增卡片 ===== */
+/* 依日期推斷輪次(自動新增卡片時用):八強→四強→季軍戰→決賽 */
+function roundForDate(d){
+  if(!d) return 8;
+  if(d>="2026-07-20") return 1;   // 決賽
+  if(d==="2026-07-19") return 3;  // 季軍戰
+  if(d>="2026-07-14") return 4;   // 四強
+  if(d>="2026-07-09") return 8;   // 八強
+  return 16;
+}
 let ACTIVE_PREDICTIONS = (typeof AUTO_PREDICTIONS!=="undefined") ? AUTO_PREDICTIONS : {};
 function mergeAutoPredictions(){
   if(!ACTIVE_PREDICTIONS || !Object.keys(ACTIVE_PREDICTIONS).length) return 0;
@@ -368,8 +380,7 @@ function mergeAutoPredictions(){
     }else{                                                  // data.js 沒有這場 → 自動新增
       const [hc,ac]=id.split("-").map(s=>s.toUpperCase());
       if(!ZH[hc]||!ZH[ac]) continue;
-      const cnt=MATCH_DATA.filter(x=>x.date===ap.date).length;
-      MATCH_DATA.push({id,round:8,date:ap.date,time:"—",auto:true,
+      MATCH_DATA.push({id,round:roundForDate(ap.date),date:ap.date,time:"—",auto:true,
         home:{code:hc,zh:ZH[hc],flag:FLAG[hc]||"🏆"}, away:{code:ac,zh:ZH[ac],flag:FLAG[ac]||"🏆"},
         pred:{prob:ap.prob,score:ap.score,advance:ap.advance,conf:ap.conf,reason:ap.reason}});
       n++;
@@ -386,7 +397,8 @@ mergeAutoPredictions();
 mergeAutoReviews();
 /* ================= config ================= */
 const DOW=["日","一","二","三","四","五","六"];
-const ROUND={32:{cls:"rb-32",label:"32強"},16:{cls:"rb-16",label:"16強"},8:{cls:"rb-8",label:"8強"}};
+const ROUND={32:{cls:"rb-32",label:"32強"},16:{cls:"rb-16",label:"16強"},8:{cls:"rb-8",label:"8強"},4:{cls:"rb-4",label:"4強"},3:{cls:"rb-3",label:"季軍戰"},1:{cls:"rb-1",label:"決賽"}};
+const RDEF={cls:"rb-32",label:"賽事"};   // 未知輪次的保底
 const CONF={hi:{cls:"hi",label:"高"},mid:{cls:"mid",label:"中"},lo:{cls:"lo",label:"低"}};
 const OUT={h:"主勝",d:"和局",a:"客勝"};
 const POS_ORDER=["門將","後衛","中場","前鋒"];
@@ -602,7 +614,7 @@ function teamRowUp(t,role){
     <div class="${role==='主'?'vs':'score'}">${role==='主'?'VS':'&nbsp;'}</div></div>`;
 }
 function matchCard(m){
-  const r=ROUND[m.round], fin=isFinal(m), g=grade(m);
+  const r=ROUND[m.round]||RDEF, fin=isFinal(m), g=grade(m);
   let teamsHTML="",pkHTML="";
   if(fin){
     const [hs,as]=m.result.score;

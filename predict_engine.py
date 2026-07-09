@@ -120,7 +120,7 @@ def team_code(team):
         if nm in NAME_TO_CODE: return NAME_TO_CODE[nm]
     return ab or None
 
-def fetch_upcoming(days_ahead=8, espn_file=None):
+def fetch_upcoming(days_ahead=14, espn_file=None):
     """回傳尚未開賽的比賽 [(home, away, iso_date)]"""
     base = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard"
     out, seen = [], set()
@@ -135,6 +135,9 @@ def fetch_upcoming(days_ahead=8, espn_file=None):
             if not hm or not aw: continue
             hc, ac = team_code(hm.get("team", {})), team_code(aw.get("team", {}))
             if not hc or not ac or (hc, ac) in seen: continue
+            # ESPN 對未定隊伍用 W97 / RU101 之類的佔位代碼,需略過
+            import re as _re
+            if any(_re.fullmatch(r"(W|RU)\d+", x or "") for x in (hc, ac)): continue
             if "TBD" in (hc, ac): continue
             out.append((hc, ac, (ev.get("date") or "")[:10]))
             seen.add((hc, ac))
