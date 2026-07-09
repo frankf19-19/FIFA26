@@ -316,15 +316,71 @@
 <div class="toast" id="toast"></div>
 
 <script src="data.js"></script>
-<!-- 自動化用(選填):GitHub Actions 產生的即時結果,會覆蓋 data.js 內的 result。
-     單機/預覽時此檔不存在也無妨,會自動沿用 data.js 的內容。 -->
+<!-- 自動化用(選填):GitHub Actions 產生的即時結果與自動預測。
+     單機/預覽時檔案不存在也無妨,會自動沿用 data.js 的內容。 -->
 <script src="results.js" onerror="void 0"></script>
+<script src="predictions.js" onerror="void 0"></script>
+<script src="reviews.js" onerror="void 0"></script>
+<script src="headlines.js" onerror="void 0"></script>
 <script>
 /* ===== 自動結果合併:results.js 若定義 MATCH_RESULTS,則覆蓋對應比賽的 result ===== */
 if(typeof MATCH_RESULTS!=="undefined"){
   MATCH_DATA.forEach(m=>{ if(MATCH_RESULTS[m.id]) m.result=MATCH_RESULTS[m.id]; });
-  if(typeof RESULTS_UPDATED!=="undefined") try{ /* 允許結果檔覆寫更新時間 */ }catch(e){}
 }
+/* ===== 自動檢討合併:沒有手寫 review 的完賽比賽,自動補上模型檢討 ===== */
+function mergeAutoReviews(){
+  if(typeof AUTO_REVIEWS==="undefined") return 0;
+  let n=0;
+  MATCH_DATA.forEach(m=>{
+    if(m.result && !m.review && AUTO_REVIEWS[m.id]){ m.review=AUTO_REVIEWS[m.id].text; m.autoReview=true; n++; }
+  });
+  return n;
+}
+/* ===== 自動頭條合併:優先使用模型自動產生的頭條(HEADLINES 為 const,故用可變副本) ===== */
+let ACTIVE_HEADLINES = (typeof HEADLINES!=="undefined") ? HEADLINES.slice() : [];
+function mergeAutoHeadlines(){
+  if(typeof AUTO_HEADLINES==="undefined" || !AUTO_HEADLINES.length) return false;
+  ACTIVE_HEADLINES = AUTO_HEADLINES.slice();
+  return true;
+}
+mergeAutoHeadlines();
+/* ===== 自動預測合併:未開賽且沒有手寫預測的比賽,自動補上模型預測;
+        八強等新對戰若 data.js 尚未建立,也會自動新增卡片 ===== */
+function mergeAutoPredictions(){
+  if(typeof AUTO_PREDICTIONS==="undefined") return 0;
+  const ZH={FRA:"法國",ESP:"西班牙",ARG:"阿根廷",BRA:"巴西",ENG:"英格蘭",POR:"葡萄牙",MAR:"摩洛哥",
+    BEL:"比利時",NOR:"挪威",COL:"哥倫比亞",SUI:"瑞士",USA:"美國",MEX:"墨西哥",EGY:"埃及",CAN:"加拿大",
+    PAR:"巴拉圭",NED:"荷蘭",GER:"德國",CRO:"克羅埃西亞",CPV:"維德角"};
+  const FLAG={FRA:"🇫🇷",ESP:"🇪🇸",ARG:"🇦🇷",BRA:"🇧🇷",ENG:"🏴󠁧󠁢󠁥󠁮󠁧󠁿",POR:"🇵🇹",MAR:"🇲🇦",BEL:"🇧🇪",NOR:"🇳🇴",
+    COL:"🇨🇴",SUI:"🇨🇭",USA:"🇺🇸",MEX:"🇲🇽",EGY:"🇪🇬",CAN:"🇨🇦",PAR:"🇵🇾",NED:"🇳🇱",GER:"🇩🇪",CRO:"🇭🇷",CPV:"🇨🇻"};
+  let n=0;
+  for(const id in AUTO_PREDICTIONS){
+    const ap=AUTO_PREDICTIONS[id];
+    let m=MATCH_DATA.find(x=>x.id===id);
+    if(m){
+      if(!m.result && (!m.pred || !m.pred.prob)){          // 沒手寫預測 → 自動補
+        m.pred={prob:ap.prob,score:ap.score,advance:ap.advance,conf:ap.conf,reason:ap.reason};
+        m.auto=true; n++;
+      }
+    }else{                                                  // data.js 沒有這場 → 自動新增
+      const [hc,ac]=id.split("-").map(s=>s.toUpperCase());
+      if(!ZH[hc]||!ZH[ac]) continue;
+      const cnt=MATCH_DATA.filter(x=>x.date===ap.date).length;
+      MATCH_DATA.push({id,round:8,date:ap.date,time:"—",auto:true,
+        home:{code:hc,zh:ZH[hc],flag:FLAG[hc]||"🏆"}, away:{code:ac,zh:ZH[ac],flag:FLAG[ac]||"🏆"},
+        pred:{prob:ap.prob,score:ap.score,advance:ap.advance,conf:ap.conf,reason:ap.reason}});
+      n++;
+    }
+  }
+  // 移除已被真實對戰取代的 TBD 佔位卡
+  for(let i=MATCH_DATA.length-1;i>=0;i--){
+    const m=MATCH_DATA[i];
+    if(m.tbd && MATCH_DATA.some(x=>!x.tbd&&x.date===m.date&&x.round===m.round)) MATCH_DATA.splice(i,1);
+  }
+  return n;
+}
+mergeAutoPredictions();
+mergeAutoReviews();
 /* ================= config ================= */
 const DOW=["日","一","二","三","四","五","六"];
 const ROUND={32:{cls:"rb-32",label:"32強"},16:{cls:"rb-16",label:"16強"},8:{cls:"rb-8",label:"8強"}};
@@ -372,7 +428,7 @@ function renderScorecard(){
 /* ================= headlines ================= */
 function renderHeadlines(){
   const box=document.getElementById("headlines");
-  box.innerHTML=HEADLINES.map((h,i)=>{
+  box.innerHTML=ACTIVE_HEADLINES.map((h,i)=>{
     const tg=HTAG[h.tag]||HTAG.result;
     const flag=h.team&&SQUADS[h.team]?SQUADS[h.team].flag:"⚽";
     return `<div class="hl" data-hi="${i}"><span class="htag ${tg.c}">${tg.t}</span>
@@ -380,7 +436,7 @@ function renderHeadlines(){
       <div class="hmeta"><span class="hteam">${flag}</span>${h.d}${h.team&&SQUADS[h.team]?" · 看名單 ›":""}</div></div>`;
   }).join("");
   box.querySelectorAll(".hl").forEach(el=>el.onclick=()=>{
-    const h=HEADLINES[+el.dataset.hi]; if(h.team&&SQUADS[h.team]) navTeam(h.team);
+    const h=ACTIVE_HEADLINES[+el.dataset.hi]; if(h.team&&SQUADS[h.team]) navTeam(h.team);
   });
 }
 
@@ -561,12 +617,13 @@ function matchCard(m){
   let revHTML="";
   if(fin){
     const rea=m.pred&&m.pred.reason?`<div class="after"><b>當初理由</b> ${m.pred.reason}</div>`:"";
-    if(m.review)revHTML=reveal("檢討","檢討分析",`${m.review}${rea}`);
+    if(m.review)revHTML=reveal(m.autoReview?"自動":"檢討","檢討分析",`${m.review}${rea}`);
   }else if(m.pred&&m.pred.reason){revHTML=reveal("理由","預測理由",m.pred.reason);}
 
   const stPill=fin?`<span class="status-pill st-final">完賽</span>`:`<span class="status-pill st-up">未開賽</span>`;
+  const autoPill=(!fin&&m.auto)?`<span class="status-pill" style="color:var(--diamond);border:1px solid #7dd3fc44;margin-right:6px">模型自動</span>`:"";
   return `<div class="card ${fin?"final":""}">
-    <div class="card-top"><span class="round-badge ${r.cls}">${r.label}</span><span class="ktime">${m.time}</span>${stPill}</div>
+    <div class="card-top"><span class="round-badge ${r.cls}">${r.label}</span><span class="ktime">${m.time}</span>${autoPill}${stPill}</div>
     <div class="teams">${teamsHTML}</div>${pkHTML}${predHTML}${cmpHTML}${revHTML}</div>`;
 }
 function reveal(ico,label,body){
@@ -624,6 +681,39 @@ async function fetchResults(){
   const code=await res.text();
   return new Function(code+';return{mr:(typeof MATCH_RESULTS!=="undefined")?MATCH_RESULTS:null,ru:(typeof RESULTS_UPDATED!=="undefined")?RESULTS_UPDATED:null};')();
 }
+async function fetchPredictions(){          // 自動預測(選填)
+  try{
+    const res=await fetch("predictions.js?_="+Date.now(),{cache:"no-store"});
+    if(!res.ok) return null;
+    const code=await res.text();
+    const out=new Function(code+';return (typeof AUTO_PREDICTIONS!=="undefined")?AUTO_PREDICTIONS:null;')();
+    if(out){ window.AUTO_PREDICTIONS=out; return mergeAutoPredictions(); }
+  }catch(e){}
+  return null;
+}
+async function fetchReviews(){              // 自動檢討(選填)
+  try{
+    const res=await fetch("reviews.js?_="+Date.now(),{cache:"no-store"});
+    if(!res.ok) return null;
+    const code=await res.text();
+    const out=new Function(code+';return (typeof AUTO_REVIEWS!=="undefined")?AUTO_REVIEWS:null;')();
+    if(out){ window.AUTO_REVIEWS=out; return mergeAutoReviews(); }
+  }catch(e){}
+  return null;
+}
+async function fetchHeadlines(){            // 自動頭條(選填)
+  try{
+    const res=await fetch("headlines.js?_="+Date.now(),{cache:"no-store"});
+    if(!res.ok) return false;
+    const code=await res.text();
+    const out=new Function(code+';return (typeof AUTO_HEADLINES!=="undefined")?AUTO_HEADLINES:null;')();
+    if(out&&out.length){ window.AUTO_HEADLINES=out; mergeAutoHeadlines(); renderHeadlines(); return true; }
+  }catch(e){}
+  return false;
+}
+async function fetchAllExtras(){
+  await Promise.all([fetchPredictions(),fetchReviews(),fetchHeadlines()]);
+}
 function applyResults(out){
   let changed=0;
   if(out.mr){MATCH_DATA.forEach(m=>{const r=out.mr[m.id];if(r){const b=JSON.stringify(m.result||null);m.result=r;if(JSON.stringify(r)!==b)changed++;}});}
@@ -640,22 +730,25 @@ function setAutoIndicator(on){
 async function refreshData(){            // 手動按鈕
   const btn=document.getElementById("refreshBtn");
   btn.classList.add("loading");btn.disabled=true;
-  try{const out=await fetchResults();const c=applyResults(out);
+  try{const out=await fetchResults();await fetchAllExtras();const c=applyResults(out);
     toast(c?`已更新 ${c} 場結果 · ${out.ru||""}`:`已是最新 · ${out.ru||""}`,"ok");}
   catch(e){toast("找不到線上結果檔 results.js —— 尚未設定自動更新。請部署模組版並啟用 GitHub Actions,或直接編輯 data.js。","err");}
   finally{btn.classList.remove("loading");btn.disabled=false;}
 }
 async function autoRefresh(){            // 背景自動輪詢
   try{const out=await fetchResults();
+    const newPreds=await fetchAllExtras();
     if(out.mr){const sig=JSON.stringify(out.mr);
-      if(sig!==lastResultsSig){const c=applyResults(out);if(c)toast(`自動更新:${c} 場結果 · ${out.ru||""}`,"ok");}}
+      if(sig!==lastResultsSig){const c=applyResults(out);if(c)toast(`自動更新:${c} 場結果 · ${out.ru||""}`,"ok");return;}}
+    if(newPreds){renderScorecard();select(currentDate);}   // 有新預測也刷新
   }catch(e){/* 靜默,下輪再試 */}
 }
 async function initAuto(){              // 開頁時判斷是否有 results.js 決定是否啟用自動更新
   try{
     const out=await fetchResults();
+    await fetchAllExtras();
     const sig=out.mr?JSON.stringify(out.mr):"";
-    if(sig&&sig!==lastResultsSig)applyResults(out);
+    if(sig&&sig!==lastResultsSig)applyResults(out); else {renderScorecard();select(currentDate);}
     setAutoIndicator(true);
     autoTimer=setInterval(autoRefresh,AUTO_MS);
     document.addEventListener("visibilitychange",()=>{if(!document.hidden)autoRefresh();});

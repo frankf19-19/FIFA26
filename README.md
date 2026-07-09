@@ -15,6 +15,14 @@
 | `results.js` | 比賽「結果」,由腳本自動產生並覆蓋 `data.js` 的結果。 | 腳本(自動) |
 | `results_state.json` | 累積的完賽紀錄(腳本自動維護,勿手刪)。 | 腳本(自動) |
 | `update_matches.py` | 抓最新比分(免金鑰 ESPN)→ 產生 `results.js`。 | — |
+| `predict_engine.py` | 幫未開賽比賽自動產生預測 → `predictions.js`。 | — |
+| `review_engine.py` | 自動賽後檢討 + **評級自我校準** → `reviews.js` / `ratings.json`。 | — |
+| `news_engine.py` | 自動產生頭條新聞 → `headlines.js`。 | — |
+| `predictions.js` | 模型自動預測(手寫預測優先,不會被覆蓋)。 | 腳本(自動) |
+| `reviews.js` | 模型自動檢討(手寫檢討優先)。 | 腳本(自動) |
+| `headlines.js` | 模型自動頭條。 | 腳本(自動) |
+| `ratings.json` | 自我校準後的實力評級(越用越準)。 | 腳本(自動) |
+| `predictions_log.json` | 當初預測的存檔(供事後比對)。 | 腳本(自動) |
 | `.github/workflows/daily.yml` | 排程 / 一鍵執行上面的腳本。 | — |
 
 > **分工原則**:比分/晉級 → 自動;預測、檢討、球員名單、先發傷兵 → 手動(沒有免費 API 能供應)。
@@ -48,19 +56,51 @@
 標題下方會顯示「🟢 自動更新中」或「自動更新未啟用」。
 
 **② 後端產生資料(需部署一次,免金鑰)** ← 沒有這步,前端就沒有新資料可抓
-GitHub Actions 用 **ESPN 公開比分**(免註冊、免 API 金鑰)定時抓 → 產生新的 `results.js`
-→ 自動 commit → Pages 重新部署。
+GitHub Actions 用 **ESPN 公開比分**(免註冊、免 API 金鑰)每 15 分鐘自動跑**四支引擎**:
+
+1. `update_matches.py` → 抓完賽結果 → `results.js`
+2. `review_engine.py` → **自動賽後檢討** + **評級自我校準** → `reviews.js`、`ratings.json`
+3. `predict_engine.py` → **自動預測**未開賽比賽(採用校準後評級)→ `predictions.js`
+4. `news_engine.py` → **自動產生頭條**(含爆冷偵測)→ `headlines.js`
+
+> 順序很重要:先檢討校準,預測才會用到更新後的評級 —— 這就是**模型自我進化**。
+> 實測:摩洛哥 3-0 血洗加拿大後,評級自動 79 → 80.9,下一場對法國的勝率
+> 自動從 25.7% 上調到 27.2%。
 
 設定步驟(只做一次,不用申請任何金鑰):
-1. 把 `update_matches.py`、`results.js`、`results_state.json` 放到 repo 根目錄,
+1. 把四支 `.py` 與所有產生的 `.js` / `.json` 放到 repo 根目錄,
    `daily.yml` 放到 `.github/workflows/`。
-2. repo → **Settings → Actions → General → Workflow permissions** 選 **Read and write**(讓機器人能提交)。
-3. 到 **Actions → 更新世界盃比賽結果 → Run workflow** 手動跑一次測試。
-   成功後 `results.js` 會更新,之後**每 15 分鐘自動跑**。
-4. 前端每 60 秒會自動抓到新的 `results.js` 並刷新。
+2. repo → **Settings → Actions → General → Workflow permissions** 選 **Read and write**。
+3. 到 **Actions → 世界盃全自動更新 → Run workflow** 手動跑一次測試。
+   成功後之後**每 15 分鐘自動跑**。
+4. 前端每 60 秒自動抓取所有檔案並刷新。
+
+### 自動預測 vs 你的手寫預測
+- 你在 `data.js` 手寫的預測**優先**,模型不會覆蓋。
+- 只有「沒有手寫預測」的比賽才會用模型自動補,卡片上會標示 <b>模型自動</b> 徽章。
+- 想改成自己的判斷?在 `data.js` 補上該場的 `pred`,徽章就會消失,以你的為準。
+
+### 自動檢討 vs 你的手寫檢討
+同樣是**你的優先**。沒手寫 `review` 的完賽比賽,會自動補上模型檢討(標示「自動」徽章),
+內容包含:方向/晉級/比分是否命中、誤差在哪(勝方壓制力被低估?防線比預期鬆散?)、Brier 校準評語。
+
+### 自動頭條
+`news_engine.py` 不依賴新聞 API,直接從賽果「生成」頭條:
+- **爆冷偵測**:比對當初預測的勝率,低勝率一方獲勝 → 標記為「爆冷」
+- 大勝、PK 晉級、焦點五五波對決,都會自動產生對應標籤
+
+### 自動預測模型怎麼算
+以各隊實力評級推導雙方預期進球(xG),用 **Poisson 分布**展開所有比分組合 →
+得到主勝/和局/客勝機率與最可能比分。地主(USA/MEX/CAN)對非地主時給予主場加成。
+評級起始值在 `predict_engine.py` 的 `BASE_RATINGS`,但**之後會由 `review_engine.py` 自動校準**
+並存進 `ratings.json`(每場調整上限 ±2.0,避免單場過度反應)。你不需要手動調。
+
+### 現在還需要手動的部分
+只剩 **球員名單 / 傷兵停賽狀態**(`data.js` 的 `SQUADS`),因為沒有免費 API 提供這些資料。
+其餘(結果、預測、檢討、頭條、評級)**全部自動**。
 
 > **為什麼要後端?** 靜態網頁(GitHub Pages)基於安全不能直接在瀏覽器抓比分(跨域會被擋)。
-> 所以由 GitHub Actions 去抓、產生 `results.js`,前端再讀它。全程免金鑰。
+> 所以由 GitHub Actions 去抓、產生檔案,前端再讀它。全程免金鑰。
 >
 > ESPN 是公開但非官方的來源,萬一某天欄位改版導致抓不到,可改用 `--source json` 手動餵比分,
 > 或改用 football-data.org(需金鑰,腳本也支援 `--source football-data`)。

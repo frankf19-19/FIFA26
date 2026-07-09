@@ -105,48 +105,5 @@
       1
     ],
     "advanced": "法國"
-  },
-  "bra-nor": {
-    "score": [
-      1,
-      2
-    ],
-    "advanced": "挪威"
-  },
-  "mex-eng": {
-    "score": [
-      2,
-      3
-    ],
-    "advanced": "英格蘭"
-  },
-  "por-esp": {
-    "score": [
-      0,
-      1
-    ],
-    "advanced": "西班牙"
-  },
-  "usa-bel": {
-    "score": [
-      1,
-      4
-    ],
-    "advanced": "比利時"
-  },
-  "arg-egy": {
-    "score": [
-      3,
-      2
-    ],
-    "advanced": "阿根廷"
-  },
-  "sui-col": {
-    "score": [
-      0,
-      0
-    ],
-    "advanced": "瑞士",
-    "pk": true
   }
 }
