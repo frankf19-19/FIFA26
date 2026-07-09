@@ -327,12 +327,14 @@
 if(typeof MATCH_RESULTS!=="undefined"){
   MATCH_DATA.forEach(m=>{ if(MATCH_RESULTS[m.id]) m.result=MATCH_RESULTS[m.id]; });
 }
-/* ===== 自動檢討合併:沒有手寫 review 的完賽比賽,自動補上模型檢討 ===== */
+/* ===== 自動檢討合併:沒有手寫 review 的完賽比賽,自動補上模型檢討 =====
+   注意:reviews.js 用 const 宣告,無法重新指派,故用可變副本 ACTIVE_REVIEWS 承接更新 */
+let ACTIVE_REVIEWS = (typeof AUTO_REVIEWS!=="undefined") ? AUTO_REVIEWS : {};
 function mergeAutoReviews(){
-  if(typeof AUTO_REVIEWS==="undefined") return 0;
+  if(!ACTIVE_REVIEWS || !Object.keys(ACTIVE_REVIEWS).length) return 0;
   let n=0;
   MATCH_DATA.forEach(m=>{
-    if(m.result && !m.review && AUTO_REVIEWS[m.id]){ m.review=AUTO_REVIEWS[m.id].text; m.autoReview=true; n++; }
+    if(m.result && !m.review && ACTIVE_REVIEWS[m.id]){ m.review=ACTIVE_REVIEWS[m.id].text; m.autoReview=true; n++; }
   });
   return n;
 }
@@ -346,16 +348,17 @@ function mergeAutoHeadlines(){
 mergeAutoHeadlines();
 /* ===== 自動預測合併:未開賽且沒有手寫預測的比賽,自動補上模型預測;
         八強等新對戰若 data.js 尚未建立,也會自動新增卡片 ===== */
+let ACTIVE_PREDICTIONS = (typeof AUTO_PREDICTIONS!=="undefined") ? AUTO_PREDICTIONS : {};
 function mergeAutoPredictions(){
-  if(typeof AUTO_PREDICTIONS==="undefined") return 0;
+  if(!ACTIVE_PREDICTIONS || !Object.keys(ACTIVE_PREDICTIONS).length) return 0;
   const ZH={FRA:"法國",ESP:"西班牙",ARG:"阿根廷",BRA:"巴西",ENG:"英格蘭",POR:"葡萄牙",MAR:"摩洛哥",
     BEL:"比利時",NOR:"挪威",COL:"哥倫比亞",SUI:"瑞士",USA:"美國",MEX:"墨西哥",EGY:"埃及",CAN:"加拿大",
     PAR:"巴拉圭",NED:"荷蘭",GER:"德國",CRO:"克羅埃西亞",CPV:"維德角"};
   const FLAG={FRA:"🇫🇷",ESP:"🇪🇸",ARG:"🇦🇷",BRA:"🇧🇷",ENG:"🏴󠁧󠁢󠁥󠁮󠁧󠁿",POR:"🇵🇹",MAR:"🇲🇦",BEL:"🇧🇪",NOR:"🇳🇴",
     COL:"🇨🇴",SUI:"🇨🇭",USA:"🇺🇸",MEX:"🇲🇽",EGY:"🇪🇬",CAN:"🇨🇦",PAR:"🇵🇾",NED:"🇳🇱",GER:"🇩🇪",CRO:"🇭🇷",CPV:"🇨🇻"};
   let n=0;
-  for(const id in AUTO_PREDICTIONS){
-    const ap=AUTO_PREDICTIONS[id];
+  for(const id in ACTIVE_PREDICTIONS){
+    const ap=ACTIVE_PREDICTIONS[id];
     let m=MATCH_DATA.find(x=>x.id===id);
     if(m){
       if(!m.result && (!m.pred || !m.pred.prob)){          // 沒手寫預測 → 自動補
@@ -405,6 +408,32 @@ function grade(m){
 }
 
 /* ================= scorecard ================= */
+/* 顯示最即時的時間戳:優先用自動更新帶來的時間,其次才是 data.js 的固定值 */
+let LIVE_STAMP = (typeof RESULTS_UPDATED!=="undefined" && RESULTS_UPDATED) ? RESULTS_UPDATED : "";
+function liveStamp(){
+  if(LIVE_STAMP) return LIVE_STAMP;
+  const el=document.getElementById("upd");
+  if(el&&el.textContent&&el.textContent!=="—") return el.textContent;
+  return UPDATED;
+}
+/* 最大誤判的修正建議:優先用自動檢討引擎針對「該場」產生的分析,而非固定文字 */
+function missAdvice(worst){
+  const m=worst.m;
+  if(ACTIVE_REVIEWS && ACTIVE_REVIEWS[m.id] && ACTIVE_REVIEWS[m.id].text){
+    return ACTIVE_REVIEWS[m.id].text.replace("（模型自動檢討）","");
+  }
+  if(m.review) return m.review;
+  // 沒有檢討資料時,依該場實際情況即時生成建議(不再寫死)
+  const [hs,as]=m.result.score, ps=m.pred.score;
+  const gdReal=hs-as, gdPred=ps[0]-ps[1];
+  const winner=m.result.advanced;
+  const tips=[];
+  if(Math.abs(gdReal)>Math.abs(gdPred)) tips.push(`${winner}的壓制力被低估,應上調其評級`);
+  else if(Math.abs(gdReal)<Math.abs(gdPred)) tips.push("弱方抵抗力被低估,應收斂強隊的預期淨勝球");
+  if(m.result.pk) tips.push("高和局機率賽事應提高 PK 韌性權重");
+  if(hs+as>ps[0]+ps[1]+1) tips.push("雙方防線比預期鬆散");
+  return tips.length?("修正:"+tips.join(";")+"。"):"修正:已依此結果自動校準雙方評級。";
+}
 function renderScorecard(){
   const graded=MATCH_DATA.map(m=>({m,g:grade(m)})).filter(x=>x.g);
   const n=graded.length, el=document.getElementById("scorecard");
@@ -413,7 +442,7 @@ function renderScorecard(){
   graded.forEach(({m,g})=>{dir+=g.dirHit;adv+=g.advHit;sco+=g.scoreHit;bsum+=g.brier;if(!worst||g.brier>worst.g.brier)worst={m,g};});
   const brier=bsum/n, pct=x=>Math.round(x/n*100);
   el.innerHTML=`
-    <div class="sc-top"><div class="sc-title">📊 模型記分卡</div><div class="sc-sub">已驗證 ${n} 場 · ${UPDATED}</div></div>
+    <div class="sc-top"><div class="sc-title">📊 模型記分卡</div><div class="sc-sub">已驗證 ${n} 場 · ${liveStamp()}</div></div>
     <div class="tiles">
       <div class="tile good"><div class="tv">${pct(adv)}<small>%</small></div><div class="tl">晉級命中</div><div class="tx">${adv}/${n}</div></div>
       <div class="tile good"><div class="tv">${pct(dir)}<small>%</small></div><div class="tl">方向命中</div><div class="tx">${dir}/${n}</div></div>
@@ -422,7 +451,7 @@ function renderScorecard(){
     </div>
     <div class="takeaway"><span class="k">最大誤判</span>
       <div><b>${worst.m.home.zh} ${worst.m.result.score[0]}–${worst.m.result.score[1]} ${worst.m.away.zh}</b>
-      ${worst.m.missTag?"("+worst.m.missTag+")":""} — Brier ${worst.g.brier.toFixed(2)}。修正:對防守型球隊下修主勝、對頂級強隊上調預期進球。</div></div>`;
+      ${worst.m.missTag?"("+worst.m.missTag+")":""} — Brier ${worst.g.brier.toFixed(2)}。${missAdvice(worst)}</div></div>`;
 }
 
 /* ================= headlines ================= */
@@ -687,7 +716,7 @@ async function fetchPredictions(){          // 自動預測(選填)
     if(!res.ok) return null;
     const code=await res.text();
     const out=new Function(code+';return (typeof AUTO_PREDICTIONS!=="undefined")?AUTO_PREDICTIONS:null;')();
-    if(out){ window.AUTO_PREDICTIONS=out; return mergeAutoPredictions(); }
+    if(out){ ACTIVE_PREDICTIONS=out; return mergeAutoPredictions(); }
   }catch(e){}
   return null;
 }
@@ -697,7 +726,7 @@ async function fetchReviews(){              // 自動檢討(選填)
     if(!res.ok) return null;
     const code=await res.text();
     const out=new Function(code+';return (typeof AUTO_REVIEWS!=="undefined")?AUTO_REVIEWS:null;')();
-    if(out){ window.AUTO_REVIEWS=out; return mergeAutoReviews(); }
+    if(out){ ACTIVE_REVIEWS=out; return mergeAutoReviews(); }
   }catch(e){}
   return null;
 }
@@ -707,7 +736,7 @@ async function fetchHeadlines(){            // 自動頭條(選填)
     if(!res.ok) return false;
     const code=await res.text();
     const out=new Function(code+';return (typeof AUTO_HEADLINES!=="undefined")?AUTO_HEADLINES:null;')();
-    if(out&&out.length){ window.AUTO_HEADLINES=out; mergeAutoHeadlines(); renderHeadlines(); return true; }
+    if(out&&out.length){ ACTIVE_HEADLINES=out.slice(); renderHeadlines(); return true; }
   }catch(e){}
   return false;
 }
@@ -717,7 +746,7 @@ async function fetchAllExtras(){
 function applyResults(out){
   let changed=0;
   if(out.mr){MATCH_DATA.forEach(m=>{const r=out.mr[m.id];if(r){const b=JSON.stringify(m.result||null);m.result=r;if(JSON.stringify(r)!==b)changed++;}});}
-  if(out.ru)document.getElementById("upd").textContent=out.ru;
+  if(out.ru){document.getElementById("upd").textContent=out.ru; LIVE_STAMP=out.ru;}
   if(out.mr)lastResultsSig=JSON.stringify(out.mr);
   renderScorecard();renderHeadlines();select(currentDate);
   return changed;
