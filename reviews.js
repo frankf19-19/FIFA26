@@ -1,5 +1,5 @@
-/* 由 review_engine.py 自動產生於 2026/07/09 22:47 — 請勿手改 */
-const REVIEWS_UPDATED = "2026/07/09 22:47";
+/* 由 review_engine.py 自動產生於 2026/07/10 10:36 — 請勿手改 */
+const REVIEWS_UPDATED = "2026/07/10 10:36";
 const MODEL_STATS = {n:16, dir:15, adv:15, score:4, brier:0.351};
 const AUTO_REVIEWS = {
   "arg-cpv": {text:"（模型自動檢討）方向與晉級命中,僅比分有誤差。實際比預測膠著(3-2 vs 3-0),弱方抵抗力被低估。雙方防線比預期鬆散,總進球高於模型預期。本場 Brier 0.04,機率校準良好。", brier:0.035},
