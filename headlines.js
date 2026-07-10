@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/07/10 10:36 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/07/10 10:36";
+/* 由 news_engine.py 自動產生於 2026/07/10 17:23 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/07/10 17:23";
 const AUTO_HEADLINES = [
   {tag:"upset", t:"大爆冷!摩洛哥 淘汰 荷蘭,1-1 (PK)寫下驚奇", d:"剛結束", team:"MAR"},
   {tag:"adv", t:"埃及 PK 大戰勝出,1-1 驚險晉級", d:"剛結束", team:"EGY"},
