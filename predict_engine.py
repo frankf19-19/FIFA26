@@ -23,6 +23,15 @@ COEF, BASE, HOME_ADV = 0.030, 1.30, 0.22
 
 RATINGS_FILE = "ratings.json"
 PREDLOG_FILE = "predictions_log.json"
+ADJUST_FILE  = "adjust.json"     # 由 injury_engine.py 產生的各隊戰力折扣
+
+def load_adjust():
+    try:
+        with open(ADJUST_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+ADJUST = load_adjust()
 
 # ---- 實力評級(基準值;若有 ratings.json 則以其為準,由 review_engine.py 自動校準) ----
 BASE_RATINGS = {
@@ -70,6 +79,9 @@ def predict(hc, ac):
     else:                                  adv = 0.0
     lh = BASE * math.exp(COEF*d/2 + adv/2)
     la = BASE * math.exp(-COEF*d/2 - adv/2)
+    # 傷停折扣:關鍵球員缺陣 → 該隊預期進球下修(來自 injury_engine.py)
+    lh *= ADJUST.get(hc, 1.0)
+    la *= ADJUST.get(ac, 1.0)
     lh, la = max(0.2, min(lh, 4.5)), max(0.2, min(la, 4.5))
     H = D = A = 0.0
     for i in range(10):
@@ -110,7 +122,10 @@ def make_reason(hc, ac, h, d, a, si, sj):
     host = ""
     if hc in HOSTS and ac not in HOSTS: host = f"{hz}為地主、享有主場加成,已納入計算。"
     elif ac in HOSTS and hc not in HOSTS: host = f"{az}為地主、享有主場加成,已納入計算。"
-    return f"（模型自動預測）{tone}{host}預期比分 {si}-{sj}。實際仍需視當日先發、傷停與狀態調整。"
+    inj = ""
+    if ADJUST.get(hc, 1.0) < 0.97: inj += f"{hz}有傷停影響、戰力已下修。"
+    if ADJUST.get(ac, 1.0) < 0.97: inj += f"{az}有傷停影響、戰力已下修。"
+    return f"（模型自動預測）{tone}{host}{inj}預期比分 {si}-{sj}。實際仍需視當日先發、傷停與狀態調整。"
 
 def team_code(team):
     ab = (team.get("abbreviation") or "").upper()

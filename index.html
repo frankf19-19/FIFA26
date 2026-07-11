@@ -209,6 +209,14 @@
   .avatar.lg{width:72px;height:72px;border-radius:18px}
   .avatar.lg .av-init{font-size:34px} .avatar.lg .av-badge{font-size:16px;right:-5px;bottom:-5px}
   .empty{text-align:center;color:var(--muted);padding:48px 0;font-size:14px}
+  .injbar{margin:0 15px 11px;padding:9px 12px;background:#fb71850a;border:1px solid #fb718522;border-radius:10px;font-size:12px}
+  .inj-h{font-family:var(--num);font-weight:700;font-size:10.5px;letter-spacing:.04em;color:var(--away);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .inj-warn{color:var(--draw);background:#fbbf2418;padding:1px 6px;border-radius:5px;font-weight:600}
+  .inj-side{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:4px}
+  .inj-team{color:var(--muted);font-weight:600;min-width:78px}
+  .inj-p{padding:2px 7px;border-radius:6px;font-size:11px;font-weight:600}
+  .inj-p.io{color:var(--away);background:#fb718518} .inj-p.id{color:var(--draw);background:#fbbf2418}
+  .inj-none{color:var(--home);font-size:11px}
   footer{text-align:center;color:var(--muted-2);font-size:11.5px;margin-top:28px;line-height:1.9}
   footer .num{font-family:var(--num)}
 
@@ -325,6 +333,7 @@
 <script src="predictions.js" onerror="void 0"></script>
 <script src="reviews.js" onerror="void 0"></script>
 <script src="headlines.js" onerror="void 0"></script>
+<script src="injuries.js" onerror="void 0"></script>
 <script>
 /* ===== 自動結果合併:results.js 若定義 MATCH_RESULTS,則覆蓋對應比賽的 result ===== */
 if(typeof MATCH_RESULTS!=="undefined"){
@@ -398,6 +407,29 @@ function mergeAutoPredictions(){
 }
 mergeAutoPredictions();
 mergeAutoReviews();
+/* ===== 自動傷停合併:把抓到的傷兵/停賽標到球員上(name 比對),沒抓到不動 ===== */
+let ACTIVE_INJURIES = (typeof INJURIES!=="undefined") ? INJURIES : {};
+let INJ_CONFIRMED = (typeof INJURIES_CONFIRMED!=="undefined") ? INJURIES_CONFIRMED : false;
+function statusZh(s){
+  s=(s||"").toLowerCase();
+  if(s.includes("suspend")||s.includes("red card")) return "停賽";
+  if(s.includes("out")||s.includes("inj")) return "傷兵";
+  return "存疑";
+}
+function mergeAutoInjuries(){
+  if(!ACTIVE_INJURIES||!Object.keys(ACTIVE_INJURIES).length) return 0;
+  let n=0;
+  for(const code in ACTIVE_INJURIES){
+    const team=SQUADS[code]; if(!team) continue;
+    ACTIVE_INJURIES[code].forEach(inj=>{
+      const p=team.players.find(pl=>(pl.e||"").toLowerCase().includes((inj.name||"").split(" ").pop().toLowerCase())
+        || (inj.name||"").toLowerCase().includes((pl.e||"").toLowerCase()));
+      if(p && !p.xManual){ p.x=statusZh(inj.status); p.xAuto=true; n++; }
+    });
+  }
+  return n;
+}
+mergeAutoInjuries();
 /* ================= config ================= */
 const DOW=["日","一","二","三","四","五","六"];
 const ROUND={32:{cls:"rb-32",label:"32強"},16:{cls:"rb-16",label:"16強"},8:{cls:"rb-8",label:"8強"},4:{cls:"rb-4",label:"4強"},3:{cls:"rb-3",label:"季軍戰"},1:{cls:"rb-1",label:"決賽"}};
@@ -626,6 +658,20 @@ function tbdLabels(m){
   if(m.round===4)  return {icon:"🎖️", a:"八強勝者",   b:"八強勝者",   ca:"待八強", cb:"待八強"};
   return {icon:"🏆", a:"晉級隊 A", b:"晉級隊 B", ca:"TBD", cb:"TBD"};
 }
+/* 比賽卡的傷停橫幅:列出雙方缺陣/存疑球員(來自自動抓取或手寫) */
+function sideInjuries(code){
+  const t=SQUADS[code]; if(!t) return [];
+  return t.players.filter(p=>p.x).map(p=>({n:p.n,x:p.x,key:p.r==="key"}));
+}
+function matchInjuries(m){
+  const H=sideInjuries(m.home.code), A=sideInjuries(m.away.code);
+  if(!H.length && !A.length) return "";
+  const fmt=list=>list.map(p=>`<span class="inj-p ${p.x==='停賽'||p.x==='傷兵'?'io':'id'}">${p.key?"⭐":""}${p.n}·${p.x}</span>`).join("");
+  const conf = INJ_CONFIRMED ? "" : `<span class="inj-warn">傷停資料未確認</span>`;
+  return `<div class="injbar"><div class="inj-h">🚑 傷停情報 ${conf}</div>
+    <div class="inj-side"><span class="inj-team">${m.home.flag} ${m.home.zh}</span>${H.length?fmt(H):'<span class="inj-none">無</span>'}</div>
+    <div class="inj-side"><span class="inj-team">${m.away.flag} ${m.away.zh}</span>${A.length?fmt(A):'<span class="inj-none">無</span>'}</div></div>`;
+}
 function matchCard(m){
   const r=ROUND[m.round]||RDEF, fin=isFinal(m), g=grade(m);
   let teamsHTML="",pkHTML="";
@@ -669,6 +715,12 @@ function matchCard(m){
         <span class="hb hb-brier">Brier ${g.brier.toFixed(2)}</span></div></div>`;
   }
 
+  let injHTML="";
+  if(!fin&&!m.tbd){
+    const inj=matchInjuries(m);
+    if(inj) injHTML=inj;
+  }
+
   let revHTML="";
   if(fin){
     const rea=m.pred&&m.pred.reason?`<div class="after"><b>當初理由</b> ${m.pred.reason}</div>`:"";
@@ -679,7 +731,7 @@ function matchCard(m){
   const autoPill=(!fin&&m.auto)?`<span class="status-pill" style="color:var(--diamond);border:1px solid #7dd3fc44;margin-right:6px">模型自動</span>`:"";
   return `<div class="card ${fin?"final":""}">
     <div class="card-top"><span class="round-badge ${r.cls}">${r.label}</span><span class="ktime">${m.time}</span>${autoPill}${stPill}</div>
-    <div class="teams">${teamsHTML}</div>${pkHTML}${predHTML}${cmpHTML}${revHTML}</div>`;
+    <div class="teams">${teamsHTML}</div>${pkHTML}${injHTML}${predHTML}${cmpHTML}${revHTML}</div>`;
 }
 function reveal(ico,label,body){
   return `<div class="reveal"><div class="reveal-head"><div class="lft"><span class="ico">${ico}</span>${label}</div><span class="chev">▾</span></div>
@@ -766,8 +818,18 @@ async function fetchHeadlines(){            // 自動頭條(選填)
   }catch(e){}
   return false;
 }
+async function fetchInjuries(){            // 自動傷停(選填)
+  try{
+    const res=await fetch("injuries.js?_="+Date.now(),{cache:"no-store"});
+    if(!res.ok) return false;
+    const code=await res.text();
+    const out=new Function(code+';return {inj:(typeof INJURIES!=="undefined")?INJURIES:null, cf:(typeof INJURIES_CONFIRMED!=="undefined")?INJURIES_CONFIRMED:false};')();
+    if(out.inj){ ACTIVE_INJURIES=out.inj; INJ_CONFIRMED=out.cf; mergeAutoInjuries(); return true; }
+  }catch(e){}
+  return false;
+}
 async function fetchAllExtras(){
-  await Promise.all([fetchPredictions(),fetchReviews(),fetchHeadlines()]);
+  await Promise.all([fetchPredictions(),fetchReviews(),fetchHeadlines(),fetchInjuries()]);
 }
 function applyResults(out){
   let changed=0;
