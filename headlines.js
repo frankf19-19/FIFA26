@@ -1,11 +1,13 @@
-/* 由 news_engine.py 自動產生於 2026/07/11 09:14 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/07/11 09:14";
-const NEWS_DIAG = {real:0, note:"連線失敗:HTTPError"};
+/* 由 news_engine.py 自動產生於 2026/07/11 09:16 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/07/11 09:16";
+const NEWS_DIAG = {real:6, note:"OK:site.api.espn.com/apis"};
 const AUTO_HEADLINES = [
-  {tag:"adv", t:"摩洛哥 PK 大戰勝出,1-1 驚險晉級", d:"剛結束", team:"MAR", link:""},
-  {tag:"result", t:"象牙海岸 1-2 挪威,挪威 晉級下一輪", d:"剛結束", team:"NOR", link:""},
-  {tag:"result", t:"法國 3-0 大勝 瑞典,展現壓倒性實力", d:"剛結束", team:"FRA", link:""},
-  {tag:"result", t:"墨西哥 2-0 厄瓜多,墨西哥 晉級下一輪", d:"剛結束", team:"MEX", link:""},
-  {tag:"result", t:"英格蘭 2-1 剛果,英格蘭 晉級下一輪", d:"剛結束", team:"ENG", link:""},
-  {tag:"focus", t:"西班牙 對決 比利時,模型看好 西班牙 晉級", d:"即將開賽", team:"ESP", link:""},
+  {tag:"news", t:"World Cup quarterfinals: How we got here, predictions, odds", d:"2026-07-11", team:"", link:"https://www.espn.com/soccer/story/_/id/49294844/fifa-world-cup-quarterfinal-preview-predictions-odds-argentina-belgium-england-france-morocco-norway-spain-switzerland"},
+  {tag:"news", t:"World Cup daily: Free England-Norway ticket for Erling Haaland look-alike", d:"2026-07-11", team:"", link:"https://www.espn.com/soccer/story/_/id/49329226/world-cup-daily-england-norway-argentina-switzerland-quarterfinals-erling-haaland"},
+  {tag:"news", t:"Why are there hydration breaks at the 2026 World Cup, and why has FIFA been criticised?", d:"2026-07-11", team:"", link:"https://www.espn.com/soccer/story/_/id/48945011/why-there-drinks-breaks-2026-world-cup-fifa-criticised"},
+  {tag:"news", t:"Free World Cup 2026 predictor: Simulate your road to the final", d:"2026-07-11", team:"", link:"https://www.espn.com/soccer/story/_/id/48945570/2026-fifa-world-cup-predictions-simulator"},
+  {tag:"news", t:"Harry Kane vs. Erling Haaland: How do England, Norway stars compare? Key stats before World Cup clash", d:"2026-07-11", team:"", link:"https://www.espn.com/soccer/story/_/id/49313872/harry-kane-erling-haaland-comparison-key-stats-england-norway-world-cup-quarterfinal"},
+  {tag:"news", t:"Norway scouting report: What can England expect in their World Cup quarterfinal?", d:"2026-07-11", team:"", link:"https://www.espn.com/soccer/story/_/id/49309967/norway-scouting-report-england-expect-their-world-cup-quarterfinal"},
+  {tag:"upset", t:"大爆冷!摩洛哥 淘汰 荷蘭,1-1 (PK)寫下驚奇", d:"剛結束", team:"MAR", link:""},
+  {tag:"adv", t:"埃及 PK 大戰勝出,1-1 驚險晉級", d:"剛結束", team:"EGY", link:""},
 ];
