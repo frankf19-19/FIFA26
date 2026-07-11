@@ -12,12 +12,37 @@ news_engine.py — 自動產生頭條新聞(免金鑰)
 用法:
   python news_engine.py
 """
-import json, datetime
+import json, datetime, urllib.request
 
 RESULTS_FILE = "results_state.json"
 PREDLOG_FILE = "predictions_log.json"
 PREDS_FILE   = "predictions.js"     # 只讀日期用;解析失敗也無妨
 OUT_FILE     = "headlines.js"
+ESPN_NEWS    = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/news"
+
+def fetch_espn_news(espn_file=None, limit=6):
+    """抓 ESPN 公開新聞標題(免金鑰)。回傳 [{t,d,link}] 或 []"""
+    data = None
+    if espn_file:
+        try:
+            with open(espn_file, encoding="utf-8") as f: data = json.load(f)
+        except Exception: return []
+    else:
+        try:
+            with urllib.request.urlopen(ESPN_NEWS, timeout=30) as r: data = json.load(r)
+        except Exception as e:
+            print(f"  (ESPN 新聞端點無回應:{e} — 改用自動生成頭條)")
+            return []
+    out = []
+    for a in (data.get("articles") or [])[:limit]:
+        headline = (a.get("headline") or a.get("title") or "").strip()
+        if not headline: continue
+        published = (a.get("published") or "")[:10]
+        link = ""
+        try: link = a["links"]["web"]["href"]
+        except Exception: pass
+        out.append({"t": headline, "d": published or "ESPN", "link": link})
+    return out
 
 CODE_TO_ZH = {
     "NED":"荷蘭","MAR":"摩洛哥","CIV":"象牙海岸","NOR":"挪威","FRA":"法國","SWE":"瑞典",
@@ -36,10 +61,14 @@ def load(p, d):
 
 def zh(c): return CODE_TO_ZH.get(c.upper(), c.upper())
 
-def build():
+def build(espn_file=None):
     results = load(RESULTS_FILE, {})
     predlog = load(PREDLOG_FILE, {})
     news = []
+
+    # ---- 0) 優先:ESPN 真實新聞(免金鑰);抓不到就往下用自動生成 ----
+    for a in fetch_espn_news(espn_file):
+        news.append({"tag": "news", "t": a["t"], "d": a["d"], "team": "", "link": a.get("link", "")})
 
     # ---- 1) 完賽頭條(依爆冷程度排序) ----
     scored = []
@@ -76,7 +105,7 @@ def build():
         scored.append((upset, {"tag": tag, "t": t, "d": "剛結束", "team": team}))
 
     scored.sort(key=lambda x: -x[0])              # 最冷門的排前面
-    news.extend(n for _, n in scored[:5])
+    news.extend(n for _, n in scored[: max(2, 5 - len(news))])
 
     # ---- 2) 即將開賽的焦點對決 ----
     focus = []
@@ -104,14 +133,19 @@ def build():
     return news[:7]
 
 def main():
-    news = build()
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--espn-file")
+    args = ap.parse_args()
+    news = build(args.espn_file)
     ts = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
     lines = [f"/* 由 news_engine.py 自動產生於 {ts} — 請勿手改 */",
              f'const HEADLINES_UPDATED = "{ts}";',
              "const AUTO_HEADLINES = ["]
-    for n in news:
-        t = n["t"].replace('"', "'")
-        lines.append(f'  {{tag:"{n["tag"]}", t:"{t}", d:"{n["d"]}", team:"{n["team"]}"}},')
+    for it in news:
+        t = it["t"].replace('"', "'")
+        link = it.get("link", "")
+        lines.append(f'  {{tag:"{it["tag"]}", t:"{t}", d:"{it["d"]}", team:"{it["team"]}", link:"{link}"}},')
     lines.append("];")
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")

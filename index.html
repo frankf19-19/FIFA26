@@ -27,6 +27,7 @@
 
   /* header */
   header{padding:24px 0 8px}
+  .buildtag{font-family:var(--num);font-size:10.5px;color:var(--gold);background:var(--gold-dim);padding:1px 8px;border-radius:999px;font-weight:700}
   .eyebrow{font-family:var(--num);font-weight:600;letter-spacing:.28em;text-transform:uppercase;font-size:12px;color:var(--gold);display:flex;align-items:center;gap:9px}
   .eyebrow::before{content:"";width:26px;height:2px;background:var(--gold);display:inline-block}
   h1{font-family:var(--disp);font-weight:800;font-size:clamp(30px,8vw,48px);line-height:.94;margin:10px 0 8px}
@@ -61,6 +62,7 @@
   .headlines::-webkit-scrollbar{display:none}
   .hl{flex:0 0 auto;width:230px;background:var(--surface);border:1px solid var(--line-soft);border-radius:14px;padding:13px 14px;cursor:pointer;transition:.16s;position:relative}
   .hl:hover{border-color:var(--line);transform:translateY(-2px)}
+  .ht-news{color:#e11d48;background:#e11d4818} .hl.has-link{cursor:pointer} .hl.has-link:hover{border-color:var(--gold)}
   .hl .htag{font-family:var(--num);font-weight:700;font-size:10.5px;letter-spacing:.06em;padding:2px 8px;border-radius:6px;display:inline-block;margin-bottom:8px}
   .ht-injury{color:var(--away);background:#fb718518} .ht-upset{color:var(--draw);background:#fbbf2418}
   .ht-result{color:var(--r16);background:#5eead418} .ht-focus{color:var(--diamond);background:#7dd3fc18}
@@ -287,7 +289,7 @@
     <div class="eyebrow">FIFA WORLD CUP · KNOCKOUT</div>
     <h1><span class="yr">2026</span> 世界盃<br>每日預測與情報</h1>
     <div class="sub"><span>淘汰賽階段</span><span class="dot-sep"></span>
-      <span>資料更新 <b id="upd">—</b></span><span class="dot-sep"></span><span>時間為 <b>台灣時間</b></span></div>
+      <span>資料更新 <b id="upd">—</b></span><span class="dot-sep"></span><span>時間為 <b>台灣時間</b></span><span class="dot-sep"></span><span class="buildtag" id="buildTag"></span></div>
     <div style="margin-top:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="refresh-btn" id="refreshBtn"><span class="ri">⟳</span> 更新結果</button><span class="auto-ind" id="autoInd">檢查自動更新中…</span></div>
 
     <div class="scorecard" id="scorecard"></div>
@@ -431,14 +433,17 @@ function mergeAutoInjuries(){
 }
 mergeAutoInjuries();
 /* ================= config ================= */
+const BUILD = "r35";                         // ← 每次改版就 +1,方便辨識
+const BUILD_DATE = "2026/07/09";
 const DOW=["日","一","二","三","四","五","六"];
 const ROUND={32:{cls:"rb-32",label:"32強"},16:{cls:"rb-16",label:"16強"},8:{cls:"rb-8",label:"8強"},4:{cls:"rb-4",label:"4強"},3:{cls:"rb-3",label:"季軍戰"},1:{cls:"rb-1",label:"決賽"}};
 const RDEF={cls:"rb-32",label:"賽事"};   // 未知輪次的保底
 const CONF={hi:{cls:"hi",label:"高"},mid:{cls:"mid",label:"中"},lo:{cls:"lo",label:"低"}};
 const OUT={h:"主勝",d:"和局",a:"客勝"};
 const POS_ORDER=["門將","後衛","中場","前鋒"];
-const HTAG={injury:{c:"ht-injury",t:"傷兵"},upset:{c:"ht-upset",t:"爆冷"},result:{c:"ht-result",t:"賽果"},focus:{c:"ht-focus",t:"焦點"},adv:{c:"ht-adv",t:"晉級"}};
+const HTAG={injury:{c:"ht-injury",t:"傷兵"},upset:{c:"ht-upset",t:"爆冷"},result:{c:"ht-result",t:"賽果"},focus:{c:"ht-focus",t:"焦點"},adv:{c:"ht-adv",t:"晉級"},news:{c:"ht-news",t:"ESPN"},info:{c:"ht-result",t:"資訊"}};
 document.getElementById("upd").textContent=(typeof RESULTS_UPDATED!=="undefined"?RESULTS_UPDATED:UPDATED);
+document.getElementById("buildTag").textContent="build "+BUILD+" · "+BUILD_DATE;
 
 const isFinal=m=>!!m.result;
 const outcome=s=>s[0]>s[1]?"h":s[0]<s[1]?"a":"d";
@@ -507,12 +512,15 @@ function renderHeadlines(){
   box.innerHTML=ACTIVE_HEADLINES.map((h,i)=>{
     const tg=HTAG[h.tag]||HTAG.result;
     const flag=h.team&&SQUADS[h.team]?SQUADS[h.team].flag:"⚽";
-    return `<div class="hl" data-hi="${i}"><span class="htag ${tg.c}">${tg.t}</span>
+    const cue = h.link ? " · ESPN 原文 ›" : (h.team&&SQUADS[h.team]?" · 看名單 ›":"");
+    return `<div class="hl ${h.link?'has-link':''}" data-hi="${i}"><span class="htag ${tg.c}">${tg.t}</span>
       <div class="htxt">${h.t}</div>
-      <div class="hmeta"><span class="hteam">${flag}</span>${h.d}${h.team&&SQUADS[h.team]?" · 看名單 ›":""}</div></div>`;
+      <div class="hmeta"><span class="hteam">${flag}</span>${h.d}${cue}</div></div>`;
   }).join("");
   box.querySelectorAll(".hl").forEach(el=>el.onclick=()=>{
-    const h=ACTIVE_HEADLINES[+el.dataset.hi]; if(h.team&&SQUADS[h.team]) navTeam(h.team);
+    const h=ACTIVE_HEADLINES[+el.dataset.hi];
+    if(h.link){ window.open(h.link,"_blank","noopener"); return; }
+    if(h.team&&SQUADS[h.team]) navTeam(h.team);
   });
 }
 
