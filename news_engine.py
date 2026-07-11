@@ -21,28 +21,62 @@ OUT_FILE     = "headlines.js"
 ESPN_NEWS    = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/news"
 
 def fetch_espn_news(espn_file=None, limit=6):
-    """抓 ESPN 公開新聞標題(免金鑰)。回傳 [{t,d,link}] 或 []"""
+    """抓 ESPN 公開新聞標題(免金鑰)。回傳 (清單, 診斷字串)。
+       解析盡量寬容:標題/連結可能在不同欄位,能抓多少算多少。"""
     data = None
+    diag = ""
     if espn_file:
         try:
             with open(espn_file, encoding="utf-8") as f: data = json.load(f)
-        except Exception: return []
-    else:
-        try:
-            with urllib.request.urlopen(ESPN_NEWS, timeout=30) as r: data = json.load(r)
         except Exception as e:
-            print(f"  (ESPN 新聞端點無回應:{e} — 改用自動生成頭條)")
-            return []
+            return [], f"讀檔失敗:{e}"
+    else:
+        # ESPN 對無 UA 的請求有時會擋,補上瀏覽器 UA;兩個網域都試
+        urls = [
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/news",
+            "https://site.web.api.espn.com/apis/site/v2/sports/soccer/fifa.world/news?region=us&lang=en",
+        ]
+        for u in urls:
+            try:
+                req = urllib.request.Request(u, headers={
+                    "User-Agent": "Mozilla/5.0 (compatible; WCbot/1.0)",
+                    "Accept": "application/json",
+                })
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    data = json.load(r); diag = f"OK:{u.split('//')[1][:22]}"
+                    break
+            except Exception as e:
+                diag = f"連線失敗:{type(e).__name__}"
+        if data is None:
+            print(f"  (ESPN 新聞端點無回應:{diag} — 改用自動生成頭條)")
+            return [], diag
+
+    # articles 可能在 data['articles'] 或 data['feed'] 或巢狀
+    arts = data.get("articles") or data.get("feed") or []
+    if isinstance(arts, dict):
+        arts = arts.get("results") or arts.get("items") or []
+
+    def dig_link(a):
+        # 連結可能藏在 links.web.href / links.mobile.href / link / links[0].href
+        L = a.get("links")
+        if isinstance(L, dict):
+            for k in ("web", "mobile", "self"):
+                if isinstance(L.get(k), dict) and L[k].get("href"): return L[k]["href"]
+        if isinstance(L, list):
+            for it in L:
+                if isinstance(it, dict) and it.get("href"): return it["href"]
+        return a.get("link") or ""
+
     out = []
-    for a in (data.get("articles") or [])[:limit]:
-        headline = (a.get("headline") or a.get("title") or "").strip()
+    for a in arts[:limit]:
+        if not isinstance(a, dict): continue
+        headline = (a.get("headline") or a.get("title") or a.get("description") or "").strip()
         if not headline: continue
-        published = (a.get("published") or "")[:10]
-        link = ""
-        try: link = a["links"]["web"]["href"]
-        except Exception: pass
-        out.append({"t": headline, "d": published or "ESPN", "link": link})
-    return out
+        published = (a.get("published") or a.get("lastModified") or a.get("date") or "")[:10]
+        out.append({"t": headline, "d": published or "ESPN", "link": dig_link(a)})
+    if not out and diag.startswith("OK"):
+        diag += f"(articles={len(arts)}但無可用標題)"
+    return out, diag
 
 CODE_TO_ZH = {
     "NED":"荷蘭","MAR":"摩洛哥","CIV":"象牙海岸","NOR":"挪威","FRA":"法國","SWE":"瑞典",
@@ -67,7 +101,8 @@ def build(espn_file=None):
     news = []
 
     # ---- 0) 優先:ESPN 真實新聞(免金鑰);抓不到就往下用自動生成 ----
-    for a in fetch_espn_news(espn_file):
+    real, diag = fetch_espn_news(espn_file)
+    for a in real:
         news.append({"tag": "news", "t": a["t"], "d": a["d"], "team": "", "link": a.get("link", "")})
 
     # ---- 1) 完賽頭條(依爆冷程度排序) ----
@@ -130,17 +165,19 @@ def build(espn_file=None):
 
     if not news:
         news = [{"tag": "info", "t": "賽事資料更新中,稍後將自動載入最新頭條", "d": "系統", "team": ""}]
-    return news[:7]
+    return news[:8], diag
 
 def main():
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--espn-file")
     args = ap.parse_args()
-    news = build(args.espn_file)
+    news, diag = build(args.espn_file)
     ts = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
+    real_n = sum(1 for x in news if x.get("tag") == "news")
     lines = [f"/* 由 news_engine.py 自動產生於 {ts} — 請勿手改 */",
              f'const HEADLINES_UPDATED = "{ts}";',
+             f'const NEWS_DIAG = {{real:{real_n}, note:"{diag}"}};',
              "const AUTO_HEADLINES = ["]
     for it in news:
         t = it["t"].replace('"', "'")
@@ -150,7 +187,8 @@ def main():
     with open(OUT_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
-    print(f"✅ 已寫入 {OUT_FILE},自動產生 {len(news)} 則頭條")
+    real_n = sum(1 for x in news if x.get("tag") == "news")
+    print(f"✅ 已寫入 {OUT_FILE}: {len(news)} 則頭條(其中 ESPN 真實新聞 {real_n} 則;診斷:{diag or '—'})")
     for n in news:
         print(f"   [{n['tag']:>6}] {n['t']}")
 

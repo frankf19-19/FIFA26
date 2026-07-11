@@ -27,6 +27,8 @@
 
   /* header */
   header{padding:24px 0 8px}
+  .news-status{font-family:var(--num);font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:5px;margin-left:6px}
+  .ns-live{color:#e11d48;background:#e11d4818} .ns-gen{color:var(--muted-2);background:var(--surface-2)}
   .buildtag{font-family:var(--num);font-size:10.5px;color:var(--gold);background:var(--gold-dim);padding:1px 8px;border-radius:999px;font-weight:700}
   .eyebrow{font-family:var(--num);font-weight:600;letter-spacing:.28em;text-transform:uppercase;font-size:12px;color:var(--gold);display:flex;align-items:center;gap:9px}
   .eyebrow::before{content:"";width:26px;height:2px;background:var(--gold);display:inline-block}
@@ -294,7 +296,7 @@
 
     <div class="scorecard" id="scorecard"></div>
 
-    <div class="seclabel">頭條新聞</div>
+    <div class="seclabel">頭條新聞 <span class="news-status" id="newsStatus"></span></div>
     <div class="headlines" id="headlines"></div>
 
     <div class="seclabel">搜尋球員</div>
@@ -433,7 +435,7 @@ function mergeAutoInjuries(){
 }
 mergeAutoInjuries();
 /* ================= config ================= */
-const BUILD = "r35";                         // ← 每次改版就 +1,方便辨識
+const BUILD = "r36";                         // ← 每次改版就 +1,方便辨識
 const BUILD_DATE = "2026/07/09";
 const DOW=["日","一","二","三","四","五","六"];
 const ROUND={32:{cls:"rb-32",label:"32強"},16:{cls:"rb-16",label:"16強"},8:{cls:"rb-8",label:"8強"},4:{cls:"rb-4",label:"4強"},3:{cls:"rb-3",label:"季軍戰"},1:{cls:"rb-1",label:"決賽"}};
@@ -509,6 +511,13 @@ function renderScorecard(){
 /* ================= headlines ================= */
 function renderHeadlines(){
   const box=document.getElementById("headlines");
+  const ns=document.getElementById("newsStatus");
+  if(ns){
+    const diag=(typeof NEWS_DIAG!=="undefined")?NEWS_DIAG:null;
+    const realN=ACTIVE_HEADLINES.filter(x=>x.tag==="news").length;
+    if(realN>0){ ns.className="news-status ns-live"; ns.textContent="🔴 ESPN 即時 "+realN+" 則"; }
+    else{ ns.className="news-status ns-gen"; ns.textContent="自動生成"+(diag&&diag.note&&!diag.note.startsWith("OK")?"(ESPN 暫無資料)":""); }
+  }
   box.innerHTML=ACTIVE_HEADLINES.map((h,i)=>{
     const tg=HTAG[h.tag]||HTAG.result;
     const flag=h.team&&SQUADS[h.team]?SQUADS[h.team].flag:"⚽";
