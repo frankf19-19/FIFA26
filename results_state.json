@@ -162,5 +162,19 @@
       1
     ],
     "advanced": "西班牙"
+  },
+  "nor-eng": {
+    "score": [
+      1,
+      2
+    ],
+    "advanced": "英格蘭"
+  },
+  "arg-sui": {
+    "score": [
+      3,
+      1
+    ],
+    "advanced": "阿根廷"
   }
 }
