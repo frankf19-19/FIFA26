@@ -1,5 +1,5 @@
-/* 由 predict_engine.py 自動產生於 2026/07/13 20:42 — 請勿手改 */
-const PREDICTIONS_UPDATED = "2026/07/13 20:42";
+/* 由 predict_engine.py 自動產生於 2026/07/13 23:37 — 請勿手改 */
+const PREDICTIONS_UPDATED = "2026/07/13 23:37";
 const AUTO_PREDICTIONS = {
   "eng-arg": {prob:{h:33.0,d:26.3,a:40.7}, score:[1,2], advance:"阿根廷", conf:"lo", date:"2026-07-15", reason:"（模型自動預測）勢均力敵的硬仗,阿根廷僅微幅領先(40.7%),和局機率也達 26.3%,不排除延長賽或 PK。預期比分 1-2。實際仍需視當日先發、傷停與狀態調整。"},
   "fra-esp": {prob:{h:37.7,d:26.4,a:35.9}, score:[1,1], advance:"法國", conf:"lo", date:"2026-07-14", reason:"（模型自動預測）勢均力敵的硬仗,法國僅微幅領先(37.7%),和局機率也達 26.4%,不排除延長賽或 PK。預期比分 1-1。實際仍需視當日先發、傷停與狀態調整。"},
