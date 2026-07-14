@@ -1,5 +1,5 @@
-/* 由 update_matches.py 自動產生於 2026/07/14 20:41 — 請勿手改 */
-const RESULTS_UPDATED = "2026/07/14 20:41";
+/* 由 update_matches.py 自動產生於 2026/07/14 23:36 — 請勿手改 */
+const RESULTS_UPDATED = "2026/07/14 23:36";
 const MATCH_RESULTS = {
   "arg-cpv": {score:[3,2], advanced:"阿根廷"},
   "arg-egy": {score:[3,2], advanced:"阿根廷"},
@@ -13,6 +13,7 @@ const MATCH_RESULTS = {
   "eng-cod": {score:[2,1], advanced:"英格蘭"},
   "esp-aut": {score:[3,0], advanced:"西班牙"},
   "esp-bel": {score:[2,1], advanced:"西班牙"},
+  "fra-esp": {score:[0,2], advanced:"西班牙"},
   "fra-mar": {score:[2,0], advanced:"法國"},
   "fra-swe": {score:[3,0], advanced:"法國"},
   "mex-ecu": {score:[2,0], advanced:"墨西哥"},
