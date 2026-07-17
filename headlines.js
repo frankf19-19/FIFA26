@@ -1,13 +1,13 @@
-/* 由 news_engine.py 自動產生於 2026/07/17 07:33 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/07/17 07:33";
+/* 由 news_engine.py 自動產生於 2026/07/17 11:59 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/07/17 11:59";
 const NEWS_DIAG = {real:6, note:"OK:site.api.espn.com/apis"};
 const AUTO_HEADLINES = [
-  {tag:"news", t:"Prepare yourself for the ultimate day of sport -- mark your calendars", d:"2026-07-17", team:"", link:"https://www.espn.com/golf/story/_/id/48769330/prepare-ultimate-day-sport-mark-calendars-open-belgium-grand-prix-fifa-world-cup-final"},
-  {tag:"news", t:"Why are there hydration breaks at the 2026 World Cup, and why has FIFA been criticised?", d:"2026-07-17", team:"", link:"https://www.espn.com/soccer/story/_/id/48945011/why-there-drinks-breaks-2026-world-cup-fifa-criticised"},
-  {tag:"news", t:"Free World Cup 2026 predictor: Simulate your road to the final", d:"2026-07-17", team:"", link:"https://www.espn.com/soccer/story/_/id/48945570/2026-fifa-world-cup-predictions-simulator"},
-  {tag:"news", t:"Superstitious Argentine president Milei won't attend World Cup final", d:"2026-07-16", team:"", link:"https://www.espn.com/soccer/story/_/id/49380261/argentina-president-javier-milei-attend-2026-world-cup-final"},
-  {tag:"news", t:"2026 FIFA World Cup match schedule: Fixtures, results, features", d:"2026-07-16", team:"", link:"https://www.espn.com/soccer/story/_/id/48939282/2026-fifa-world-cup-fixtures-results-match-schedule-group-stage-knockout-rounds-bracket"},
-  {tag:"news", t:"Should Messi win the Ballon d'Or if Argentina win the World Cup?", d:"2026-07-16", team:"", link:"https://www.espn.com/video/clip/_/id/49379953/should-messi-win-ballon-dor-argentina-win-world-cup"},
+  {tag:"news", t:"Slovenia's Slavko Vinčić announced as referee for World Cup final", d:"2026-07-17", team:"", link:"https://www.espn.com/video/clip/_/id/49383212/slovenia-slavko-vini-announced-referee-world-cup-final"},
+  {tag:"news", t:"World Cup Daily: Final winners (and fans!) to get championship rings", d:"2026-07-17", team:"", link:"https://www.espn.com/soccer/story/_/id/49380811/world-cup-daily-world-cup-winners-spain-argentina-fans-championship-rings"},
+  {tag:"news", t:"Just tuning in for World Cup final? Let's catch you up on what you've missed", d:"2026-07-17", team:"", link:"https://www.espn.com/soccer/story/_/id/49376001/just-tuning-world-cup-final-let-catch-what-missed"},
+  {tag:"news", t:"Who is Slavko Vincic? Spain vs. Argentina referee for World Cup final drew Real Madrid backlash, Jose Mourinho praise", d:"2026-07-17", team:"", link:"https://www.espn.com/soccer/story/_/id/49382615/who-slavko-vincic-spain-vs-argentina-referee-world-cup-final-real-madrid-jose-mourinho-jude-bellingham"},
+  {tag:"news", t:"Messi first met Yamal as a baby. The World Cup final will be their next meeting", d:"2026-07-17", team:"", link:"https://www.espn.com/soccer/story/_/id/40532807/lionel-messi-baby-lamine-yamal-barcelona-spain-argentina-world-cup-final"},
+  {tag:"news", t:"Mauricio Pochettino to make decision on USMNT future next week", d:"2026-07-17", team:"", link:"https://www.espn.com/soccer/story/_/id/49382484/mauricio-pochettino-make-decision-usmnt-future-next-week"},
   {tag:"upset", t:"大爆冷!摩洛哥 淘汰 荷蘭,1-1 (PK)寫下驚奇", d:"剛結束", team:"MAR", link:""},
   {tag:"upset", t:"大爆冷!西班牙 淘汰 法國,0-2寫下驚奇", d:"剛結束", team:"ESP", link:""},
 ];
