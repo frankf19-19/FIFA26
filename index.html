@@ -212,7 +212,7 @@
     <button class="fchip" data-pos="中場">中場</button>
     <button class="fchip" data-pos="前鋒">前鋒</button>
     <span class="fdiv"></span>
-    <button class="fchip cross" id="crossBtn" data-cross="0">🌍 跨五大聯賽</button>
+    <button class="fchip cross" id="crossBtn" data-cross="0">🌍 全聯賽球員</button>
   </div>
   <div style="font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:6px 0 4px" id="searchInfo"></div>
   <div class="search-results" id="searchResults"></div>
@@ -254,7 +254,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e8";
+const BUILD = "e9";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS"},
   {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽"},
@@ -502,8 +502,10 @@ async function buildPlayerIndex(league){
 }
 
 /* 跨五大聯賽:依序把每個聯賽的名冊都併進索引 */
+let allBuilding=false;
 async function buildAllLeaguesIndex(){
-  if(allIndexLoaded) return;
+  if(allIndexLoaded||allBuilding) return;
+  allBuilding=true;
   const si=document.getElementById("searchInfo");
   const merged=[]; const seen=new Set();
   for(const lg of LEAGUES){
@@ -524,8 +526,9 @@ async function buildAllLeaguesIndex(){
       }
     }catch(e){}
   }
-  PLAYER_INDEX=merged; allIndexLoaded=true; indexedLeague="ALL";
-  if(si) si.textContent=`可搜尋五大聯賽 ${merged.length} 名球員`;
+  PLAYER_INDEX=merged; allIndexLoaded=true; indexedLeague="ALL"; allBuilding=false;
+  const t=new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
+  if(si) si.textContent=`可搜尋全部 ${merged.length} 名球員(六聯賽)· 名冊 ${t} 自動更新`;
 }
 
 function searchPlayers(q){
@@ -1040,8 +1043,8 @@ function buildLeagueTabs(){
     document.getElementById("lgName").textContent=lg.full;
     STAND_CACHE={};                                   // 清掉上一聯賽的戰績快取
     document.getElementById("searchResults").innerHTML="";
-    if(!crossLeague){                                 // 非跨聯賽模式 → 重建該聯賽球員索引
-      indexedLeague=null; PLAYER_INDEX=[]; allIndexLoaded=false;
+    if(!allIndexLoaded && !allBuilding){              // 全聯賽索引尚未就緒 → 先建當前聯賽的
+      indexedLeague=null; PLAYER_INDEX=[];
       buildPlayerIndex(curLeague);
     }
     document.getElementById("searchResults").innerHTML="";
@@ -1079,15 +1082,25 @@ function init(){
     searchPlayers(sb.value);
   });
   // 跨五大聯賽 toggle
-  document.getElementById("crossBtn").onclick=async()=>{
-    const btn=document.getElementById("crossBtn");
-    crossLeague=!crossLeague; btn.classList.toggle("on",crossLeague);
-    if(crossLeague){ await buildAllLeaguesIndex(); }
-    else{ allIndexLoaded=false; indexedLeague=null; PLAYER_INDEX=[]; buildPlayerIndex(curLeague); }
+  document.getElementById("crossBtn").onclick=async()=>{   // 點=手動強制重抓最新名冊
+    TEAM_LIST={}; allIndexLoaded=false; indexedLeague=null;
+    await buildAllLeaguesIndex();
+    if(allIndexLoaded){ crossLeague=true; document.getElementById("crossBtn").classList.add("on"); }
     searchPlayers(sb.value);
   };
   load();
   buildPlayerIndex(curLeague);
+  // 全自動:1.5 秒後在背景把六個聯賽的球員全部抓好(不用手動點)
+  setTimeout(async()=>{
+    await buildAllLeaguesIndex();
+    if(allIndexLoaded){ crossLeague=true; const b=document.getElementById("crossBtn"); if(b) b.classList.add("on"); }
+  },1500);
+  // 名冊每 30 分鐘自動重抓(轉會/升降名單變動);比分每 90 秒、球員數據點開即時抓
+  setInterval(()=>{
+    if(document.hidden) return;
+    TEAM_LIST={}; allIndexLoaded=false; indexedLeague=null;
+    buildAllLeaguesIndex().then(()=>{ if(allIndexLoaded){ crossLeague=true; const b=document.getElementById("crossBtn"); if(b) b.classList.add("on"); } });
+  }, 1800000);
   setInterval(()=>{ if(!document.hidden) load(); }, 90000);  // 每 90 秒自動更新
 }
 init();
