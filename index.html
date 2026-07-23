@@ -18,8 +18,32 @@
     --mono:'IBM Plex Mono',ui-monospace,monospace;
     --cond:'Barlow Condensed',sans-serif; --body:'Noto Sans TC',sans-serif;
   }
+  /* ---- 主題(預設亮白;可切換) ---- */
+  body[data-theme="light"]{
+    --field:#f2f5f8; --glow:#dfe9f2; --panel:#ffffff; --panel-2:#eef2f6;
+    --line:rgba(23,41,58,.15); --chalk:#17293a; --muted:#5b7186;
+    --wash:rgba(23,41,58,.05); --wash2:rgba(23,41,58,.1); --ink2:#2c4258; --btn-ink:#1c2b3a;
+    --amber:#b97b00; --teal:#0d8f86; --hit:#1e9e4e; --miss:#d54848; --home:#1e9e4e; --draw:#b97b00; --awy:#d54848;}
+  body[data-theme="cream"]{
+    --field:#faf6ec; --glow:#f1e8d5; --panel:#fffdf7; --panel-2:#f4eddd;
+    --line:rgba(70,55,30,.16); --chalk:#3a2f1c; --muted:#8a7a5c;
+    --wash:rgba(70,55,30,.05); --wash2:rgba(70,55,30,.1); --ink2:#5a4c30; --btn-ink:#3a2f1c;
+    --amber:#b0731a; --teal:#0f8d7d; --hit:#2b9350; --miss:#c9504a; --home:#2b9350; --draw:#b0731a; --awy:#c9504a;}
+  body[data-theme="sky"]{
+    --field:#eaf3fb; --glow:#d5e8f8; --panel:#ffffff; --panel-2:#e2eef9;
+    --line:rgba(18,52,86,.15); --chalk:#123456; --muted:#54749a;
+    --wash:rgba(18,52,86,.05); --wash2:rgba(18,52,86,.1); --ink2:#2b4d74; --btn-ink:#123456;
+    --amber:#b3770a; --teal:#0b7fa8; --hit:#1e9e4e; --miss:#d54848; --home:#1e9e4e; --draw:#b3770a; --awy:#d54848;}
+  body[data-theme="mint"]{
+    --field:#edf9f3; --glow:#daf1e5; --panel:#ffffff; --panel-2:#e3f3ea;
+    --line:rgba(18,66,45,.15); --chalk:#12422d; --muted:#55806b;
+    --wash:rgba(18,66,45,.05); --wash2:rgba(18,66,45,.1); --ink2:#2c5c44; --btn-ink:#12422d;
+    --amber:#a97a12; --teal:#0e8f6e; --hit:#1e9e4e; --miss:#cf4d4d; --home:#1e9e4e; --draw:#a97a12; --awy:#cf4d4d;}
+  /* 亮色主題下,寫死的深色分隔線改亮 */
+  body[data-theme] table.stand td{border-bottom:1px solid var(--line)}
+  body[data-theme] .lineup-col .pl{border-bottom:1px solid var(--line)}
   *{box-sizing:border-box;margin:0;padding:0}
-  body{background:radial-gradient(1200px 600px at 50% -10%, #163150 0%, transparent 60%), var(--field);
+  body{background:radial-gradient(1200px 600px at 50% -10%, var(--glow,#163150) 0%, transparent 60%), var(--field);
     color:var(--chalk); font-family:var(--body); line-height:1.6; min-height:100vh;
     padding:clamp(16px,4vw,40px) clamp(14px,4vw,28px) 60px;}
   .wrap{max-width:960px;margin:0 auto}
@@ -187,6 +211,13 @@
     <div class="eyebrow" style="text-transform:none;font-family:var(--mono);letter-spacing:0">
       <span id="lgName">美國職業足球大聯盟 MLS</span> · <span id="upd">—</span> · 台灣時間 · <span class="buildtag" id="buildTag"></span></div>
     <div class="leagues" id="leagueTabs"></div>
+    <div class="leagues" style="margin-top:-8px" id="themeTabs">
+      <button class="lg th" data-th="light">☀️ 亮白</button>
+      <button class="lg th" data-th="cream">🍦 米色</button>
+      <button class="lg th" data-th="sky">🌤 淺藍</button>
+      <button class="lg th" data-th="mint">🌿 薄荷</button>
+      <button class="lg th" data-th="navy">🌙 深藍</button>
+    </div>
     <div class="datebar">
       <button class="nav" id="prevBtn">‹</button>
       <input type="date" id="datePick">
@@ -255,7 +286,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e10";
+const BUILD = "e11";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS"},
   {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽"},
@@ -445,11 +476,12 @@ async function fetchTeamRoster(league,teamId){
   if(lastErr) throw lastErr;
   return [];
 }
+function espnHeadshot(id){return id?`https://a.espncdn.com/i/headshots/soccer/players/full/${id}.png`:"";}
 function athleteToIdx(a,teamName,league){
   return { id:a.id, name:a.fullName||a.displayName,
     pos:(a.position&&(a.position.abbreviation||a.position.name))||"",
     num:a.jersey||"", teamName,
-    headshot:(a.headshot&&(a.headshot.href||a.headshot))||"",
+    headshot:(a.headshot&&(a.headshot.href||a.headshot))||espnHeadshot(a.id),
     age:a.age||"", nat:(a.citizenship)||(a.birthPlace&&a.birthPlace.country)||"",
     h:a.displayHeight||"", w:a.displayWeight||"", birth:(a.dateOfBirth||"").slice(0,10),
     league };
@@ -1046,7 +1078,7 @@ async function showGame(g, fromPop){
   box.querySelectorAll(".lu-p").forEach(el=>el.onclick=()=>{
     const {pid,pname,ppos,pnum,pteam}=el.dataset;
     let p=PLAYER_INDEX.find(x=>String(x.id)===String(pid)) || PLAYER_INDEX.find(x=>norm(x.name)===norm(pname));
-    if(!p) p={id:pid,name:pname,pos:ppos,num:pnum,teamName:pteam,headshot:"",age:"",nat:"",league:g.league||curLeague};
+    if(!p) p={id:pid,name:pname,pos:ppos,num:pnum,teamName:pteam,headshot:espnHeadshot(pid),age:"",nat:"",league:g.league||curLeague};
     showPlayer(p);
   });
 }
@@ -1107,8 +1139,17 @@ function buildLeagueTabs(){
     buildPlayerIndex(curLeague);
   });
 }
+function applyTheme(t){
+  if(t==="navy") document.body.removeAttribute("data-theme");
+  else document.body.setAttribute("data-theme",t);
+  document.querySelectorAll(".th").forEach(x=>x.classList.toggle("on",x.dataset.th===t));
+  try{localStorage.setItem("euroTheme",t);}catch(e){}
+}
 function init(){
   document.getElementById("buildTag").textContent="build "+BUILD;
+  let th="light"; try{th=localStorage.getItem("euroTheme")||"light";}catch(e){}
+  applyTheme(th);
+  document.querySelectorAll(".th").forEach(el=>el.onclick=()=>applyTheme(el.dataset.th));
   buildLeagueTabs();
   const dp=document.getElementById("datePick");
   dp.value=isoDate(curDate);
