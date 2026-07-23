@@ -255,6 +255,12 @@
     <div id="games"></div>
   </section>
 
+  <!-- 模型心得 -->
+  <section id="insightSec">
+    <div class="sec-head"><h2>模型心得</h2><span class="tag" id="insTag"></span></div>
+    <div id="insights"></div>
+  </section>
+
   <!-- 積分榜 -->
   <section id="standSec">
     <div class="sec-head"><h2>積分榜</h2><span class="tag" id="standTag"></span></div>
@@ -286,7 +292,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e11";
+const BUILD = "e12";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS"},
   {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽"},
@@ -357,11 +363,20 @@ function avFallback(img){
   d.textContent=img.dataset.init||"?"; img.replaceWith(d);
 }
 function norm(s){return (s||"").toLowerCase().replace(/[^a-z\s]/g,"").replace(/\s+/g," ").trim();}
-function rating(name){
+/* ---- 評級自我校準:依賽果微調,存在瀏覽器(euroADJ),越用越準 ---- */
+let inMemAdj={};
+function adjGet(){try{const v=localStorage.getItem("euroADJ");return v?JSON.parse(v):{};}catch(e){return inMemAdj;}}
+function adjSet(o){inMemAdj=o;try{localStorage.setItem("euroADJ",JSON.stringify(o));}catch(e){}}
+let ADJ_CACHE=adjGet();
+function baseRating(name){
   const n=norm(name);
   if(RATINGS[n]!==undefined) return RATINGS[n];
   for(const k in RATINGS){ if(n.includes(k)||k.includes(n)) return RATINGS[k]; }
   return 68;
+}
+function rating(name){
+  const d=ADJ_CACHE[norm(name)]||0;
+  return baseRating(name)+Math.max(-8,Math.min(8,d));   // 校準值上限 ±8
 }
 function zhName(name){
   const n=norm(name);
@@ -685,7 +700,7 @@ async function fetchPlayerStats(league, id){
 function showPlayer(p, fromPop){
   if(!fromPop){ try{history.pushState({v:"player",p:p},"");}catch(e){} }
   document.getElementById("teamView").classList.remove("hidden");
-  ["fixturesSec","standSec","hlSec","gameView"].forEach(id=>document.getElementById(id).classList.add("hidden"));
+  ["fixturesSec","insightSec","standSec","hlSec","gameView"].forEach(id=>document.getElementById(id).classList.add("hidden"));
   document.getElementById("teamTitle").textContent = p.name;
   const av = p.headshot?`<img class="avatar" style="width:84px;height:84px;flex:0 0 84px;object-fit:cover" src="${p.headshot}" data-init="${(p.name||'?').charAt(0)}" data-big="1" onerror="avFallback(this)">`:`<div class="avatar" style="width:84px;height:84px;flex:0 0 84px">${(p.name||'?').charAt(0)}</div>`;
   const bio = [["位置",posToZh(p.pos)+(p.pos?` (${p.pos})`:"")],["背號",p.num?"#"+p.num:"—"],["球隊",zhName(p.teamName)],["年齡",p.age||"—"],["國籍",p.nat||"—"]];
@@ -767,11 +782,66 @@ function gradeFinished(games){
     const y={H:0,D:0,A:0}; y[realOut]=1;
     const brier=(p.H/100-y.H)**2+(p.D/100-y.D)**2+(p.A/100-y.A)**2;
     sc[g.id]={hit:predOut===realOut, brier:+brier.toFixed(3),
-      score:predOut===realOut&&p.si===g.hs&&p.sj===g.as};
+      score:predOut===realOut&&p.si===g.hs&&p.sj===g.as,
+      hs:g.hs, as:g.as, hz:zhName(g.hn), az:zhName(g.an),
+      homePick:p.pick===g.hn, draw:g.hs===g.as,
+      pred:{H:p.H,D:p.D,A:p.A,si:p.si,sj:p.sj,conf:p.conf,pick:p.pick}};
+    // --- 評級自我校準:淨勝球誤差 → 微調兩隊評級(此消彼長,單場上限 ±2) ---
+    const err=(g.hs-g.as)-(p.si-p.sj);
+    const delta=Math.max(-2,Math.min(2, 1.6*Math.tanh(err/2)));
+    if(Math.abs(delta)>0.05){
+      const hn=norm(g.hn), an=norm(g.an);
+      ADJ_CACHE[hn]=Math.max(-8,Math.min(8,(ADJ_CACHE[hn]||0)+delta));
+      ADJ_CACHE[an]=Math.max(-8,Math.min(8,(ADJ_CACHE[an]||0)-delta));
+      adjSet(ADJ_CACHE);
+      sc[g.id].adj=+delta.toFixed(2);
+    }
     changed=true;
   });
   if(changed)scSet(sc);
   return sc;
+}
+function renderInsights(){
+  const box=document.getElementById("insights"), tag=document.getElementById("insTag");
+  if(!box) return;
+  const sc=scGet(); const ids=Object.keys(sc).filter(k=>sc[k].pred);
+  const n=ids.length;
+  if(!n){ box.innerHTML=`<div class="empty" style="text-align:left">完賽累積後,模型會在這裡整理檢討心得與評級調整。</div>`; tag.textContent=""; return; }
+  tag.textContent=`已學習 ${n} 場`;
+  const S=ids.map(k=>sc[k]);
+  const lessons=[];
+  // 教訓1:和局偏差
+  const draws=S.filter(s=>s.draw);
+  if(draws.length>=2){
+    const avgD=draws.reduce((a,s)=>a+s.pred.D,0)/draws.length;
+    if(avgD<30) lessons.push(`和局共發生 ${draws.length} 次,模型平均只給 ${avgD.toFixed(0)}% 和局機率 → 偏差:低估均勢賽事,遇實力接近對戰應更保守`);
+  }
+  // 教訓2:主場優勢
+  const hp=S.filter(s=>s.homePick).length, hw=S.filter(s=>s.hs>s.as).length;
+  const hpr=hp/n*100, hwr=hw/n*100;
+  if(n>=6&&Math.abs(hpr-hwr)>=15){
+    lessons.push(hpr>hwr?`主隊被看好 ${hpr.toFixed(0)}%,實際主勝僅 ${hwr.toFixed(0)}% → 主場加成可能偏高,已透過逐場校準修正中`
+      :`主隊被看好 ${hpr.toFixed(0)}%,實際主勝達 ${hwr.toFixed(0)}% → 主場加成可能偏低`);
+  }
+  // 教訓3:比分誤差
+  const gdErr=S.reduce((a,s)=>a+Math.abs((s.hs-s.as)-(s.pred.si-s.pred.sj)),0)/n;
+  if(gdErr>1.3) lessons.push(`平均淨勝球誤差 ${gdErr.toFixed(1)} 球,偏大 → 強弱差距判讀持續收斂中`);
+  else lessons.push(`平均淨勝球誤差 ${gdErr.toFixed(1)} 球,在合理範圍`);
+  // 評級異動 top
+  const movers=Object.entries(ADJ_CACHE).filter(([k,v])=>Math.abs(v)>=0.3)
+    .sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,8);
+  let html=`<div style="border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:14px 16px">`;
+  html+=lessons.map(t=>`<div class="tl-item" style="margin-left:8px">${t}</div>`).join("");
+  if(movers.length){
+    html+=`<div class="pos-group" style="margin:12px 0 8px">評級校準異動(依賽果自動調整)</div><div style="display:flex;flex-wrap:wrap;gap:8px">`+
+      movers.map(([k,v])=>{
+        let nm=zhName(k); if(nm===k) nm=k.replace(/\b\w/g,c=>c.toUpperCase());
+        const up=v>0;
+        return `<span style="font-family:var(--mono);font-size:12.5px;padding:4px 11px;border-radius:999px;border:1px solid ${up?'rgba(70,196,106,.4)':'rgba(239,95,95,.4)'};color:${up?'var(--hit)':'var(--miss)'}">${nm} ${up?'▲':'▼'}${Math.abs(v).toFixed(1)}</span>`;
+      }).join("")+`</div>`;
+  }
+  html+=`<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:12px">心得由模型依實際賽果自動生成 · 校準值存於此瀏覽器,持續累積會越來越準</div></div>`;
+  box.innerHTML=html;
 }
 function renderScorecard(){
   const sc=scGet(); const ids=Object.keys(sc);
@@ -794,6 +864,32 @@ function teamRow(name,logo,score,win,pred){
   const sc = score!=null?`<span class="sc">${score}</span>`:(pred!=null?`<span class="sc" style="color:var(--teal)">${pred}</span>`:"");
   return `<div class="team ${win?'win':''}">${logoImg}<span class="nm" data-team="${name}">${zh} ${en}</span>${sc}</div>`;
 }
+/* 賽後檢討:比對快照與實際,生成分析與教訓 */
+function makeReview(g){
+  const s=scGet()[g.id]; if(!s||!s.pred) return null;
+  const p=s.pred, hz=s.hz, az=s.az;
+  const parts=[];
+  if(s.score){ parts.push("方向與比分全中,模型校準精準"); }
+  else if(s.hit){
+    parts.push("勝負方向命中,比分有誤差");
+    const gdR=Math.abs(s.hs-s.as), gdP=Math.abs(p.si-p.sj);
+    if(gdR>gdP) parts.push(`實際差距(${s.hs}-${s.as})比預測懸殊,勝方壓制力被低估`);
+    else if(gdR<gdP) parts.push(`實際比預測膠著(${s.hs}-${s.as} vs ${p.si}-${p.sj}),弱方抵抗力被低估`);
+    if(s.hs+s.as>p.si+p.sj+1) parts.push("雙方防線比預期鬆散");
+    else if(s.hs+s.as+1<p.si+p.sj) parts.push("進球數低於模型預期");
+  }else if(s.draw){
+    parts.push(`和局未在預期內(賽前和局機率僅 ${p.D}%),兩隊實際更均勢`);
+  }else{
+    const w=s.hs>s.as?hz:az;
+    parts.push(`預測失準:看好 ${zhName(p.pick)},實際 ${w} 勝出`);
+  }
+  if(s.adj){
+    const up=s.adj>0?hz:az, dn=s.adj>0?az:hz;
+    parts.push(`已自動校準:${up} 評級 +${Math.abs(s.adj)}、${dn} -${Math.abs(s.adj)},之後預測將反映`);
+  }
+  parts.push(`本場 Brier ${s.brier.toFixed(2)}`);
+  return {text:parts.join(";")+"。", good:s.hit};
+}
 function gameCard(g){
   const p=predict(g.hn,g.an);
   const done=g.completed, live=g.state==="in";
@@ -812,8 +908,12 @@ function gameCard(g){
 
   let body="";
   if(done){
-    body=`<div class="predline"><span class="k">賽前預測</span> 看好 <span class="pick">${zhName(p.pick)}</span> · 比分 <b>${p.si}-${p.sj}</b> · 信心 ${p.conf}</div>
-      <div class="why"><span class="k">結果</span>${g.hs}-${g.as},實際 ${g.hs>g.as?zhName(g.hn):g.hs<g.as?zhName(g.an):'雙方戰平'}${g.hs===g.as?'':'勝出'}。</div>`;
+    const snap=scGet()[g.id];
+    const sp=(snap&&snap.pred)?snap.pred:p;    // 用當初的預測快照,不因校準漂移
+    const rv=makeReview(g);
+    body=`<div class="predline"><span class="k">賽前預測</span> 看好 <span class="pick">${zhName(sp.pick)}</span> · 比分 <b>${sp.si}-${sp.sj}</b> · 信心 ${sp.conf||p.conf}</div>
+      <div class="why"><span class="k">結果</span>${g.hs}-${g.as},實際 ${g.hs>g.as?zhName(g.hn):g.hs<g.as?zhName(g.an):'雙方戰平'}${g.hs===g.as?'':'勝出'}。</div>`+
+      (rv?`<div class="review ${rv.good?'good':'bad'}"><span class="k">檢討</span>${rv.text}</div>`:"");
   }else{
     body=probBar(p)+`<div class="predline"><span class="k">預測</span>看好 <span class="pick">${zhName(p.pick)}</span> · 比分 <b>${p.si}-${p.sj}</b> · 信心 ${p.conf}</div>
       <div class="why"><span class="k">理由</span>${reasonText(g.hn,g.an,p)}</div>`;
@@ -891,7 +991,7 @@ function renderHeadlines(games){
 async function showTeam(name, fromPop){
   if(!fromPop){ try{history.pushState({v:"team",name:name},"");}catch(e){} }
   document.getElementById("teamView").classList.remove("hidden");
-  ["fixturesSec","standSec","hlSec","gameView"].forEach(id=>document.getElementById(id).classList.add("hidden"));
+  ["fixturesSec","insightSec","standSec","hlSec","gameView"].forEach(id=>document.getElementById(id).classList.add("hidden"));
   document.getElementById("teamTitle").textContent=zhName(name);
   const box=document.getElementById("roster");
   window.scrollTo(0,0);
@@ -998,7 +1098,7 @@ function gameNarrative(g,goals,statPairs){
 }
 async function showGame(g, fromPop){
   if(!fromPop){ try{history.pushState({v:"game",id:g.id,g:g},"");}catch(e){} }
-  ["fixturesSec","standSec","hlSec","teamView"].forEach(id=>document.getElementById(id).classList.add("hidden"));
+  ["fixturesSec","insightSec","standSec","hlSec","teamView"].forEach(id=>document.getElementById(id).classList.add("hidden"));
   document.getElementById("gameView").classList.remove("hidden");
   const hz=zhName(g.hn),az=zhName(g.an);
   document.getElementById("gameTitle").textContent=`${hz} ${g.completed||g.state==="in"?g.hs+" - "+g.as:"vs"} ${az}`;
@@ -1046,7 +1146,9 @@ async function showGame(g, fromPop){
     if(cols.length) lineups=`<div class="pos-group">先發陣容</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">${cols.join("")}</div>`;
   }catch(e){}
   // --- 組頁 ---
-  const narrative=gameNarrative(g,goals,statPairs);
+  let narrative=gameNarrative(g,goals,statPairs);
+  const rv0=makeReview(g);
+  if(rv0) narrative+=` 檢討:${rv0.text}`;
   let html=`<div class="why" style="border-top:none;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:13px 15px;margin-bottom:14px"><span class="k">解說</span>${narrative}</div>`;
   if(!g.completed&&g.state!=="in"){
     html+=probBar(p)+`<div class="predline" style="margin-bottom:14px"><span class="k">預測</span>看好 <span class="pick">${zhName(p.pick)}</span> · 比分 <b>${p.si}-${p.sj}</b> · 信心 ${p.conf}</div>
@@ -1085,7 +1187,7 @@ async function showGame(g, fromPop){
 function hideTeam(){
   document.getElementById("teamView").classList.add("hidden");
   document.getElementById("gameView").classList.add("hidden");
-  ["fixturesSec","standSec","hlSec"].forEach(id=>document.getElementById(id).classList.remove("hidden"));
+  ["fixturesSec","insightSec","standSec","hlSec"].forEach(id=>document.getElementById(id).classList.remove("hidden"));
 }
 
 /* ================= 載入 ================= */
@@ -1102,6 +1204,7 @@ async function load(){
     const games=parseEvents(data).filter(g=>g.localIso===isoDate(curDate));
     gradeFinished(games);
     renderScorecard();
+    renderInsights();
     renderGames(games);
     renderHeadlines(games);
     st.textContent=`已更新 · ${games.length} 場`;
