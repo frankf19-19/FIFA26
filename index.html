@@ -215,6 +215,7 @@
     <button class="fchip cross" id="crossBtn" data-cross="0">🌍 全聯賽球員</button>
   </div>
   <div style="font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:6px 0 4px" id="searchInfo"></div>
+  <div style="font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:0 0 4px" id="injInfo"></div>
   <div class="search-results" id="searchResults"></div>
 
   <!-- 賽事 -->
@@ -254,7 +255,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e9";
+const BUILD = "e10";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS"},
   {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽"},
@@ -352,6 +353,7 @@ function predict(homeName,awayName){
   const rh=rating(homeName), ra=rating(awayName), d=rh-ra;
   const COEF=0.030, BASE=1.32, HA=0.24;         // 主場優勢固定(聯賽有真實主客場)
   let lh=BASE*Math.exp(COEF*d/2 + HA/2), la=BASE*Math.exp(-COEF*d/2 - HA/2);
+  lh*=injAdj(homeName); la*=injAdj(awayName);   // 傷兵折扣:主力缺陣自動下修預期進球
   lh=Math.max(0.2,Math.min(lh,4.2)); la=Math.max(0.2,Math.min(la,4.2));
   let H=0,D=0,A=0;
   for(let i=0;i<8;i++)for(let j=0;j<8;j++){const p=poisson(i,lh)*poisson(j,la);
@@ -378,6 +380,40 @@ function reasonText(hn,an,p){
 /* ================= ESPN 資料 ================= */
 async function jget(url){const r=await fetch(url);if(!r.ok)throw new Error("HTTP "+r.status);return r.json();}
 function espnScore(league,date){return `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/scoreboard?dates=${date}`;}
+function espnInjuries(league){return `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/injuries`;}
+let INJURIES={};        // norm(team) -> [{name,status,out}]
+let INJ_BY_PLAYER={};   // norm(player) -> status
+let INJ_LOADED_AT="";
+async function loadInjuries(){
+  const map={}, byP={};
+  let teams=0, players=0;
+  for(const lg of LEAGUES){
+    try{
+      const d=await jget(espnInjuries(lg.id));
+      (d.injuries||[]).forEach(t=>{
+        const tn=norm((t.team&&(t.team.displayName||t.team.name))||""); if(!tn) return;
+        const lst=(t.injuries||[]).map(it=>{
+          const a=it.athlete||{}; const nm=a.displayName||a.shortName||"";
+          const st=it.status||((it.type||{}).description)||"";
+          const out=/out|suspend|red/i.test(st);
+          if(nm) byP[norm(nm)]=st;
+          return {name:nm,status:st,out};
+        }).filter(x=>x.name);
+        if(lst.length){ map[tn]=(map[tn]||[]).concat(lst); teams++; players+=lst.length; }
+      });
+    }catch(e){}
+  }
+  INJURIES=map; INJ_BY_PLAYER=byP;
+  INJ_LOADED_AT=new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
+  const el=document.getElementById("injInfo");
+  if(el) el.textContent = players? `🚑 傷兵情報:${teams} 隊 ${players} 人(ESPN,${INJ_LOADED_AT} 更新,已納入預測)`
+    : `🚑 傷兵情報:ESPN 目前未提供(不影響其他功能)`;
+}
+function injAdj(teamName){
+  const lst=INJURIES[norm(teamName)]; if(!lst) return 1.0;
+  const outs=lst.filter(x=>x.out).length, doubts=lst.length-outs;
+  return Math.max(0.85, 1 - 0.035*Math.min(outs,4) - 0.012*Math.min(doubts,4));
+}
 function espnSummary(league,eventId){return `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/summary?event=${eventId}`;}
 let GAMES_BY_ID={};
 function espnStand(league){return `https://site.api.espn.com/apis/v2/sports/soccer/${league}/standings`;}
@@ -626,7 +662,7 @@ function showPlayer(p, fromPop){
   if(p.birth) bio.push(["生日",p.birth]);
   document.getElementById("roster").innerHTML = `
     <div class="player" style="align-items:center">${av}
-      <div><div class="p-top"><span class="pnm" style="font-size:20px">${p.name}</span><span class="badge star">⭐ ${posToZh(p.pos)}</span></div>
+      <div><div class="p-top"><span class="pnm" style="font-size:20px">${p.name}</span><span class="badge star">⭐ ${posToZh(p.pos)}</span>${INJ_BY_PLAYER[norm(p.name)]?`<span class="badge" style="background:rgba(239,95,95,.15);color:var(--miss);border:1px solid rgba(239,95,95,.4)">🚑 ${INJ_BY_PLAYER[norm(p.name)]}</span>`:""}</div>
       <div class="p-note">${zhName(p.teamName)}${p.num?' · #'+p.num:''}</div></div></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:12px">
       ${bio.map(([l,v])=>`<div style="border:1px solid var(--line);border-radius:9px;background:var(--panel);padding:9px 13px">
@@ -838,6 +874,12 @@ async function showTeam(name, fromPop){
         <div style="font-family:var(--mono);font-weight:600;font-size:19px;color:${l==='積分'?'var(--amber)':'var(--chalk)'}">${v!==""&&v!=null?v:'—'}</div>
         <div style="font-family:var(--cond);letter-spacing:.06em;text-transform:uppercase;font-size:10.5px;color:var(--muted)">${l}</div></div>`).join("")+`</div>`;
   }
+  const injL=INJURIES[norm(name)];
+  if(injL&&injL.length){
+    banner+=`<div style="border:1px solid rgba(239,95,95,.3);border-radius:10px;background:rgba(239,95,95,.06);padding:10px 14px;margin-bottom:14px;font-size:13px">
+      <span style="font-family:var(--cond);font-weight:700;letter-spacing:.08em;color:var(--miss)">🚑 傷兵/停賽</span> `+
+      injL.map(x=>`<span style="margin-left:10px">${x.name}<span style="color:var(--muted)">(${x.status})</span></span>`).join("")+`</div>`;
+  }
   box.dataset.banner = banner;
   // 先從已載入的球員索引找出整隊(即時、真實名冊)
   const roster = PLAYER_INDEX.filter(p=>norm(p.teamName)===norm(name));
@@ -961,9 +1003,13 @@ async function showGame(g, fromPop){
   let lineups="";
   try{
     const cols=(sum.rosters||[]).map(r=>{
-      const starters=(r.roster||[]).filter(x=>x.starter).map(x=>
-        `<div class="pl"><b>${x.jersey||""}</b>${(x.athlete&&x.athlete.displayName)||""} <span style="color:var(--muted);font-size:11px">${(x.position&&x.position.abbreviation)||""}</span></div>`).join("");
-      return starters?`<div class="lineup-col"><div class="t">${zhName((r.team&&r.team.displayName)||"")} 先發</div>${starters}</div>`:"";
+      const tName=(r.team&&r.team.displayName)||"";
+      const starters=(r.roster||[]).filter(x=>x.starter).map(x=>{
+        const a=x.athlete||{}; const nm=a.displayName||"";
+        const injured=INJ_BY_PLAYER[norm(nm)]?` <span style="color:var(--miss)">🚑</span>`:"";
+        return `<div class="pl lu-p" style="cursor:pointer" data-pid="${a.id||""}" data-pname="${nm.replace(/"/g,"&quot;")}" data-ppos="${(x.position&&x.position.abbreviation)||""}" data-pnum="${x.jersey||""}" data-pteam="${tName.replace(/"/g,"&quot;")}"><b>${x.jersey||""}</b>${nm}${injured} <span style="color:var(--muted);font-size:11px">${(x.position&&x.position.abbreviation)||""}</span></div>`;
+      }).join("");
+      return starters?`<div class="lineup-col"><div class="t" style="cursor:pointer" data-team="${tName.replace(/"/g,"&quot;")}">${zhName(tName)} 先發 ›</div>${starters}</div>`:"";
     }).filter(Boolean);
     if(cols.length) lineups=`<div class="pos-group">先發陣容</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">${cols.join("")}</div>`;
   }catch(e){}
@@ -981,7 +1027,7 @@ async function showGame(g, fromPop){
   }
   if(statPairs.length){
     html+=`<div class="pos-group">數據對比</div><div style="border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:14px 16px">
-      <div class="cmp-row" style="margin-bottom:12px"><div class="v h" style="color:var(--chalk)">${hz}</div><div class="l">vs</div><div class="v" style="color:var(--chalk)">${az}</div></div>`+
+      <div class="cmp-row" style="margin-bottom:12px"><div class="v h" style="color:var(--chalk);cursor:pointer" data-team="${g.hn.replace(/"/g,"&quot;")}">${hz} ›</div><div class="l">vs</div><div class="v" style="color:var(--chalk);cursor:pointer" data-team="${g.an.replace(/"/g,"&quot;")}">${az} ›</div></div>`+
       statPairs.map(s=>{
         const hn=parseFloat(s.h)||0, an=parseFloat(s.a)||0, tot=(hn+an)||1;
         return `<div class="cmp-row"><div class="v h">${s.h}<div class="cmp-bar" style="direction:rtl"><div style="width:${hn/tot*100}%"></div></div></div>
@@ -994,6 +1040,15 @@ async function showGame(g, fromPop){
     html+=`<div class="empty">${g.completed?"ESPN 未提供此場的詳細數據。":"尚未開賽——開賽後這裡會顯示進球事件、數據對比與先發陣容。"}</div>`;
   }
   box.innerHTML=html;
+  // 點球隊名 → 球隊頁
+  box.querySelectorAll("[data-team]").forEach(el=>el.onclick=()=>showTeam(el.dataset.team));
+  // 點先發球員 → 球員詳細頁(索引找得到用完整資料,找不到用當場資料)
+  box.querySelectorAll(".lu-p").forEach(el=>el.onclick=()=>{
+    const {pid,pname,ppos,pnum,pteam}=el.dataset;
+    let p=PLAYER_INDEX.find(x=>String(x.id)===String(pid)) || PLAYER_INDEX.find(x=>norm(x.name)===norm(pname));
+    if(!p) p={id:pid,name:pname,pos:ppos,num:pnum,teamName:pteam,headshot:"",age:"",nat:"",league:g.league||curLeague};
+    showPlayer(p);
+  });
 }
 function hideTeam(){
   document.getElementById("teamView").classList.add("hidden");
@@ -1101,6 +1156,8 @@ function init(){
     TEAM_LIST={}; allIndexLoaded=false; indexedLeague=null;
     buildAllLeaguesIndex().then(()=>{ if(allIndexLoaded){ crossLeague=true; const b=document.getElementById("crossBtn"); if(b) b.classList.add("on"); } });
   }, 1800000);
+  setTimeout(loadInjuries, 2000);            // 開站 2 秒後抓傷兵
+  setInterval(()=>{ if(!document.hidden) loadInjuries(); }, 600000);   // 每 10 分鐘更新傷兵
   setInterval(()=>{ if(!document.hidden) load(); }, 90000);  // 每 90 秒自動更新
 }
 init();
