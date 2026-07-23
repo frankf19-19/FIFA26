@@ -231,7 +231,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e5";
+const BUILD = "e6";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS"},
   {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽"},
@@ -357,7 +357,49 @@ async function jget(url){const r=await fetch(url);if(!r.ok)throw new Error("HTTP
 function espnScore(league,date){return `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/scoreboard?dates=${date}`;}
 function espnStand(league){return `https://site.api.espn.com/apis/v2/sports/soccer/${league}/standings`;}
 function espnTeams(league){return `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/teams`;}
-function espnRoster(league,teamId){return `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/teams/${teamId}/roster`;}
+/* 足球名冊端點在 ESPN 有多種格式,逐一嘗試(哪個成功用哪個) */
+function espnRosterUrls(league,teamId){return [
+  `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/teams/${teamId}/roster`,
+  `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/teams/${teamId}?enable=roster`,
+  `https://site.web.api.espn.com/apis/site/v2/sports/soccer/${league}/teams/${teamId}/roster`,
+];}
+function parseRosterPayload(rd){
+  // 可能結構:rd.athletes[](分組) / rd.team.athletes[] / rd.roster.entries[]
+  const flat=[];
+  const push=a=>{ if(a&&(a.fullName||a.displayName)) flat.push(a); };
+  const groups = rd.athletes || (rd.team&&rd.team.athletes) || (rd.roster&&(rd.roster.entries||rd.roster.athletes)) || [];
+  (Array.isArray(groups)?groups:[groups]).forEach(g=>{
+    if(!g) return;
+    if(g.items||g.athletes){ (g.items||g.athletes).forEach(x=>push(x.athlete||x)); }
+    else push(g.athlete||g);
+  });
+  return flat;
+}
+async function fetchTeamRoster(league,teamId){
+  let lastErr=null;
+  for(const u of espnRosterUrls(league,teamId)){
+    try{ const rd=await jget(u); const flat=parseRosterPayload(rd); if(flat.length) return flat; }
+    catch(e){ lastErr=e; }
+  }
+  if(lastErr) throw lastErr;
+  return [];
+}
+function athleteToIdx(a,teamName,league){
+  return { id:a.id, name:a.fullName||a.displayName,
+    pos:(a.position&&(a.position.abbreviation||a.position.name))||"",
+    num:a.jersey||"", teamName,
+    headshot:(a.headshot&&(a.headshot.href||a.headshot))||"",
+    age:a.age||"", nat:(a.citizenship)||(a.birthPlace&&a.birthPlace.country)||"",
+    h:a.displayHeight||"", w:a.displayWeight||"", birth:(a.dateOfBirth||"").slice(0,10),
+    league };
+}
+let TEAM_LIST={};   // league -> [{id,displayName}]
+async function getTeamList(league){
+  if(TEAM_LIST[league]) return TEAM_LIST[league];
+  const td=await jget(espnTeams(league));
+  let teams=[]; try{teams=td.sports[0].leagues[0].teams.map(t=>t.team);}catch(e){teams=(td.teams||[]).map(t=>t.team||t);}
+  TEAM_LIST[league]=teams; return teams;
+}
 
 /* ---- 球員索引:背景載入該聯賽所有球隊名冊,供搜尋 ---- */
 let PLAYER_INDEX = [];        // [{name, pos, num, team, teamName, headshot, age, nat, league}]
@@ -383,41 +425,28 @@ async function buildPlayerIndex(league){
   const si = document.getElementById("searchInfo");
   if(si) si.textContent = "載入球員名冊中…";
   try{
-    const td = await jget(espnTeams(league));
-    // teams 結構:sports[0].leagues[0].teams[].team
-    let teams = [];
-    try{ teams = td.sports[0].leagues[0].teams.map(t=>t.team); }catch(e){ teams = (td.teams||[]).map(t=>t.team||t); }
+    const teams = await getTeamList(league);
     const idx = [];
-    // 並行抓各隊名冊(限制併發避免過載)
     const chunks = [];
-    for(let i=0;i<teams.length;i+=6) chunks.push(teams.slice(i,i+6));
+    for(let i=0;i<teams.length;i+=4) chunks.push(teams.slice(i,i+4));
+    let fail=0;
     for(const chunk of chunks){
       await Promise.all(chunk.map(async t=>{
         try{
-          const rd = await jget(espnRoster(league, t.id));
-          const groups = rd.athletes||[];
-          const flat = [];
-          groups.forEach(g=>{ (g.items||g.athletes||[g]).forEach(a=>{ if(a&&a.fullName) flat.push(a); }); });
-          flat.forEach(a=>{
-            idx.push({
-              id: a.id, name: a.fullName || a.displayName,
-              pos: (a.position&&(a.position.abbreviation||a.position.name))||"",
-              num: a.jersey||"",
-              teamName: t.displayName,
-              headshot: (a.headshot&&a.headshot.href)||"",
-              age: a.age||"",
-              nat: (a.citizenship)||(a.birthPlace&&a.birthPlace.country)||"",
-              league: league,
-            });
-          });
-        }catch(e){/* 單隊失敗略過 */}
+          const flat = await fetchTeamRoster(league, t.id);
+          flat.forEach(a=>idx.push(athleteToIdx(a, t.displayName, league)));
+        }catch(e){ fail++; }
       }));
+      if(si) si.textContent = `載入球員名冊中… ${idx.length} 名`;
     }
     PLAYER_INDEX = idx;
     indexedLeague = league;
-    if(si) si.textContent = idx.length?`可搜尋 ${idx.length} 名球員`:"";
+    if(si) si.textContent = idx.length?`可搜尋 ${idx.length} 名球員${fail?`(${fail} 隊載入失敗)`:""}`
+      :`名冊端點無資料(${fail} 隊失敗)— 點球隊仍可即時載入該隊名冊`;
   }catch(e){
-    if(si) si.textContent = "球員名冊載入失敗(可改用球隊名搜尋)";
+    if(si) si.innerHTML = `名冊載入失敗:${e.message} · <a href="#" id="idxRetry" style="color:var(--teal)">重試</a>`;
+    const r=document.getElementById("idxRetry");
+    if(r) r.onclick=(ev)=>{ev.preventDefault();indexedLeague=null;indexLoading=false;buildPlayerIndex(league);};
   }
   indexLoading = false;
 }
@@ -430,20 +459,16 @@ async function buildAllLeaguesIndex(){
   for(const lg of LEAGUES){
     if(si) si.textContent=`載入 ${lg.zh} 名冊中…`;
     try{
-      const td=await jget(espnTeams(lg.id));
-      let teams=[]; try{ teams=td.sports[0].leagues[0].teams.map(t=>t.team);}catch(e){teams=(td.teams||[]).map(t=>t.team||t);}
-      const chunks=[]; for(let i=0;i<teams.length;i+=6) chunks.push(teams.slice(i,i+6));
+      const teams=await getTeamList(lg.id);
+      const chunks=[]; for(let i=0;i<teams.length;i+=4) chunks.push(teams.slice(i,i+4));
       for(const chunk of chunks){
         await Promise.all(chunk.map(async t=>{
           try{
-            const rd=await jget(espnRoster(lg.id,t.id));
-            (rd.athletes||[]).forEach(g=>{(g.items||g.athletes||[g]).forEach(a=>{
-              if(!a||!a.fullName)return;
-              const key=a.fullName+"|"+t.displayName; if(seen.has(key))return; seen.add(key);
-              merged.push({id:a.id, name:a.fullName||a.displayName, pos:(a.position&&(a.position.abbreviation||a.position.name))||"",
-                num:a.jersey||"", teamName:t.displayName, headshot:(a.headshot&&a.headshot.href)||"",
-                age:a.age||"", nat:(a.citizenship)||(a.birthPlace&&a.birthPlace.country)||"", league:lg.id});
-            })});
+            const flat=await fetchTeamRoster(lg.id,t.id);
+            flat.forEach(a=>{
+              const key=(a.fullName||a.displayName)+"|"+t.displayName; if(seen.has(key))return; seen.add(key);
+              merged.push(athleteToIdx(a,t.displayName,lg.id));
+            });
           }catch(e){}
         }));
       }
@@ -492,6 +517,27 @@ const STAT_ZH = {
   passesTotal:"傳球", accuratePasses:"準確傳球", wonTackles:"搶斷", interceptions:"攔截",
   penaltyKicksScored:"點球進球", penaltyKicksTaken:"主罰點球",
 };
+/* 由真實資料生成球員介紹(誠實原則:有什麼寫什麼,不編造) */
+function playerIntroText(p,flat){
+  const parts=[];
+  const zhPos=posToZh(p.pos);
+  parts.push(`${p.name} 是 ${zhName(p.teamName)} 的${zhPos}${p.num?`(背號 ${p.num})`:""}`);
+  if(p.age||p.nat){ parts.push(`${p.nat?p.nat+"籍,":""}${p.age?`現年 ${p.age} 歲`:""}`.replace(/,$/,"")); }
+  if(p.h||p.w){ parts.push(`${p.h||""}${p.h&&p.w?" / ":""}${p.w||""}`); }
+  if(flat){
+    const g=flat.goals??flat.totalGoals, a=flat.goalAssists??flat.assists, ap=flat.appearances;
+    const sv=flat.saves, yc=flat.yellowCards;
+    const bits=[];
+    if(ap!=null) bits.push(`出場 ${ap} 次`);
+    if(zhPos==="門將"&&sv!=null) bits.push(`撲救 ${sv} 次`);
+    if(g!=null&&+g>0) bits.push(`攻入 ${g} 球`);
+    if(a!=null&&+a>0) bits.push(`送出 ${a} 助攻`);
+    if(bits.length) parts.push(`本季${bits.join("、")}`);
+    if(g!=null&&+g>=10) parts.push(`是球隊的主要得分點`);
+    else if(a!=null&&+a>=8) parts.push(`是進攻的重要串聯者`);
+  }
+  return parts.filter(Boolean).join(",")+"。資料來源:ESPN,介紹由數據自動生成。";
+}
 async function fetchPlayerStats(league, id){
   if(!id) return null;
   const tryUrls = [
@@ -521,6 +567,9 @@ function showPlayer(p){
   document.getElementById("teamTitle").textContent = p.name;
   const av = p.headshot?`<img class="avatar" style="width:84px;height:84px;flex:0 0 84px;object-fit:cover" src="${p.headshot}" data-init="${(p.name||'?').charAt(0)}" data-big="1" onerror="avFallback(this)">`:`<div class="avatar" style="width:84px;height:84px;flex:0 0 84px">${(p.name||'?').charAt(0)}</div>`;
   const bio = [["位置",posToZh(p.pos)+(p.pos?` (${p.pos})`:"")],["背號",p.num?"#"+p.num:"—"],["球隊",zhName(p.teamName)],["年齡",p.age||"—"],["國籍",p.nat||"—"]];
+  if(p.h) bio.push(["身高",p.h]);
+  if(p.w) bio.push(["體重",p.w]);
+  if(p.birth) bio.push(["生日",p.birth]);
   document.getElementById("roster").innerHTML = `
     <div class="player" style="align-items:center">${av}
       <div><div class="p-top"><span class="pnm" style="font-size:20px">${p.name}</span><span class="badge star">⭐ ${posToZh(p.pos)}</span></div>
@@ -529,6 +578,7 @@ function showPlayer(p){
       ${bio.map(([l,v])=>`<div style="border:1px solid var(--line);border-radius:9px;background:var(--panel);padding:9px 13px">
         <div style="font-family:var(--cond);letter-spacing:.1em;text-transform:uppercase;font-size:11px;color:var(--muted)">${l}</div>
         <div style="font-size:15px;margin-top:2px">${v}</div></div>`).join("")}</div>
+    <div id="playerIntro" class="why" style="border-top:none;margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel)"><span class="k">介紹</span>${playerIntroText(p,null)}</div>
     <div class="pos-group" style="margin-top:18px">本季數據 <span id="statLoad" style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0">載入中…</span></div>
     <div id="playerStats"></div>
     <div class="player" data-team="${p.teamName}" style="cursor:pointer;margin-top:14px"><div class="avatar">${zhName(p.teamName).charAt(0)}</div>
@@ -545,6 +595,8 @@ function showPlayer(p){
       .filter(([l,v],i,arr)=>arr.findIndex(x=>x[0]===l)===i);  // 去重(進球/助攻同義)
     if(!picked.length){ load.textContent="ESPN 未提供結構化數據"; box.innerHTML=`<div class="empty" style="text-align:left">找到球員但無可解析的數據欄位。</div>`; return; }
     load.textContent="來源:ESPN";
+    const intro=document.getElementById("playerIntro");
+    if(intro) intro.innerHTML=`<span class="k">介紹</span>${playerIntroText(p,flat)}`;
     box.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">`+
       picked.map(([l,v])=>`<div style="border:1px solid var(--line);border-radius:9px;background:var(--panel);padding:10px 13px;text-align:center">
         <div style="font-family:var(--mono);font-weight:600;font-size:22px;color:var(--amber)">${v}</div>
@@ -757,15 +809,35 @@ async function showTeam(name){
     return;
   }
 
-  // 索引還沒建好 → 退回手寫球星
-  const stars=starsFor(name);
-  if(!stars){ box.innerHTML=`<div class="empty">${zhName(name)} 的名冊載入中或暫無資料。<br>切換到該球隊所在聯賽後,名冊會在背景載入,再回來即可看到完整陣容。</div>`; }
-  else{
-    box.innerHTML=`<div class="pos-group">代表球星</div>`+stars.map(([n,pos,note])=>
-      `<div class="player"><div class="avatar">${n.charAt(0)}</div><div>
-        <div class="p-top"><span class="pnm">${n}</span><span class="badge star">⭐ ${pos}</span></div>
-        <div class="p-note">${note}</div></div></div>`).join("");
-  }
+  // 索引沒涵蓋這隊 → 即時抓該隊名冊(不再只顯示空頁)
+  box.innerHTML = `<div class="empty">正在載入 ${zhName(name)} 的名冊…</div>`;
+  (async()=>{
+    try{
+      // 在六個聯賽中找這支球隊的 id
+      let found=null, foundLg=null;
+      for(const lg of LEAGUES){
+        try{
+          const teams=await getTeamList(lg.id);
+          const t=teams.find(x=>norm(x.displayName)===norm(name)||norm(x.displayName).includes(norm(name))||norm(name).includes(norm(x.displayName)));
+          if(t){found=t;foundLg=lg.id;break;}
+        }catch(e){}
+      }
+      if(!found) throw new Error("找不到球隊");
+      const flat=await fetchTeamRoster(foundLg,found.id);
+      if(!flat.length) throw new Error("名冊無資料");
+      const players=flat.map(a=>athleteToIdx(a,found.displayName,foundLg));
+      players.forEach(p=>{ if(!PLAYER_INDEX.some(x=>x.id===p.id&&x.teamName===p.teamName)) PLAYER_INDEX.push(p); });
+      showTeam(name);   // 重進:此時索引已有,走完整名冊路徑
+    }catch(e){
+      const stars=starsFor(name);
+      let fb = stars? `<div class="pos-group">代表球星</div>`+stars.map(([n,pos,note])=>
+        `<div class="player"><div class="avatar">${n.charAt(0)}</div><div>
+          <div class="p-top"><span class="pnm">${n}</span><span class="badge star">⭐ ${pos}</span></div>
+          <div class="p-note">${note}</div></div></div>`).join("") : "";
+      box.innerHTML = (box.dataset.banner||"") + fb +
+        `<div class="empty">${zhName(name)} 名冊載入失敗(${e.message})。<br>可能是 ESPN 端點暫時無回應,稍後點「更新」重試。</div>`;
+    }
+  })();
 }
 function hideTeam(){
   document.getElementById("teamView").classList.add("hidden");
