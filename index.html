@@ -231,7 +231,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e6";
+const BUILD = "e7";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS"},
   {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽"},
@@ -396,9 +396,34 @@ function athleteToIdx(a,teamName,league){
 let TEAM_LIST={};   // league -> [{id,displayName}]
 async function getTeamList(league){
   if(TEAM_LIST[league]) return TEAM_LIST[league];
-  const td=await jget(espnTeams(league));
-  let teams=[]; try{teams=td.sports[0].leagues[0].teams.map(t=>t.team);}catch(e){teams=(td.teams||[]).map(t=>t.team||t);}
-  TEAM_LIST[league]=teams; return teams;
+  // 路徑1:teams 端點(兩個網域)
+  for(const u of [espnTeams(league), `https://site.web.api.espn.com/apis/site/v2/sports/soccer/${league}/teams`]){
+    try{
+      const td=await jget(u);
+      let teams=[]; try{teams=td.sports[0].leagues[0].teams.map(t=>t.team);}catch(e){teams=(td.teams||[]).map(t=>t.team||t);}
+      teams=teams.filter(t=>t&&t.id);
+      if(teams.length){TEAM_LIST[league]=teams;return teams;}
+    }catch(e){}
+  }
+  // 路徑2:從積分榜萃取(此端點已證實可通)
+  try{
+    const sd=await jget(espnStand(league));
+    const teams=[];
+    (sd.children||[sd]).forEach(gr=>(((gr.standings&&gr.standings.entries)||gr.entries)||[]).forEach(e=>{
+      const t=e.team||{}; if(t.id&&(t.displayName||t.name)) teams.push({id:t.id,displayName:t.displayName||t.name,logos:t.logos});
+    }));
+    if(teams.length){TEAM_LIST[league]=teams;return teams;}
+  }catch(e){}
+  // 路徑3:從近兩天賽程萃取(至少涵蓋有比賽的球隊)
+  try{
+    const d0=new Date(); const d1=new Date(); d1.setDate(d1.getDate()-1);
+    const sb=await jget(espnScore(league, ymd(d1)+"-"+ymd(d0)));
+    const seen={}; const teams=[];
+    (sb.events||[]).forEach(ev=>{const c=(ev.competitions||[])[0];((c&&c.competitors)||[]).forEach(x=>{
+      const t=x.team||{}; if(t.id&&!seen[t.id]){seen[t.id]=1;teams.push({id:t.id,displayName:t.displayName});}});});
+    if(teams.length){TEAM_LIST[league]=teams;return teams;}
+  }catch(e){}
+  throw new Error("無法取得球隊清單(teams/積分榜/賽程皆無回應)");
 }
 
 /* ---- 球員索引:背景載入該聯賽所有球隊名冊,供搜尋 ---- */
@@ -561,7 +586,8 @@ async function fetchPlayerStats(league, id){
   }
   return null;
 }
-function showPlayer(p){
+function showPlayer(p, fromPop){
+  if(!fromPop){ try{history.pushState({v:"player",p:p},"");}catch(e){} }
   document.getElementById("teamView").classList.remove("hidden");
   ["fixturesSec","standSec","hlSec"].forEach(id=>document.getElementById(id).classList.add("hidden"));
   document.getElementById("teamTitle").textContent = p.name;
@@ -613,7 +639,7 @@ function parseEvents(data){
     if(!home||!away)return;
     const st=(c.status||ev.status||{}).type||{};
     out.push({
-      id:ev.id,
+      id:ev.id, localIso: isoDate(new Date(ev.date)),
       hn:home.team.displayName, an:away.team.displayName,
       hlogo:home.team.logo||"", alogo:away.team.logo||"",
       hs:home.score!=null?parseInt(home.score):null, as:away.score!=null?parseInt(away.score):null,
@@ -764,7 +790,8 @@ function renderHeadlines(games){
   box.innerHTML=items;
 }
 
-async function showTeam(name){
+async function showTeam(name, fromPop){
+  if(!fromPop){ try{history.pushState({v:"team",name:name},"");}catch(e){} }
   document.getElementById("teamView").classList.remove("hidden");
   ["fixturesSec","standSec","hlSec"].forEach(id=>document.getElementById(id).classList.add("hidden"));
   document.getElementById("teamTitle").textContent=zhName(name);
@@ -827,7 +854,7 @@ async function showTeam(name){
       if(!flat.length) throw new Error("名冊無資料");
       const players=flat.map(a=>athleteToIdx(a,found.displayName,foundLg));
       players.forEach(p=>{ if(!PLAYER_INDEX.some(x=>x.id===p.id&&x.teamName===p.teamName)) PLAYER_INDEX.push(p); });
-      showTeam(name);   // 重進:此時索引已有,走完整名冊路徑
+      showTeam(name, true);   // 重進:此時索引已有,走完整名冊路徑(不重複寫入歷史)
     }catch(e){
       const stars=starsFor(name);
       let fb = stars? `<div class="pos-group">代表球星</div>`+stars.map(([n,pos,note])=>
@@ -852,8 +879,10 @@ async function load(){
   const dateStr=ymd(curDate);
   document.getElementById("upd").textContent=isoDate(curDate)+" "+new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
   try{
-    const data=await jget(espnScore(curLeague,dateStr));
-    const games=parseEvents(data);
+    // ESPN 以美國/UTC 日期分組;抓「前一天+當天」範圍再依台灣當日過濾,確保台灣時間正確
+    const d0=new Date(curDate); d0.setDate(d0.getDate()-1);
+    const data=await jget(espnScore(curLeague, ymd(d0)+"-"+dateStr));
+    const games=parseEvents(data).filter(g=>g.localIso===isoDate(curDate));
     gradeFinished(games);
     renderScorecard();
     renderGames(games);
@@ -903,7 +932,14 @@ function init(){
   document.getElementById("nextBtn").onclick=()=>{curDate.setDate(curDate.getDate()+1);dp.value=isoDate(curDate);load();};
   document.getElementById("todayBtn").onclick=()=>{curDate=new Date();dp.value=isoDate(curDate);load();};
   document.getElementById("loadBtn").onclick=load;
-  document.getElementById("backBtn").onclick=hideTeam;
+  document.getElementById("backBtn").onclick=()=>{ if(history.state&&history.state.v){history.back();} else hideTeam(); };
+  // 瀏覽器上一頁:回到主列表或上一個檢視,而不是整頁跑掉
+  window.addEventListener("popstate",e=>{
+    const s=e.state;
+    if(!s||!s.v) hideTeam();
+    else if(s.v==="team") showTeam(s.name,true);
+    else if(s.v==="player") showPlayer(s.p,true);
+  });
   const sb=document.getElementById("searchBox");
   let sTimer=null;
   sb.addEventListener("input",e=>{ clearTimeout(sTimer); sTimer=setTimeout(()=>searchPlayers(e.target.value),180); });
