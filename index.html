@@ -292,7 +292,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e12";
+const BUILD = "e13";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS"},
   {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽"},
@@ -775,26 +775,32 @@ function gradeFinished(games){
   const sc=scGet(); let changed=false;
   games.forEach(g=>{
     if(!g.completed||g.hs==null||g.as==null)return;
-    if(sc[g.id])return;
+    const ex=sc[g.id];
+    if(ex&&ex.pred)return;                      // 新格式已完整 → 跳過
+    // ex 存在但無快照 = e12 前的舊記錄 → 升級:補快照與檢討所需欄位(保留原本的命中/Brier,誠實不竄改)
     const p=predict(g.hn,g.an);
     const realOut = g.hs>g.as?"H":g.hs<g.as?"A":"D";
     const predOut = p.H>=p.D&&p.H>=p.A?"H":p.A>=p.D&&p.A>=p.H?"A":"D";
     const y={H:0,D:0,A:0}; y[realOut]=1;
     const brier=(p.H/100-y.H)**2+(p.D/100-y.D)**2+(p.A/100-y.A)**2;
-    sc[g.id]={hit:predOut===realOut, brier:+brier.toFixed(3),
-      score:predOut===realOut&&p.si===g.hs&&p.sj===g.as,
+    sc[g.id]={hit:ex?ex.hit:(predOut===realOut),
+      brier:ex?ex.brier:+brier.toFixed(3),
+      score:ex?ex.score:(predOut===realOut&&p.si===g.hs&&p.sj===g.as),
       hs:g.hs, as:g.as, hz:zhName(g.hn), az:zhName(g.an),
-      homePick:p.pick===g.hn, draw:g.hs===g.as,
+      homePick:p.pick===g.hn, draw:g.hs===g.as, cal:!!(ex&&ex.cal),
       pred:{H:p.H,D:p.D,A:p.A,si:p.si,sj:p.sj,conf:p.conf,pick:p.pick}};
-    // --- 評級自我校準:淨勝球誤差 → 微調兩隊評級(此消彼長,單場上限 ±2) ---
-    const err=(g.hs-g.as)-(p.si-p.sj);
-    const delta=Math.max(-2,Math.min(2, 1.6*Math.tanh(err/2)));
-    if(Math.abs(delta)>0.05){
-      const hn=norm(g.hn), an=norm(g.an);
-      ADJ_CACHE[hn]=Math.max(-8,Math.min(8,(ADJ_CACHE[hn]||0)+delta));
-      ADJ_CACHE[an]=Math.max(-8,Math.min(8,(ADJ_CACHE[an]||0)-delta));
-      adjSet(ADJ_CACHE);
-      sc[g.id].adj=+delta.toFixed(2);
+    // --- 評級自我校準:淨勝球誤差 → 微調兩隊評級(此消彼長,單場上限 ±2;每場只做一次) ---
+    if(!sc[g.id].cal){
+      const err=(g.hs-g.as)-(p.si-p.sj);
+      const delta=Math.max(-2,Math.min(2, 1.6*Math.tanh(err/2)));
+      if(Math.abs(delta)>0.05){
+        const hn=norm(g.hn), an=norm(g.an);
+        ADJ_CACHE[hn]=Math.max(-8,Math.min(8,(ADJ_CACHE[hn]||0)+delta));
+        ADJ_CACHE[an]=Math.max(-8,Math.min(8,(ADJ_CACHE[an]||0)-delta));
+        adjSet(ADJ_CACHE);
+        sc[g.id].adj=+delta.toFixed(2);
+      }
+      sc[g.id].cal=true;
     }
     changed=true;
   });
