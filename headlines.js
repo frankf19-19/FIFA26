@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/07/24 20:04 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/07/24 20:04";
+/* 由 news_engine.py 自動產生於 2026/07/24 23:45 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/07/24 23:45";
 const NEWS_DIAG = {real:6, note:"OK:site.api.espn.com/apis"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"What does the future look like for the Italian national team?", d:"2026-07-24", team:"", link:"https://www.espn.com/video/clip/_/id/49440743/what-does-future-look-italian-national-team"},
