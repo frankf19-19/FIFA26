@@ -200,6 +200,10 @@
   .detail-btn:hover{border-color:var(--gold)}
   .teams{display:flex;flex-direction:column;gap:10px}
   .team{display:flex;align-items:center;gap:12px}
+  .ha{font-family:var(--cond);font-weight:700;font-size:10px;letter-spacing:.1em;flex:0 0 auto;
+    padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .ha.hm{color:var(--home);border-color:var(--home)}
+  .ha.aw{color:var(--awy);border-color:var(--awy)}
   .team img{width:28px;height:28px;object-fit:contain;flex:0 0 28px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.3))}
   .team .nm{font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
     cursor:pointer;transition:.15s}
@@ -426,7 +430,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e18";
+const BUILD = "e19";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS"},
   {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽"},
@@ -954,6 +958,7 @@ function parseEvents(data){
       completed:!!st.completed,
       time:new Date(ev.date).toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false}),
       detail:st.shortDetail||"",
+      venue:(c.venue&&(c.venue.fullName||c.venue.displayName))||"",
     });
   });
   return out;
@@ -1067,11 +1072,12 @@ function probBar(p){
       <div class="h" style="width:${p.H}%"></div><div class="d" style="width:${p.D}%"></div><div class="a" style="width:${p.A}%"></div></div>
     <div class="prob-lbl"><span>主勝 <b>${p.H}%</b></span><span>和 <b>${p.D}%</b></span><span>客勝 <b>${p.A}%</b></span></div></div>`;
 }
-function teamRow(name,logo,score,win,pred){
+function teamRow(name,logo,score,win,pred,ha){
   const zh=zhName(name), en=zh!==name?`<span style="color:var(--muted);font-size:12px">${name}</span>`:"";
   const logoImg=logo?`<img src="${logo}" alt="" onerror="this.style.visibility='hidden'">`:`<span style="width:26px"></span>`;
   const sc = score!=null?`<span class="sc">${score}</span>`:(pred!=null?`<span class="sc" style="color:var(--teal)">${pred}</span>`:"");
-  return `<div class="team ${win?'win':''}">${logoImg}<span class="nm" data-team="${name}">${zh} ${en}</span>${sc}</div>`;
+  const haTag = ha?`<span class="ha ${ha==='主'?'hm':'aw'}">${ha}</span>`:"";
+  return `<div class="team ${win?'win':''}">${logoImg}${haTag}<span class="nm" data-team="${name}">${zh} ${en}</span>${sc}</div>`;
 }
 /* 賽後檢討:比對快照與實際,生成分析與教訓 */
 function makeReview(g){
@@ -1112,8 +1118,8 @@ function gameCard(g){
 
   const hWin=done&&g.hs>g.as, aWin=done&&g.as>g.hs;
   const rows=`<div class="teams">
-    ${teamRow(g.hn,g.hlogo,(done||live)?g.hs:null,hWin,(done||live)?null:p.si)}
-    ${teamRow(g.an,g.alogo,(done||live)?g.as:null,aWin,(done||live)?null:p.sj)}</div>`;
+    ${teamRow(g.hn,g.hlogo,(done||live)?g.hs:null,hWin,(done||live)?null:p.si,"主")}
+    ${teamRow(g.an,g.alogo,(done||live)?g.as:null,aWin,(done||live)?null:p.sj,"客")}</div>`;
 
   let body="";
   if(done){
@@ -1361,15 +1367,17 @@ async function showGame(g, fromPop){
         const injured=INJ_BY_PLAYER[norm(nm)]?` <span style="color:var(--miss)">🚑</span>`:"";
         return `<div class="pl lu-p" style="cursor:pointer" data-pid="${a.id||""}" data-pname="${nm.replace(/"/g,"&quot;")}" data-ppos="${(x.position&&x.position.abbreviation)||""}" data-pnum="${x.jersey||""}" data-pteam="${tName.replace(/"/g,"&quot;")}"><b>${x.jersey||""}</b>${nm}${injured} <span style="color:var(--muted);font-size:11px">${(x.position&&x.position.abbreviation)||""}</span></div>`;
       }).join("");
-      return starters?`<div class="lineup-col"><div class="t" style="cursor:pointer" data-team="${tName.replace(/"/g,"&quot;")}">${zhName(tName)} 先發 ›</div>${starters}</div>`:"";
+      const haLbl = norm(tName)===norm(g.hn)?"主場先發":norm(tName)===norm(g.an)?"客場先發":"先發";
+      return starters?`<div class="lineup-col"><div class="t" style="cursor:pointer" data-team="${tName.replace(/"/g,"&quot;")}">${zhName(tName)} ${haLbl} ›</div>${starters}</div>`:"";
     }).filter(Boolean);
     if(cols.length) lineups=`<div class="pos-group">先發陣容</div><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">${cols.join("")}</div>`;
   }catch(e){}
   // --- 組頁 ---
+  const venueLine = g.venue?`<div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin:-6px 0 12px">📍 ${esc(g.venue)} · ${zhName(g.hn)} 主場</div>`:`<div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin:-6px 0 12px">${zhName(g.hn)} 主場 · ${zhName(g.an)} 作客</div>`;
   let narrative=gameNarrative(g,goals,statPairs);
   const rv0=makeReview(g);
   if(rv0) narrative+=` 檢討:${rv0.text}`;
-  let html=`<div class="why" style="border-top:none;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:13px 15px;margin-bottom:14px"><span class="k">解說</span>${narrative}</div>`;
+  let html=venueLine+`<div class="why" style="border-top:none;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:13px 15px;margin-bottom:14px"><span class="k">解說</span>${narrative}</div>`;
   if(!g.completed&&g.state!=="in"){
     html+=probBar(p)+`<div class="predline" style="margin-bottom:14px"><span class="k">預測</span>看好 <span class="pick">${zhName(p.pick)}</span> · 比分 <b>${p.si}-${p.sj}</b> · 信心 ${p.conf}</div>
       <div class="why"><span class="k">理由</span>${reasonText(g.hn,g.an,p)}</div>`;
@@ -1381,7 +1389,7 @@ async function showGame(g, fromPop){
   }
   if(statPairs.length){
     html+=`<div class="pos-group">數據對比</div><div style="border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:14px 16px">
-      <div class="cmp-row" style="margin-bottom:12px"><div class="v h" style="color:var(--chalk);cursor:pointer" data-team="${g.hn.replace(/"/g,"&quot;")}">${hz} ›</div><div class="l">vs</div><div class="v" style="color:var(--chalk);cursor:pointer" data-team="${g.an.replace(/"/g,"&quot;")}">${az} ›</div></div>`+
+      <div class="cmp-row" style="margin-bottom:12px"><div class="v h" style="color:var(--chalk);cursor:pointer" data-team="${g.hn.replace(/"/g,"&quot;")}"><span class="ha hm">主</span> ${hz} ›</div><div class="l">vs</div><div class="v" style="color:var(--chalk);cursor:pointer" data-team="${g.an.replace(/"/g,"&quot;")}">${az} <span class="ha aw">客</span> ›</div></div>`+
       statPairs.map(s=>{
         const hn=parseFloat(s.h)||0, an=parseFloat(s.a)||0, tot=(hn+an)||1;
         return `<div class="cmp-row"><div class="v h">${s.h}<div class="cmp-bar" style="direction:rtl"><div style="width:${hn/tot*100}%"></div></div></div>
