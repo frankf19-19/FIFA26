@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/07/25 11:47 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/07/25 11:47";
+/* 由 news_engine.py 自動產生於 2026/07/25 15:46 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/07/25 15:46";
 const NEWS_DIAG = {real:6, note:"OK:site.api.espn.com/apis"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Which South American players raised their stock at the World Cup?", d:"2026-07-25", team:"", link:"https://www.espn.com/soccer/story/_/id/49425954/which-south-american-players-raised-their-world-cup"},
