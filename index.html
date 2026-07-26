@@ -311,6 +311,14 @@
   .ce-sub{font-size:12px;color:var(--muted);margin-top:1px}
   .ce-in{color:var(--hit);font-size:11px} .ce-out{color:var(--miss);font-size:11px}
   .ce-sc{font-family:var(--mono);font-size:11px;color:var(--gold);margin-top:3px}
+  .ct-row.ct-goal{cursor:pointer;border-radius:14px;transition:.15s}
+  .ct-row.ct-goal:hover{background:var(--wash)}
+  .ct-goalview{grid-column:1/-1;display:none;margin:6px auto 4px;max-width:420px;width:100%;
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 14px 8px;
+    backdrop-filter:var(--blur);box-shadow:var(--shadow)}
+  .ct-goalview.open{display:block;animation:fadeup .3s ease-out}
+  .gv-head{text-align:center;font-family:var(--cond);font-weight:700;font-size:15px;margin-bottom:10px}
+  .shotmap{width:100%;height:auto;display:block}
   .tl{border-left:1px solid var(--gold);margin:8px 0 8px 10px;padding-left:19px;opacity:.96}
   .tl-item{position:relative;margin-bottom:11px;font-size:13.5px;color:var(--ink2)}
   .tl-item::before{content:"";position:absolute;left:-24px;top:6px;width:9px;height:9px;border-radius:50%;
@@ -450,7 +458,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e20";
+const BUILD = "e21";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS"},
   {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽"},
@@ -1343,6 +1351,33 @@ function gameNarrative(g,goals,statPairs){
   }
   return parts.join(",")+"。(解說由模型與 ESPN 數據自動生成)";
 }
+/* 射門視覺:透視半場 + 金色軌跡(Apple Sports 風)。無真實座標時為示意圖並誠實標示 */
+function shotSVG(e){
+  const hash=[...String(e.a||"x")].reduce((a,ch)=>a+ch.charCodeAt(0),0);
+  let px,py,real=false;
+  if(e.c&&e.c.x>=0&&e.c.x<=100&&e.c.y>=0&&e.c.y<=100){ px=e.c.x/100; py=Math.min(.72,Math.max(.08,e.c.y/100*.6+.08)); real=true; }
+  else { px=.32+(hash%6)*.072; py=.16+(hash%4)*.075; }
+  const W=y=>64+36*y, LX=y=>18-18*y;                    // 透視:深度 y∈[0,1] 對應寬度/左緣
+  const P=(fx,fy)=>[LX(fy)+W(fy)*fx, 10+85*fy];         // 場上座標 → SVG
+  const [sx,sy]=P(px,py);
+  const tx=.22+((hash>>3)%5)*.14;                       // 進球落點(門內左/中/右)
+  const gx=38+24*tx, gy=6.2;
+  const box=(fx0,fy0,fx1,fy1)=>{const[a,b]=P(fx0,fy0),[c,d]=P(fx1,fy0),[e2,f]=P(fx1,fy1),[g2,i]=P(fx0,fy1);
+    return `${a},${b} ${c},${d} ${e2},${f} ${g2},${i}`;};
+  return `<svg viewBox="0 0 100 100" class="shotmap" aria-label="射門位置圖">
+    <polygon points="${box(0,0,1,1)}" fill="none" stroke="var(--line)" stroke-width=".7"/>
+    <polygon points="${box(.18,0,.82,.34)}" fill="none" stroke="var(--line)" stroke-width=".6"/>
+    <polygon points="${box(.34,0,.66,.13)}" fill="none" stroke="var(--line)" stroke-width=".6"/>
+    <path d="M ${P(.40,.34)[0]} ${P(.40,.34)[1]} Q ${P(.5,.45)[0]} ${P(.5,.45)[1]} ${P(.60,.34)[0]} ${P(.60,.34)[1]}" fill="none" stroke="var(--line)" stroke-width=".6"/>
+    <rect x="36" y="0" width="28" height="8.5" fill="none" stroke="var(--chalk)" stroke-width="1.1"/>
+    <ellipse cx="${gx}" cy="${gy}" rx="3.1" ry="1.5" fill="none" stroke="var(--hit)" stroke-width="1"/>
+    <polygon points="${gx-1.9},${gy} ${gx+1.9},${gy} ${sx},${sy}" fill="var(--gold)" opacity=".85"/>
+    <circle cx="${sx}" cy="${sy+2.2}" r="1.7" fill="none" stroke="var(--chalk)" stroke-width=".9"/>
+    <circle cx="${sx}" cy="${sy-3.4}" r="1.6" fill="var(--chalk)"/>
+    <path d="M ${sx} ${sy-1.8} L ${sx} ${sy+.6} M ${sx} ${sy-.9} L ${sx-2} ${sy+.4} M ${sx} ${sy-.9} L ${sx+1.8} ${sy-2.2}" stroke="var(--chalk)" stroke-width=".9" fill="none"/>
+    <text x="50" y="98.5" text-anchor="middle" font-size="3.4" fill="var(--muted)" font-family="var(--mono)">${real?"位置依 ESPN 座標":"示意圖(ESPN 未提供實際射門座標)"}</text>
+  </svg>`;
+}
 async function showGame(g, fromPop){
   if(!fromPop){ try{history.pushState({v:"game",id:g.id,g:g},"");}catch(e){} }
   ["fixturesSec","insightSec","standSec","hlSec","teamView"].forEach(id=>document.getElementById(id).classList.add("hidden"));
@@ -1374,7 +1409,8 @@ async function showGame(g, fromPop){
       const t=((ev.type&&ev.type.text)||"").toLowerCase();
       const min=(ev.clock&&ev.clock.displayValue)||"";
       const ps=(ev.participants||[]).map(x=>x.athlete||{}).filter(x=>x.displayName);
-      return {t,min,mv:minValOf(min),side:sideOf(ev),ps,txt:ev.text||""};
+      const c=(ev.coordinate&&typeof ev.coordinate.x==="number")?ev.coordinate:null;
+      return {t,min,mv:minValOf(min),side:sideOf(ev),ps,txt:ev.text||"",c};
     }).sort((a,b)=>a.mv-b.mv);
     raw.forEach(e=>{
       if(e.t.includes("goal")){
@@ -1383,7 +1419,7 @@ async function showGame(g, fromPop){
         if(scoringSide==="h")hSc++;else aSc++;
         const nm=(e.ps[0]&&e.ps[0].displayName)||e.txt||"進球";
         const assist=e.ps[1]&&e.ps[1].displayName;
-        evs.push({kind:"goal",side:scoringSide,min:e.min,mv:e.mv,a:nm+(own?"(烏龍球)":""),b:assist?("助攻 "+assist):"",sc:`${hSc} - ${aSc}`,pid:e.ps[0]&&e.ps[0].id});
+        evs.push({kind:"goal",side:scoringSide,min:e.min,mv:e.mv,a:nm+(own?"(烏龍球)":""),b:assist?("助攻 "+assist):"",sc:`${hSc} - ${aSc}`,pid:e.ps[0]&&e.ps[0].id,c:e.c});
         goals.push({min:e.min,txt:nm});
       }else if(e.t.includes("card")){
         const red=e.t.includes("red");
@@ -1447,13 +1483,15 @@ async function showGame(g, fromPop){
     let rows="",htShown=false;
     evs.forEach(e=>{
       if(!htShown&&e.mv>45){ rows+=`<div class="ct-row"><div></div><div class="ct-ht">中場休息</div><div></div></div>`; htShown=true; }
-      rows+=`<div class="ct-row">
-        <div class="ct-l">${e.side==="h"?cell(e):""}${e.side==="h"&&e.kind==="goal"?`<div class="ce-sc">${zhName(g.hn)} ${e.sc}</div>`:""}</div>
+      const isGoal=e.kind==="goal";
+      rows+=`<div class="ct-row ${isGoal?"ct-goal":""}">
+        <div class="ct-l">${e.side==="h"?cell(e):""}${e.side==="h"&&isGoal?`<div class="ce-sc">${zhName(g.hn)} ${e.sc}</div>`:""}</div>
         <div class="ct-c"><span class="ct-ico ${e.kind}">${icon(e.kind)}</span><span class="ct-min">${e.min}</span></div>
-        <div class="ct-r">${e.side==="a"?cell(e):""}${e.side==="a"&&e.kind==="goal"?`<div class="ce-sc">${e.sc} ${zhName(g.an)}</div>`:""}</div>
+        <div class="ct-r">${e.side==="a"?cell(e):""}${e.side==="a"&&isGoal?`<div class="ce-sc">${e.sc} ${zhName(g.an)}</div>`:""}</div>
+        ${isGoal?`<div class="ct-goalview"><div class="gv-head">⚽ ${e.min} ${e.a}${e.b?` · ${e.b}`:""}</div>${shotSVG(e)}</div>`:""}
       </div>`;
     });
-    html+=`<div class="pos-group">比賽事件</div>
+    html+=`<div class="pos-group">比賽事件 <span style="font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;color:var(--muted);text-transform:none">(點進球看射門圖)</span></div>
       <div class="ct-head"><span class="ha hm">主</span> ${hz}<span style="flex:1"></span>${az} <span class="ha aw">客</span></div>
       <div class="ctl">${rows}</div>`;
   }
@@ -1494,6 +1532,12 @@ async function showGame(g, fromPop){
     html+=`<div class="empty">${g.completed?"ESPN 未提供此場的詳細數據。":"尚未開賽——開賽後這裡會顯示進球事件、數據對比與先發陣容。"}</div>`;
   }
   box.innerHTML=html;
+  // 點進球 → 展開/收合射門圖
+  box.querySelectorAll(".ct-row.ct-goal").forEach(el=>el.onclick=()=>{
+    const v=el.querySelector(".ct-goalview"); if(!v) return;
+    const open=v.classList.toggle("open");
+    box.querySelectorAll(".ct-goalview.open").forEach(x=>{ if(x!==v) x.classList.remove("open"); });
+  });
   // 點球隊名 → 球隊頁
   box.querySelectorAll("[data-team]").forEach(el=>el.onclick=()=>showTeam(el.dataset.team));
   // 點先發球員 → 球員詳細頁(索引找得到用完整資料,找不到用當場資料)
