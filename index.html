@@ -458,7 +458,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e29";
+const BUILD = "e31";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS"},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1"},
@@ -744,6 +744,7 @@ function espnRosterUrls(league,teamId){return [
   `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/teams/${teamId}/roster`,
   `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/teams/${teamId}?enable=roster`,
   `https://site.web.api.espn.com/apis/site/v2/sports/soccer/${league}/teams/${teamId}/roster`,
+  `https://site.web.api.espn.com/apis/site/v2/sports/soccer/${league}/teams/${teamId}?enable=roster`,
 ];}
 function parseRosterPayload(rd){
   // 可能結構:rd.athletes[](分組) / rd.team.athletes[] / rd.roster.entries[]
@@ -864,7 +865,7 @@ async function buildAllLeaguesIndex(){
   if(allIndexLoaded||allBuilding) return;
   allBuilding=true;
   const si=document.getElementById("searchInfo");
-  const merged=[]; const seen=new Set();
+  const merged=[]; const seen=new Set(); const lgMissing=[];
   for(const lg of LEAGUES){
     if(si) si.textContent=`載入 ${lg.zh} 名冊中…`;
     try{
@@ -881,11 +882,12 @@ async function buildAllLeaguesIndex(){
           }catch(e){}
         }));
       }
-    }catch(e){}
+      if(!merged.some(p=>p.league===lg.id)) lgMissing.push(lg.zh);
+    }catch(e){ lgMissing.push(lg.zh); }
   }
   PLAYER_INDEX=merged; allIndexLoaded=true; indexedLeague="ALL"; allBuilding=false;
   const t=new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
-  if(si) si.textContent=`可搜尋全部 ${merged.length} 名球員(七聯賽)· 名冊 ${t} 自動更新`;
+  if(si) si.textContent=`可搜尋全部 ${merged.length} 名球員(七聯賽)· 名冊 ${t} 自動更新`+(lgMissing.length?` · ⚠ 名冊缺:${lgMissing.join("/")}`:"");
 }
 
 function searchPlayers(q){
@@ -952,6 +954,7 @@ async function fetchPlayerStats(league, id){
   if(!id) return null;
   const tryUrls = [
     `https://site.web.api.espn.com/apis/common/v3/sports/soccer/${league}/athletes/${id}/overview`,
+    `https://site.web.api.espn.com/apis/common/v3/sports/soccer/all/athletes/${id}/overview`,
     `https://site.api.espn.com/apis/common/v3/sports/soccer/${league}/athletes/${id}/stats`,
   ];
   for(const u of tryUrls){
@@ -989,6 +992,8 @@ function showPlayer(p, fromPop){
       ${bio.map(([l,v])=>`<div style="border:1px solid var(--line);border-radius:9px;background:var(--panel);padding:9px 13px">
         <div style="font-family:var(--cond);letter-spacing:.1em;text-transform:uppercase;font-size:11px;color:var(--muted)">${l}</div>
         <div style="font-size:15px;margin-top:2px">${v}</div></div>`).join("")}</div>
+    ${p.league==="jpn.1"?`<div style="font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:10px">ℹ ESPN 對日職聯多數球員未提供照片檔(顯示姓名縮寫);數據視 ESPN 涵蓋而定。</div>`:""}
+    ${p.id?`<div style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap"><a href="https://www.espn.com/soccer/player/_/id/${p.id}" target="_blank" rel="noopener" style="font-family:var(--cond);font-weight:600;font-size:13px;color:var(--teal);text-decoration:none">在 ESPN 查看完整球員頁 ›</a>${p.league==="jpn.1"?`<a href="https://www.google.com/search?q=${encodeURIComponent(p.name+" Jリーグ 選手")}" target="_blank" rel="noopener" style="font-family:var(--cond);font-weight:600;font-size:13px;color:var(--teal);text-decoration:none">🇯🇵 搜尋日文詳細資料 ›</a>`:""}</div>`:""}
     <div id="playerIntro" class="why" style="border-top:none;margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel)"><span class="k">介紹</span>${playerIntroText(p,null)}</div>
     <div class="pos-group" style="margin-top:18px">本季數據 <span id="statLoad" style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0">載入中…</span></div>
     <div id="playerStats"></div>
