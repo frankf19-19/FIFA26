@@ -464,7 +464,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e33";
+const BUILD = "e34";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -558,6 +558,96 @@ const ZH = {
   "celtic":"凱爾特人","rangers":"格拉斯哥流浪者","hearts":"哈茨","aberdeen":"阿伯丁","hibernian":"希伯尼安",
   "galatasaray":"加拉塔薩雷","fenerbahce":"費內巴切","fenerbahçe":"費內巴切","besiktas":"貝西克塔斯","beşiktaş":"貝西克塔斯","trabzonspor":"特拉布宗",
   "club brugge":"布魯日","anderlecht":"安德萊赫特","royal antwerp":"安特衛普","union saint-gilloise":"聖吉羅斯聯","genk":"亨克","gent":"根特",
+  /* 荷甲(完整) */
+  "sparta rotterdam":"鹿特丹斯巴達","go ahead eagles":"前進之鷹","nec nijmegen":"奈梅亨","nec":"奈梅亨",
+  "fortuna sittard":"福圖納錫塔德","sc heerenveen":"海倫芬","heerenveen":"海倫芬","fc groningen":"格羅寧根","groningen":"格羅寧根",
+  "pec zwolle":"茲沃勒","heracles almelo":"赫拉克勒斯","heracles":"赫拉克勒斯","nac breda":"布雷達","nac":"布雷達",
+  "excelsior":"鹿特丹精英","sbv excelsior":"鹿特丹精英","fc volendam":"福倫丹","volendam":"福倫丹","telstar":"特爾斯達","feyenoord rotterdam":"飛燕諾",
+  /* 葡超(完整) */
+  "vitoria de guimaraes":"吉馬良斯","vitória sc":"吉馬良斯","moreirense":"莫雷倫斯","famalicao":"法馬利康","fc famalicão":"法馬利康",
+  "casa pia":"卡薩皮亞","casa pia ac":"卡薩皮亞","rio ave":"里奧阿維","gil vicente":"吉維森特","estoril":"埃斯托里爾","estoril praia":"埃斯托里爾",
+  "arouca":"阿羅卡","fc arouca":"阿羅卡","nacional":"馬德拉國民","cd nacional":"馬德拉國民","santa clara":"聖克拉拉",
+  "estrela amadora":"阿馬多拉之星","avs":"AVS富查達","alverca":"阿爾維卡","tondela":"通德拉",
+  /* 蘇超(完整) */
+  "heart of midlothian":"哈茨","dundee":"鄧迪","dundee fc":"鄧迪","dundee united":"鄧迪聯","motherwell":"馬瑟韋爾",
+  "st mirren":"聖米倫","st. mirren":"聖米倫","kilmarnock":"基爾馬諾克","falkirk":"福爾柯克","livingston":"利文斯頓","ross county":"羅斯郡","st johnstone":"聖約翰斯通",
+  /* 比甲(完整) */
+  "standard liege":"標準列日","standard liège":"標準列日","charleroi":"沙勒羅瓦","kv mechelen":"梅赫倫","mechelen":"梅赫倫",
+  "westerlo":"韋斯特羅","kvc westerlo":"韋斯特羅","oh leuven":"魯汶","oud-heverlee leuven":"魯汶","cercle brugge":"賽克爾布魯日",
+  "sint-truiden":"聖特雷登","sint-truidense":"聖特雷登","dender":"登德爾","fcv dender":"登德爾","zulte waregem":"蘇爾特瓦雷根","la louviere":"拉盧維耶爾",
+  /* 土超(完整) */
+  "istanbul basaksehir":"巴薩克賽希爾","basaksehir":"巴薩克賽希爾","samsunspor":"薩姆松體育","goztepe":"格茲特佩","göztepe":"格茲特佩",
+  "alanyaspor":"阿蘭亞體育","antalyaspor":"安塔利亞體育","konyaspor":"科尼亞體育","kasimpasa":"卡瑟帕薩","kasımpaşa":"卡瑟帕薩",
+  "rizespor":"里澤體育","caykur rizespor":"里澤體育","gaziantep fk":"加濟安泰普","gaziantep":"加濟安泰普","kayserispor":"開塞利體育",
+  "eyupspor":"埃於普體育","kocaelispor":"科賈埃利體育","genclerbirligi":"根克勒比爾利吉","fatih karagumruk":"卡拉貢魯克","karagumruk":"卡拉貢魯克",
+  /* 英冠 */
+  "leicester city":"萊斯特城","southampton":"南安普頓","ipswich town":"伊普斯維奇","west bromwich albion":"西布朗","west brom":"西布朗",
+  "sheffield united":"雪菲爾聯","sheffield wednesday":"雪菲爾週三","middlesbrough":"米德斯堡","norwich city":"諾里奇",
+  "watford":"沃特福德","coventry city":"考文垂","hull city":"赫爾城","preston north end":"普雷斯頓","bristol city":"布里斯托城",
+  "blackburn rovers":"布萊克本","millwall":"米爾沃爾","swansea city":"斯旺西","stoke city":"斯托克城","queens park rangers":"女王公園巡遊者",
+  "derby county":"德比郡","portsmouth":"樸茨茅斯","oxford united":"牛津聯","luton town":"盧頓","charlton athletic":"查爾頓","wrexham":"雷克斯漢姆","birmingham city":"伯明翰",
+  /* 西乙 */
+  "deportivo la coruna":"拉科魯尼亞","deportivo la coruña":"拉科魯尼亞","racing santander":"桑坦德競技","almeria":"阿爾梅里亞","almería":"阿爾梅里亞",
+  "cadiz":"加的斯","cádiz":"加的斯","real zaragoza":"薩拉戈薩","zaragoza":"薩拉戈薩","sporting gijon":"希洪競技","sporting gijón":"希洪競技",
+  "las palmas":"拉斯帕爾馬斯","real valladolid":"瓦拉多利德","malaga":"馬拉加","málaga":"馬拉加","granada":"格拉納達",
+  "eibar":"埃瓦爾","sd eibar":"埃瓦爾","huesca":"韋斯卡","sd huesca":"韋斯卡","burgos":"布爾戈斯","leganes":"萊加內斯","leganés":"萊加內斯",
+  "albacete":"阿爾巴塞特","cordoba":"科爾多瓦","córdoba":"科爾多瓦","mirandes":"米蘭德斯","mirandés":"米蘭德斯",
+  "fc andorra":"安道爾","castellon":"卡斯特利翁","castellón":"卡斯特利翁","ceuta":"休達","cultural leonesa":"萊昂文化","real sociedad b":"皇家社會B隊",
+  /* 義乙 */
+  "palermo":"巴勒摩","bari":"巴里","sampdoria":"桑普多利亞","venezia":"威尼斯","empoli":"恩波利","monza":"蒙扎",
+  "spezia":"斯佩齊亞","frosinone":"弗羅西諾內","modena":"摩德納","cesena":"切塞納","catanzaro":"卡坦扎羅",
+  "sudtirol":"南蒂羅爾","südtirol":"南蒂羅爾","reggiana":"雷吉安納","carrarese":"卡拉雷塞","mantova":"曼托瓦",
+  "juve stabia":"尤維斯塔比亞","avellino":"阿韋利諾","padova":"帕多瓦","pescara":"佩斯卡拉","virtus entella":"恩特拉","salernitana":"薩勒尼塔納",
+  /* 德乙 */
+  "hertha berlin":"柏林赫塔","hertha bsc":"柏林赫塔","schalke 04":"沙爾克04","schalke":"沙爾克04","1. fc kaiserslautern":"凱澤斯勞滕","kaiserslautern":"凱澤斯勞滕",
+  "hannover 96":"漢諾威96","fortuna dusseldorf":"杜塞道夫","fortuna düsseldorf":"杜塞道夫","karlsruher sc":"卡爾斯魯厄","karlsruhe":"卡爾斯魯厄",
+  "1. fc nurnberg":"紐倫堡","nurnberg":"紐倫堡","nürnberg":"紐倫堡","sc paderborn":"帕德博恩","paderborn":"帕德博恩",
+  "greuther furth":"菲爾特","greuther fürth":"菲爾特","1. fc magdeburg":"馬格德堡","magdeburg":"馬格德堡","darmstadt 98":"達姆施塔特","darmstadt":"達姆施塔特",
+  "elversberg":"埃爾弗斯貝格","sv elversberg":"埃爾弗斯貝格","eintracht braunschweig":"布倫瑞克","preussen munster":"明斯特","preußen münster":"明斯特",
+  "dynamo dresden":"德勒斯登迪納摩","arminia bielefeld":"比勒費爾德","vfl bochum":"波鴻","bochum":"波鴻","holstein kiel":"基爾",
+  /* 法乙 */
+  "troyes":"特魯瓦","reims":"蘭斯","stade de reims":"蘭斯","montpellier":"蒙彼利埃","saint-etienne":"聖艾蒂安","st etienne":"聖艾蒂安","as saint-étienne":"聖艾蒂安",
+  "guingamp":"甘岡","amiens":"亞眠","bastia":"巴斯蒂亞","grenoble":"格勒諾布爾","annecy":"安錫","laval":"拉瓦勒",
+  "pau fc":"波城","pau":"波城","rodez":"羅德茲","dunkerque":"敦克爾克","usl dunkerque":"敦克爾克","red star":"巴黎紅星",
+  "clermont foot":"克萊蒙","clermont":"克萊蒙","le mans":"勒芒","nancy":"南錫","boulogne":"布洛涅",
+  /* 希超 */
+  "olympiacos":"奧林匹亞科斯","panathinaikos":"帕納辛奈科斯","aek athens":"雅典AEK","paok":"PAOK薩隆尼卡","paok salonika":"PAOK薩隆尼卡",
+  "aris":"阿里斯","aris salonika":"阿里斯","asteras tripolis":"特里波利斯","atromitos":"阿特羅米托斯","ofi crete":"克里特OFI","ofi":"克里特OFI",
+  "panetolikos":"帕內托利科斯","volos":"沃洛斯","levadiakos":"萊瓦賈科斯","kifisia":"基菲西亞","ael larissa":"拉里薩","panserraikos":"塞雷斯",
+  /* 瑞士超 */
+  "fc basel":"巴塞爾","basel":"巴塞爾","young boys":"伯恩年輕人","bsc young boys":"伯恩年輕人","fc zurich":"蘇黎世","zurich":"蘇黎世","fc zürich":"蘇黎世",
+  "grasshopper":"草蜢","grasshoppers":"草蜢","servette":"塞爾維特","fc lugano":"盧加諾","lugano":"盧加諾",
+  "st gallen":"聖加侖","fc st. gallen":"聖加侖","fc luzern":"盧塞恩","luzern":"盧塞恩","lausanne sport":"洛桑","lausanne":"洛桑",
+  "fc sion":"錫永","sion":"錫永","fc winterthur":"溫特圖爾","winterthur":"溫特圖爾","fc thun":"圖恩","thun":"圖恩",
+  /* 奧超 */
+  "red bull salzburg":"薩爾斯堡紅牛","rb salzburg":"薩爾斯堡紅牛","sturm graz":"格拉茨風暴","rapid vienna":"維也納快速","rapid wien":"維也納快速",
+  "austria vienna":"維也納奧地利","austria wien":"維也納奧地利","lask":"林茨LASK","lask linz":"林茨LASK","wolfsberger ac":"沃爾夫斯貝格","wolfsberger":"沃爾夫斯貝格",
+  "tsv hartberg":"哈特貝格","hartberg":"哈特貝格","scr altach":"阿爾塔赫","altach":"阿爾塔赫","wsg tirol":"提洛爾",
+  "blau-weiss linz":"藍白林茨","blau-weiß linz":"藍白林茨","sv ried":"里德","ried":"里德","grazer ak":"格拉茨AK","gak":"格拉茨AK",
+  /* 丹麥超 */
+  "fc copenhagen":"哥本哈根","copenhagen":"哥本哈根","fc midtjylland":"中日德蘭","midtjylland":"中日德蘭","brondby":"布隆德比","brøndby":"布隆德比",
+  "agf aarhus":"奧胡斯","agf":"奧胡斯","fc nordsjaelland":"北西蘭","nordsjaelland":"北西蘭","randers":"蘭德斯","viborg":"維堡",
+  "silkeborg":"錫爾克堡","sonderjyske":"南日德蘭","sønderjyske":"南日德蘭","vejle":"瓦埃勒","odense":"歐登塞","ob":"歐登塞","fredericia":"弗雷德里西亞",
+  /* 挪超 */
+  "bodo/glimt":"博德閃耀","bodo glimt":"博德閃耀","bodø/glimt":"博德閃耀","molde":"莫爾德","rosenborg":"羅森博格","brann":"布蘭",
+  "viking":"維京","viking fk":"維京","valerenga":"瓦勒倫加","vålerenga":"瓦勒倫加","tromso":"特羅姆瑟","tromsø":"特羅姆瑟",
+  "sarpsborg 08":"薩爾普斯堡","sarpsborg":"薩爾普斯堡","stromsgodset":"斯特羅姆加斯特","strømsgodset":"斯特羅姆加斯特",
+  "haugesund":"海于格松","fredrikstad":"弗雷德里克斯塔","kfum oslo":"奧斯陸KFUM","sandefjord":"桑德菲尤德","bryne":"布萊尼","hamkam":"哈馬爾卡默","lillestrom":"利勒斯特羅姆","lillestrøm":"利勒斯特羅姆",
+  /* 瑞典超 */
+  "malmo ff":"馬爾默","malmö ff":"馬爾默","malmo":"馬爾默","aik":"AIK索爾納","djurgarden":"尤爾加登","djurgården":"尤爾加登",
+  "hammarby":"哈馬比","ifk goteborg":"哥德堡","ifk göteborg":"哥德堡","bk hacken":"海肯","hacken":"海肯","häcken":"海肯",
+  "elfsborg":"埃爾夫斯堡","if elfsborg":"埃爾夫斯堡","mjallby":"米亞爾比","mjällby":"米亞爾比","sirius":"天狼星","ik sirius":"天狼星",
+  "varnamo":"韋納穆","värnamo":"韋納穆","norrkoping":"北雪平","norrköping":"北雪平","ifk norrkoping":"北雪平",
+  "halmstad":"哈爾姆斯塔德","halmstads bk":"哈爾姆斯塔德","degerfors":"代格福什","gais":"哥德堡GAIS","brommapojkarna":"布羅馬波卡納","if brommapojkarna":"布羅馬波卡納",
+  /* 俄超 */
+  "zenit st petersburg":"澤尼特","zenit":"澤尼特","spartak moscow":"莫斯科斯巴達","cska moscow":"莫斯科中央陸軍",
+  "dynamo moscow":"莫斯科迪納摩","lokomotiv moscow":"莫斯科火車頭","krasnodar":"克拉斯諾達爾","fc krasnodar":"克拉斯諾達爾",
+  "rostov":"羅斯托夫","fc rostov":"羅斯托夫","rubin kazan":"喀山紅寶石","akhmat grozny":"格羅茲尼艾哈邁特","orenburg":"奧倫堡",
+  "baltika":"波羅的海","baltika kaliningrad":"波羅的海","akron togliatti":"阿克隆","akron":"阿克隆",
+  "pari nizhny novgorod":"下諾夫哥羅德","nizhny novgorod":"下諾夫哥羅德","dynamo makhachkala":"馬哈奇卡拉迪納摩","sochi":"索契","fc sochi":"索契",
+  /* 愛超 */
+  "shamrock rovers":"沙姆洛克流浪者","bohemians":"波希米亞人","shelbourne":"謝爾本","st patrick's athletic":"聖派翠克競技","st patricks athletic":"聖派翠克競技",
+  "derry city":"德里城","sligo rovers":"斯萊戈流浪者","drogheda united":"德羅赫達聯","galway united":"高威聯","waterford":"沃特福德聯","cork city":"科克城",
 };
 /* ---- 球星名單(重點球隊,正規化隊名 → 陣容) ---- */
 const STARS = {
@@ -578,7 +668,7 @@ function avFallback(img){
   if(img.dataset.big){ d.style.cssText="width:84px;height:84px;flex:0 0 84px"; }
   d.textContent=img.dataset.init||"?"; img.replaceWith(d);
 }
-function norm(s){return (s||"").toLowerCase().replace(/[^a-z\s]/g,"").replace(/\s+/g," ").trim();}
+function norm(s){return (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z\s]/g," ").replace(/\s+/g," ").trim();}
 /* ---- 評級自我校準:依賽果微調,存在瀏覽器(euroADJ),越用越準 ---- */
 let inMemAdj={};
 function adjGet(){try{const v=localStorage.getItem("euroADJ");return v?JSON.parse(v):{};}catch(e){return inMemAdj;}}
@@ -639,20 +729,22 @@ function formSeq(name){
   const f=FORM_CACHE[norm(name)];
   return f?f.seq:"";
 }
+const RATN={}; for(const k in RATINGS){ RATN[norm(k)]=RATINGS[k]; }
 function baseRating(name){
   const n=norm(name);
-  if(RATINGS[n]!==undefined) return RATINGS[n];
-  for(const k in RATINGS){ if(n.includes(k)||k.includes(n)) return RATINGS[k]; }
+  if(RATN[n]!==undefined) return RATN[n];
+  for(const k in RATN){ if(k&&(n.includes(k)||k.includes(n))) return RATN[k]; }
   return 68;
 }
 function rating(name){
   const d=ADJ_CACHE[norm(name)]||0;
   return baseRating(name)+Math.max(-8,Math.min(8,d))+formBonus(name);   // 校準 ±8 + 近況 ±1.8
 }
+const ZHN={}; for(const k in ZH){ ZHN[norm(k)]=ZH[k]; }
 function zhName(name){
   const n=norm(name);
-  if(ZH[n]) return ZH[n];
-  for(const k in ZH){ if(n.includes(k)||k.includes(n)) return ZH[k]; }
+  if(ZHN[n]) return ZHN[n];
+  for(const k in ZHN){ if(k&&(n.includes(k)||k.includes(n))) return ZHN[k]; }
   return name;
 }
 function starsFor(name){
