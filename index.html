@@ -117,6 +117,11 @@
   .lg.on{color:var(--btn-ink);border-color:transparent;
     background:linear-gradient(120deg,var(--gold),var(--gold2));font-weight:700}
   .lg.th,.lg.nav-p{font-size:11.5px;padding:4px 13px;letter-spacing:.04em}
+  select.lg{appearance:none;-webkit-appearance:none;background:var(--panel);color:var(--muted);
+    border:1px solid var(--line);border-radius:999px;padding:7px 16px;backdrop-filter:var(--blur)}
+  select.lg:hover{color:var(--chalk);border-color:var(--gold)}
+  .tdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--gold);margin-left:7px;vertical-align:middle}
+  .tdot.live{background:var(--miss);animation:blink 1.2s infinite;box-shadow:0 0 7px var(--miss)}
 
   /* ---------- 控制列 ---------- */
   .datebar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:center;padding:14px 0 6px}
@@ -376,6 +381,7 @@
     </div>
 
     <div class="leagues" id="leagueTabs"></div>
+    <div id="todayLine" style="text-align:center;font-family:var(--mono);font-size:12px;color:var(--muted);padding:2px 0 4px"></div>
 
     <div class="datebar">
       <button class="nav" id="prevBtn">‹</button>
@@ -458,15 +464,36 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e31";
+const BUILD = "e33";
 const LEAGUES = [
-  {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS"},
-  {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1"},
-  {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽"},
-  {id:"esp.1", zh:"西甲",   full:"西班牙甲級聯賽"},
-  {id:"ita.1", zh:"義甲",   full:"義大利甲級聯賽"},
-  {id:"ger.1", zh:"德甲",   full:"德國甲級聯賽"},
-  {id:"fra.1", zh:"法甲",   full:"法國甲級聯賽"},
+  {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
+  {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
+  {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽", core:1},
+  {id:"esp.1", zh:"西甲",   full:"西班牙甲級聯賽", core:1},
+  {id:"ita.1", zh:"義甲",   full:"義大利甲級聯賽", core:1},
+  {id:"ger.1", zh:"德甲",   full:"德國甲級聯賽", core:1},
+  {id:"fra.1", zh:"法甲",   full:"法國甲級聯賽", core:1},
+  {id:"uefa.champions", zh:"歐冠", full:"歐洲冠軍聯賽"},
+  {id:"uefa.europa",    zh:"歐霸", full:"歐足聯歐洲聯賽"},
+  {id:"ned.1", zh:"荷甲", full:"荷蘭甲級聯賽"},
+  {id:"por.1", zh:"葡超", full:"葡萄牙超級聯賽"},
+  {id:"sco.1", zh:"蘇超", full:"蘇格蘭超級聯賽"},
+  {id:"bel.1", zh:"比甲", full:"比利時甲級聯賽"},
+  {id:"tur.1", zh:"土超", full:"土耳其超級聯賽"},
+  {id:"uefa.europa.conf", zh:"歐會盃", full:"歐足聯歐洲協會聯賽", more:1},
+  {id:"eng.2", zh:"英冠", full:"英格蘭冠軍聯賽", more:1},
+  {id:"esp.2", zh:"西乙", full:"西班牙乙級聯賽", more:1},
+  {id:"ita.2", zh:"義乙", full:"義大利乙級聯賽", more:1},
+  {id:"ger.2", zh:"德乙", full:"德國乙級聯賽", more:1},
+  {id:"fra.2", zh:"法乙", full:"法國乙級聯賽", more:1},
+  {id:"gre.1", zh:"希超", full:"希臘超級聯賽", more:1},
+  {id:"sui.1", zh:"瑞士超", full:"瑞士超級聯賽", more:1},
+  {id:"aut.1", zh:"奧超", full:"奧地利甲級聯賽", more:1},
+  {id:"den.1", zh:"丹麥超", full:"丹麥超級聯賽", more:1},
+  {id:"nor.1", zh:"挪超", full:"挪威超級聯賽", more:1},
+  {id:"swe.1", zh:"瑞典超", full:"瑞典超級聯賽", more:1},
+  {id:"rus.1", zh:"俄超", full:"俄羅斯超級聯賽", more:1},
+  {id:"irl.1", zh:"愛超", full:"愛爾蘭超級聯賽", more:1},
 ];
 let curLeague = "usa.1";     // 預設美職聯(現在是賽季中;歐洲 8 月開賽後可自行切換)
 let curDate = new Date();
@@ -502,6 +529,11 @@ const RATINGS = {
   "yokohama f. marinos":71,"urawa red diamonds":71,"kawasaki frontale":71,"gamba osaka":71,"cerezo osaka":70,
   "fc tokyo":70,"nagoya grampus":69,"avispa fukuoka":68,"tokyo verdy":68,"kyoto sanga":68,"shonan bellmare":66,
   "albirex niigata":66,"kashiwa reysol":69,"shimizu s-pulse":67,"consadole sapporo":65,"yokohama fc":64,
+  "ajax":78,"psv":80,"psv eindhoven":80,"feyenoord":78,"az alkmaar":74,"fc twente":73,"fc utrecht":70,
+  "fc porto":80,"porto":80,"benfica":81,"sl benfica":81,"sporting cp":81,"sc braga":75,
+  "celtic":76,"rangers":74,"hearts":66,"aberdeen":65,"hibernian":64,
+  "galatasaray":79,"fenerbahce":78,"fenerbahçe":78,"besiktas":74,"beşiktaş":74,"trabzonspor":72,
+  "club brugge":75,"anderlecht":72,"royal antwerp":70,"union saint-gilloise":73,"genk":72,"gent":70,
 };
 /* ---- 中文隊名(主要球隊;其餘顯示英文) ---- */
 const ZH = {
@@ -520,6 +552,12 @@ const ZH = {
   "nagoya grampus":"名古屋鯨八","avispa fukuoka":"福岡黃蜂","shonan bellmare":"湘南比馬","albirex niigata":"新潟天鵝",
   "kyoto sanga":"京都不死鳥","tokyo verdy":"東京綠茵","kashiwa reysol":"柏太陽神","shimizu s-pulse":"清水心跳",
   "consadole sapporo":"札幌岡薩多","hokkaido consadole sapporo":"札幌岡薩多","fagiano okayama":"岡山綠雉","jubilo iwata":"磐田喜悅",
+  "ajax":"阿賈克斯","ajax amsterdam":"阿賈克斯","psv":"PSV燕豪芬","psv eindhoven":"PSV燕豪芬","feyenoord":"飛燕諾",
+  "az alkmaar":"阿爾克馬爾","fc twente":"特文特","fc utrecht":"烏特勒支",
+  "fc porto":"波爾圖","porto":"波爾圖","benfica":"本菲卡","sl benfica":"本菲卡","sporting cp":"里斯本競技","sc braga":"布拉加",
+  "celtic":"凱爾特人","rangers":"格拉斯哥流浪者","hearts":"哈茨","aberdeen":"阿伯丁","hibernian":"希伯尼安",
+  "galatasaray":"加拉塔薩雷","fenerbahce":"費內巴切","fenerbahçe":"費內巴切","besiktas":"貝西克塔斯","beşiktaş":"貝西克塔斯","trabzonspor":"特拉布宗",
+  "club brugge":"布魯日","anderlecht":"安德萊赫特","royal antwerp":"安特衛普","union saint-gilloise":"聖吉羅斯聯","genk":"亨克","gent":"根特",
 };
 /* ---- 球星名單(重點球隊,正規化隊名 → 陣容) ---- */
 const STARS = {
@@ -861,12 +899,69 @@ async function buildPlayerIndex(league){
 
 /* 跨五大聯賽:依序把每個聯賽的名冊都併進索引 */
 let allBuilding=false;
+let MERGING={};
+async function mergeLeagueIndex(league){
+  if(MERGING[league]) return; MERGING[league]=1;
+  const si=document.getElementById("searchInfo");
+  try{
+    const teams=await getTeamList(league);
+    const chunks=[]; for(let i=0;i<teams.length;i+=4) chunks.push(teams.slice(i,i+4));
+    let added=0;
+    for(const chunk of chunks){
+      await Promise.all(chunk.map(async t=>{try{
+        const flat=await fetchTeamRoster(league,t.id);
+        flat.forEach(a=>{const p=athleteToIdx(a,t.displayName,league);
+          if(!PLAYER_INDEX.some(x=>String(x.id)===String(p.id)&&x.teamName===p.teamName)){PLAYER_INDEX.push(p);added++;}});
+      }catch(e){}}));
+    }
+    if(si&&added) si.textContent=`可搜尋全部 ${PLAYER_INDEX.length} 名球員(已併入${(LEAGUES.find(l=>l.id===league)||{}).zh||league})`;
+  }catch(e){}
+  MERGING[league]=0;
+}
+let TODAY_GAMES={};
+async function checkTodayGames(){
+  const today=isoDate(new Date());
+  const d0=new Date(); d0.setDate(d0.getDate()-1);
+  const range=ymd(d0)+"-"+ymd(new Date());
+  const chunks=[]; const L=[...LEAGUES];
+  for(let i=0;i<L.length;i+=4) chunks.push(L.slice(i,i+4));
+  for(const ch of chunks){
+    await Promise.all(ch.map(async lg=>{try{
+      const sb=await jget(espnScore(lg.id,range));
+      const evs=parseEvents(sb).filter(g=>g.localIso===today);
+      TODAY_GAMES[lg.id]={n:evs.length,live:evs.some(g=>g.state==="in")};
+    }catch(e){ TODAY_GAMES[lg.id]={n:0,live:false}; }}));
+  }
+  decorateTabs(); renderTodayLine();
+}
+function decorateTabs(){
+  const sel=document.getElementById("moreLg");
+  if(sel){
+    const moreHas=LEAGUES.filter(l=>l.more&&TODAY_GAMES[l.id]&&TODAY_GAMES[l.id].n>0);
+    const live=moreHas.some(l=>TODAY_GAMES[l.id].live);
+    sel.options[0].text=moreHas.length?`更多歐洲聯賽 ${live?"🔴":"●"}${moreHas.length} ▾`:"更多歐洲聯賽 ▾";
+  }
+  document.querySelectorAll("#leagueTabs .lg").forEach(el=>{
+    const t=TODAY_GAMES[el.dataset.lg]; const old=el.querySelector(".tdot"); if(old) old.remove();
+    if(t&&t.n>0){ const d=document.createElement("span"); d.className="tdot"+(t.live?" live":"");
+      d.title=t.live?`進行中!今日 ${t.n} 場`:`今日 ${t.n} 場`; el.appendChild(d); }
+  });
+}
+function renderTodayLine(){
+  const el=document.getElementById("todayLine"); if(!el) return;
+  const has=LEAGUES.filter(l=>TODAY_GAMES[l.id]&&TODAY_GAMES[l.id].n>0);
+  if(!has.length){ el.innerHTML=`📅 今日各聯賽皆無賽事`; return; }
+  el.innerHTML=`📅 今日賽事:`+has.map(l=>{const t=TODAY_GAMES[l.id];
+    return `<a href="#" data-golg="${l.id}" style="color:${t.live?'var(--miss)':'var(--gold)'};text-decoration:none;margin-right:12px">${l.zh} ${t.n} 場${t.live?' 🔴':''}</a>`;}).join("");
+  el.querySelectorAll("[data-golg]").forEach(a=>a.onclick=(ev)=>{ev.preventDefault();
+    if(window.switchLeague) window.switchLeague(a.dataset.golg);});
+}
 async function buildAllLeaguesIndex(){
   if(allIndexLoaded||allBuilding) return;
   allBuilding=true;
   const si=document.getElementById("searchInfo");
   const merged=[]; const seen=new Set(); const lgMissing=[];
-  for(const lg of LEAGUES){
+  for(const lg of LEAGUES.filter(l=>l.core)){
     if(si) si.textContent=`載入 ${lg.zh} 名冊中…`;
     try{
       const teams=await getTeamList(lg.id);
@@ -887,7 +982,7 @@ async function buildAllLeaguesIndex(){
   }
   PLAYER_INDEX=merged; allIndexLoaded=true; indexedLeague="ALL"; allBuilding=false;
   const t=new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
-  if(si) si.textContent=`可搜尋全部 ${merged.length} 名球員(七聯賽)· 名冊 ${t} 自動更新`+(lgMissing.length?` · ⚠ 名冊缺:${lgMissing.join("/")}`:"");
+  if(si) si.textContent=`可搜尋全部 ${merged.length} 名球員(28 聯賽)· 名冊 ${t} 自動更新`+(lgMissing.length?` · ⚠ 名冊缺:${lgMissing.join("/")}`:"");
 }
 
 function searchPlayers(q){
@@ -1698,9 +1793,11 @@ async function load(){
 /* ================= 初始化 ================= */
 function buildLeagueTabs(){
   const box=document.getElementById("leagueTabs");
-  box.innerHTML=LEAGUES.map(l=>`<button class="lg ${l.id===curLeague?'on':''}" data-lg="${l.id}">${l.zh}</button>`).join("");
-  box.querySelectorAll(".lg").forEach(el=>el.onclick=()=>{
-    curLeague=el.dataset.lg;
+  box.innerHTML=LEAGUES.filter(l=>!l.more).map(l=>`<button class="lg ${l.id===curLeague?'on':''}" data-lg="${l.id}">${l.zh}</button>`).join("")
+    +`<select id="moreLg" class="lg" style="cursor:pointer"><option value="">更多歐洲聯賽 ▾</option>`
+    +LEAGUES.filter(l=>l.more).map(l=>`<option value="${l.id}">${l.zh} ${l.full}</option>`).join("")+`</select>`;
+  function switchLeague(id){
+    curLeague=id;
     document.querySelectorAll(".lg").forEach(x=>x.classList.toggle("on",x.dataset.lg===curLeague));
     const lg=LEAGUES.find(l=>l.id===curLeague);
     document.getElementById("lgName").textContent=lg.full;
@@ -1709,11 +1806,19 @@ function buildLeagueTabs(){
     if(!allIndexLoaded && !allBuilding){              // 全聯賽索引尚未就緒 → 先建當前聯賽的
       indexedLeague=null; PLAYER_INDEX=[];
       buildPlayerIndex(curLeague);
+    } else if(allIndexLoaded && !PLAYER_INDEX.some(p=>p.league===curLeague)){
+      mergeLeagueIndex(curLeague);
     }
     document.getElementById("searchResults").innerHTML="";
     load();
     buildPlayerIndex(curLeague);
-  });
+    const sel=document.getElementById("moreLg");
+    if(sel) sel.value=(LEAGUES.find(l=>l.id===id)||{}).more?id:"";
+  }
+  window.switchLeague=switchLeague;
+  box.querySelectorAll(".lg[data-lg]").forEach(el=>el.onclick=()=>switchLeague(el.dataset.lg));
+  const sel=document.getElementById("moreLg");
+  if(sel) sel.onchange=()=>{ if(sel.value) switchLeague(sel.value); };
 }
 function applyTheme(t){
   if(t==="navy") document.body.removeAttribute("data-theme");
@@ -1780,7 +1885,9 @@ function init(){
     TEAM_LIST={}; allIndexLoaded=false; indexedLeague=null;
     buildAllLeaguesIndex().then(()=>{ if(allIndexLoaded){ crossLeague=true; const b=document.getElementById("crossBtn"); if(b) b.classList.add("on"); } });
   }, 1800000);
-  setTimeout(loadInjuries, 2000);            // 開站 2 秒後抓傷兵
+  setTimeout(loadInjuries, 2000);
+  setTimeout(checkTodayGames, 2500);
+  setInterval(()=>{ if(!document.hidden) checkTodayGames(); }, 600000);            // 開站 2 秒後抓傷兵
   setInterval(()=>{ if(!document.hidden) loadInjuries(); }, 600000);   // 每 10 分鐘更新傷兵
   setInterval(()=>{ if(!document.hidden) load(); }, 90000);  // 每 90 秒自動更新
 }
