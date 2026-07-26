@@ -458,7 +458,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e21";
+const BUILD = "e22";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS"},
   {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽"},
@@ -1342,6 +1342,9 @@ function gameNarrative(g,goals,statPairs){
     if(pos) parts.push(`控球 ${pos.h}% 對 ${pos.a}%`);
     if(sot) parts.push(`射正 ${sot.h} 比 ${sot.a}`);
     if(goals.length) parts.push(`共 ${goals.length} 粒進球`);
+  }else if(g.state==="in"){
+    parts.push(`比賽進行中${g.detail?`(${g.detail})`:""},目前 ${hz} ${g.hs??0} - ${g.as??0} ${az}`);
+    parts.push(`賽前模型看好${p.pick===g.hn?hz:az}(主勝 ${p.H}%、和 ${p.D}%、客勝 ${p.A}%)`);
   }else{
     parts.push(`${hz}主場迎戰${az}`);
     const fh=formSeq(g.hn), fa=formSeq(g.an);
@@ -1403,30 +1406,34 @@ async function showGame(g, fromPop){
       if(tn&&norm(g.hn).includes(tn)||tn.includes(norm(g.hn))) return "h";
       return "a";
     };
-    const minValOf=s=>{const m=String(s||"").match(/\d+/g);return m?m.reduce((a,x)=>a+ +x,0):0;};
+    const minValOf=s=>{const m=String(s||"").match(/\d+/g);return m?(+m[0]+(m[1]?+m[1]/100:0)):0;};
     let hSc=0,aSc=0;
     const raw=(sum.keyEvents||[]).map(ev=>{
       const t=((ev.type&&ev.type.text)||"").toLowerCase();
       const min=(ev.clock&&ev.clock.displayValue)||"";
       const ps=(ev.participants||[]).map(x=>x.athlete||{}).filter(x=>x.displayName);
       const c=(ev.coordinate&&typeof ev.coordinate.x==="number")?ev.coordinate:null;
-      return {t,min,mv:minValOf(min),side:sideOf(ev),ps,txt:ev.text||"",c};
+      const half=(ev.period&&ev.period.number)||null;
+      return {t,min,mv:minValOf(min),half,side:sideOf(ev),ps,txt:ev.text||"",c};
     }).sort((a,b)=>a.mv-b.mv);
+    const isGoalType=t=> (t.includes("goal") || (t.includes("penalty")&&(t.includes("scored")||t.includes("goal"))))
+      && !t.includes("missed") && !t.includes("saved") && !t.includes("shootout");
     raw.forEach(e=>{
-      if(e.t.includes("goal")){
+      if(isGoalType(e.t)){
         const own=e.t.includes("own");
         const scoringSide = own ? (e.side==="h"?"a":"h") : e.side;
         if(scoringSide==="h")hSc++;else aSc++;
-        const nm=(e.ps[0]&&e.ps[0].displayName)||e.txt||"進球";
+        let nm=(e.ps[0]&&e.ps[0].displayName)||e.txt||"進球";
+        if(e.t.includes("penalty")) nm+="(點球)";
         const assist=e.ps[1]&&e.ps[1].displayName;
-        evs.push({kind:"goal",side:scoringSide,min:e.min,mv:e.mv,a:nm+(own?"(烏龍球)":""),b:assist?("助攻 "+assist):"",sc:`${hSc} - ${aSc}`,pid:e.ps[0]&&e.ps[0].id,c:e.c});
+        evs.push({kind:"goal",side:scoringSide,min:e.min,mv:e.mv,half:e.half,a:nm+(own?"(烏龍球)":""),b:assist?("助攻 "+assist):"",sc:`${hSc} - ${aSc}`,pid:e.ps[0]&&e.ps[0].id,c:e.c});
         goals.push({min:e.min,txt:nm});
       }else if(e.t.includes("card")){
         const red=e.t.includes("red");
-        evs.push({kind:red?"red":"card",side:e.side,min:e.min,mv:e.mv,a:(e.ps[0]&&e.ps[0].displayName)||e.txt,b:""});
+        evs.push({kind:red?"red":"card",side:e.side,min:e.min,mv:e.mv,half:e.half,a:(e.ps[0]&&e.ps[0].displayName)||e.txt,b:""});
         cards.push({min:e.min,txt:(e.ps[0]&&e.ps[0].displayName)||e.txt,red});
       }else if(e.t.includes("substitution")){
-        evs.push({kind:"sub",side:e.side,min:e.min,mv:e.mv,a:(e.ps[0]&&e.ps[0].displayName)||"",b:(e.ps[1]&&e.ps[1].displayName)||""});
+        evs.push({kind:"sub",side:e.side,min:e.min,mv:e.mv,half:e.half,a:(e.ps[0]&&e.ps[0].displayName)||"",b:(e.ps[1]&&e.ps[1].displayName)||""});
       }
     });
   }catch(e){}
@@ -1482,7 +1489,8 @@ async function showGame(g, fromPop){
     const cell=e=>`<div class="ce-nm">${e.a}${e.kind==="sub"?` <span class="ce-in">▸入</span>`:""}</div>${e.b?`<div class="ce-sub">${e.kind==="sub"?`${e.b} <span class="ce-out">◂出</span>`:e.b}</div>`:""}`;
     let rows="",htShown=false;
     evs.forEach(e=>{
-      if(!htShown&&e.mv>45){ rows+=`<div class="ct-row"><div></div><div class="ct-ht">中場休息</div><div></div></div>`; htShown=true; }
+      const secondHalf = e.half!=null ? e.half>=2 : e.mv>=46;
+      if(!htShown&&secondHalf){ rows+=`<div class="ct-row"><div></div><div class="ct-ht">中場休息</div><div></div></div>`; htShown=true; }
       const isGoal=e.kind==="goal";
       rows+=`<div class="ct-row ${isGoal?"ct-goal":""}">
         <div class="ct-l">${e.side==="h"?cell(e):""}${e.side==="h"&&isGoal?`<div class="ce-sc">${zhName(g.hn)} ${e.sc}</div>`:""}</div>
@@ -1491,8 +1499,13 @@ async function showGame(g, fromPop){
         ${isGoal?`<div class="ct-goalview"><div class="gv-head">⚽ ${e.min} ${e.a}${e.b?` · ${e.b}`:""}</div>${shotSVG(e)}</div>`:""}
       </div>`;
     });
-    html+=`<div class="pos-group">比賽事件 <span style="font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;color:var(--muted);text-transform:none">(點進球看射門圖)</span></div>
-      <div class="ct-head"><span class="ha hm">主</span> ${hz}<span style="flex:1"></span>${az} <span class="ha aw">客</span></div>
+    let evNote="";
+    try{
+      const gH=evs.filter(e=>e.kind==="goal"&&e.side==="h").length, gA=evs.filter(e=>e.kind==="goal"&&e.side==="a").length;
+      if(g.hs!=null&&g.as!=null&&(gH!==g.hs||gA!==g.as))
+        evNote=`<div style="font-family:var(--mono);font-size:11.5px;color:var(--draw);margin:2px 0 10px">⚠ 事件流(${gH}-${gA})與比分(${g.hs}-${g.as})不一致 — ESPN 事件資料延遲或缺漏,稍後點「更新」重試</div>`;
+    }catch(e){}
+    html+=`<div class="pos-group">比賽事件 <span style="font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;color:var(--muted);text-transform:none">(點進球看射門圖)</span></div>`+evNote+`<div class="ct-head"><span class="ha hm">主</span> ${hz}<span style="flex:1"></span>${az} <span class="ha aw">客</span></div>
       <div class="ctl">${rows}</div>`;
   }
   if(statPairs.length){
