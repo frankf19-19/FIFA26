@@ -458,7 +458,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e24";
+const BUILD = "e26";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS"},
   {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽"},
@@ -538,6 +538,26 @@ let ADJ_CACHE=adjGet();
 let FORM_CACHE={};      // norm(team) -> {pts,seq:"WWDLW"}
 let DRAW_NUDGE=0;       // 和局機率補正(百分點)
 let HA_TUNE=0;          // 主場係數微調
+/* 一次性修復:e23 前的舊快照可能「看好某隊但比分平局」(當時的顯示 bug),
+   修成與看好一致的比分;命中/Brier 為真實評分,原封不動 */
+function migrateSnapshots(){
+  const sc=scGet(); let changed=false;
+  for(const k in sc){
+    const s=sc[k]; if(!s||!s.pred) continue;
+    const p=s.pred;
+    const isTeamPick = p.pick && p.pick!=="和局";
+    if(isTeamPick && p.si===p.sj){
+      const v=p.si;
+      const homePick = s.homePick===true;
+      if(homePick){ p.si=Math.max(1,v); p.sj=Math.max(0,p.si-1); }
+      else { p.sj=Math.max(1,v); p.si=Math.max(0,p.sj-1); }
+      changed=true;
+    }else if(p.pick==="和局" && p.si!==p.sj){
+      const m=Math.max(p.si,p.sj); p.si=m; p.sj=m; changed=true;
+    }
+  }
+  if(changed) scSet(sc);
+}
 function computeTuning(){
   const sc=scGet();
   const entries=Object.values(sc).filter(s=>s&&s.pred&&s.hnk);
@@ -1139,7 +1159,8 @@ function makeReview(g){
   const s=scGet()[g.id]; if(!s||!s.pred) return null;
   const p=s.pred, hz=s.hz, az=s.az;
   const parts=[];
-  if(s.score){ parts.push("方向與比分全中,模型校準精準"); }
+  const exact=(s.hit&&p.si===s.hs&&p.sj===s.as);
+  if(s.score||exact){ parts.push("方向與比分全中,模型校準精準"); }
   else if(s.hit){
     parts.push("勝負方向命中,比分有誤差");
     const gdR=Math.abs(s.hs-s.as), gdP=Math.abs(p.si-p.sj), dd=gdR-gdP;
@@ -1168,9 +1189,20 @@ function gameCard(g){
   let pill;
   if(live) pill=`<span class="pill live"><span class="dot"></span>${g.detail||'進行中'}</span>`;
   else if(done){
-    const realOut=g.hs>g.as?"H":g.hs<g.as?"A":"D";
-    const predOut=p.H>=p.D&&p.H>=p.A?"H":p.A>=p.D&&p.A>=p.H?"A":"D";
-    pill=realOut===predOut?`<span class="pill hit">命中</span>`:`<span class="pill miss">未中</span>`;
+    // 依「當初存的快照成績」判章,不用事後重算的預測(避免校準漂移造成章與成績不符)
+    const snap0=scGet()[g.id];
+    let hitFlag, exact=false;
+    if(snap0&&snap0.pred){
+      hitFlag=!!snap0.hit;
+      exact=hitFlag&&(snap0.score||(snap0.pred.si===g.hs&&snap0.pred.sj===g.as));
+    }else{
+      const realOut=g.hs>g.as?"H":g.hs<g.as?"A":"D";
+      const predOut=p.H>=p.D&&p.H>=p.A?"H":p.A>=p.D&&p.A>=p.H?"A":"D";
+      hitFlag=realOut===predOut; exact=hitFlag&&p.si===g.hs&&p.sj===g.as;
+    }
+    pill= exact?`<span class="pill hit" title="勝負方向與比分皆預測正確">全中</span>`
+        : hitFlag?`<span class="pill hit" title="勝負方向(主勝/和/客勝)預測正確;比分未全中">命中</span>`
+        : `<span class="pill miss" title="勝負方向預測錯誤">未中</span>`;
   } else pill=`<span class="pill wait">未開賽</span>`;
 
   const hWin=done&&g.hs>g.as, aWin=done&&g.as>g.hs;
@@ -1666,6 +1698,7 @@ function applyTheme(t){
 }
 function init(){
   document.getElementById("buildTag").textContent="build "+BUILD;
+  migrateSnapshots();
   computeTuning();
   let th="navy"; try{th=localStorage.getItem("euroTheme")||"navy";}catch(e){}
   applyTheme(th);
