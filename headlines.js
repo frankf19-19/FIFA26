@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/07/26 15:45 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/07/26 15:45";
+/* 由 news_engine.py 自動產生於 2026/07/26 19:59 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/07/26 19:59";
 const NEWS_DIAG = {real:6, note:"OK:site.api.espn.com/apis"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"The players who played no minutes at the World Cup -- who were the unlucky few?", d:"2026-07-26", team:"", link:"https://www.espn.com/soccer/story/_/id/49416547/the-players-played-no-minutes-world-cup-were-unlucky-ngolo-kante-kobbie-mainoo-david-raya-victor-munoz"},
