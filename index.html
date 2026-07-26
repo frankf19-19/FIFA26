@@ -291,6 +291,26 @@
   .p-note{font-size:13px;color:var(--ink2);margin-top:3px}
 
   /* ---------- 詳情 ---------- */
+  .ct-head{display:flex;align-items:center;gap:9px;font-family:var(--cond);font-weight:700;font-size:14px;
+    padding:4px 6px 12px;color:var(--chalk)}
+  .ctl{position:relative;padding:4px 0}
+  .ctl::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;
+    background:linear-gradient(180deg,transparent,var(--line) 8%,var(--line) 92%,transparent)}
+  .ct-row{display:grid;grid-template-columns:1fr 92px 1fr;align-items:center;gap:8px;margin-bottom:16px;position:relative}
+  .ct-l{text-align:right} .ct-r{text-align:left}
+  .ct-c{display:flex;flex-direction:column;align-items:center;gap:4px}
+  .ct-ico{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:15px;background:var(--panel-2);border:1px solid var(--line)}
+  .ct-ico.goal{border-color:var(--hit);box-shadow:0 0 12px rgba(102,201,140,.3)}
+  .ct-ico.card{border-color:var(--draw)} .ct-ico.red{border-color:var(--miss)}
+  .ct-min{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .ct-ht{text-align:center;font-family:var(--cond);font-weight:600;font-size:11px;letter-spacing:.3em;
+    text-transform:uppercase;color:var(--muted);background:var(--panel);border:1px solid var(--line);
+    border-radius:999px;padding:4px 0;position:relative;z-index:1}
+  .ce-nm{font-weight:600;font-size:14px;color:var(--chalk)}
+  .ce-sub{font-size:12px;color:var(--muted);margin-top:1px}
+  .ce-in{color:var(--hit);font-size:11px} .ce-out{color:var(--miss);font-size:11px}
+  .ce-sc{font-family:var(--mono);font-size:11px;color:var(--gold);margin-top:3px}
   .tl{border-left:1px solid var(--gold);margin:8px 0 8px 10px;padding-left:19px;opacity:.96}
   .tl-item{position:relative;margin-bottom:11px;font-size:13.5px;color:var(--ink2)}
   .tl-item::before{content:"";position:absolute;left:-24px;top:6px;width:9px;height:9px;border-radius:50%;
@@ -430,7 +450,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e19";
+const BUILD = "e20";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS"},
   {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽"},
@@ -1295,8 +1315,9 @@ async function showTeam(name, fromPop){
   })();
 }
 /* ================= 比賽詳情頁(像 MLB 版的逐場解說) ================= */
-const GSTAT_ZH={possessionPct:"控球率 %",totalShots:"射門",shotsOnTarget:"射正",wonCorners:"角球",
-  foulsCommitted:"犯規",offsides:"越位",saves:"撲救",yellowCards:"黃牌",redCards:"紅牌",totalPasses:"傳球",accuratePasses:"準確傳球"};
+const GSTAT_ZH={possessionPct:"控球率 %",wonCorners:"角球",totalCrosses:"傳中",effectiveCrosses:"成功傳中",
+  foulsCommitted:"犯規",offsides:"越位",saves:"撲救",yellowCards:"黃牌",redCards:"紅牌",
+  totalPasses:"傳球",accuratePasses:"準確傳球",assists:"助攻",totalTackles:"搶斷",interceptions:"攔截"};
 function gameNarrative(g,goals,statPairs){
   const hz=zhName(g.hn),az=zhName(g.an),p=predict(g.hn,g.an);
   const parts=[];
@@ -1335,15 +1356,42 @@ async function showGame(g, fromPop){
   let sum=null;
   try{ sum=await jget(espnSummary(g.league||curLeague, g.id)); }catch(e){}
   // --- 進球/紅黃牌時間軸 ---
-  let goals=[],cards=[];
+  let goals=[],cards=[],evs=[];
   try{
-    (sum.keyEvents||[]).forEach(ev=>{
+    // 主隊 id:優先用 summary header 的 homeAway 標記,退而求其次比隊名
+    let homeId=null;
+    try{ homeId=(sum.header.competitions[0].competitors.find(x=>x.homeAway==="home")||{}).id; }catch(e){}
+    const sideOf=ev=>{
+      const tid=ev.team&&ev.team.id;
+      if(homeId!=null&&tid!=null) return String(tid)===String(homeId)?"h":"a";
+      const tn=norm((ev.team&&ev.team.displayName)||"");
+      if(tn&&norm(g.hn).includes(tn)||tn.includes(norm(g.hn))) return "h";
+      return "a";
+    };
+    const minValOf=s=>{const m=String(s||"").match(/\d+/g);return m?m.reduce((a,x)=>a+ +x,0):0;};
+    let hSc=0,aSc=0;
+    const raw=(sum.keyEvents||[]).map(ev=>{
       const t=((ev.type&&ev.type.text)||"").toLowerCase();
       const min=(ev.clock&&ev.clock.displayValue)||"";
-      const txt=ev.text||((ev.participants||[]).map(x=>x.athlete&&x.athlete.displayName).filter(Boolean).join(", "));
-      if(t.includes("goal")&&!t.includes("own")) goals.push({min,txt});
-      else if(t.includes("own goal")) goals.push({min,txt:txt+"(烏龍球)"});
-      else if(t.includes("card")) cards.push({min,txt,red:t.includes("red")});
+      const ps=(ev.participants||[]).map(x=>x.athlete||{}).filter(x=>x.displayName);
+      return {t,min,mv:minValOf(min),side:sideOf(ev),ps,txt:ev.text||""};
+    }).sort((a,b)=>a.mv-b.mv);
+    raw.forEach(e=>{
+      if(e.t.includes("goal")){
+        const own=e.t.includes("own");
+        const scoringSide = own ? (e.side==="h"?"a":"h") : e.side;
+        if(scoringSide==="h")hSc++;else aSc++;
+        const nm=(e.ps[0]&&e.ps[0].displayName)||e.txt||"進球";
+        const assist=e.ps[1]&&e.ps[1].displayName;
+        evs.push({kind:"goal",side:scoringSide,min:e.min,mv:e.mv,a:nm+(own?"(烏龍球)":""),b:assist?("助攻 "+assist):"",sc:`${hSc} - ${aSc}`,pid:e.ps[0]&&e.ps[0].id});
+        goals.push({min:e.min,txt:nm});
+      }else if(e.t.includes("card")){
+        const red=e.t.includes("red");
+        evs.push({kind:red?"red":"card",side:e.side,min:e.min,mv:e.mv,a:(e.ps[0]&&e.ps[0].displayName)||e.txt,b:""});
+        cards.push({min:e.min,txt:(e.ps[0]&&e.ps[0].displayName)||e.txt,red});
+      }else if(e.t.includes("substitution")){
+        evs.push({kind:"sub",side:e.side,min:e.min,mv:e.mv,a:(e.ps[0]&&e.ps[0].displayName)||"",b:(e.ps[1]&&e.ps[1].displayName)||""});
+      }
     });
   }catch(e){}
   // --- 球隊數據對比 ---
@@ -1352,10 +1400,21 @@ async function showGame(g, fromPop){
     const tms=sum.boxscore.teams;
     const hIdx=norm(tms[0].team.displayName)===norm(g.hn)?0:1, aIdx=1-hIdx;
     const hst=tms[hIdx].statistics||[], ast=tms[aIdx].statistics||[];
+    const gv=(arr,k)=>{const s=arr.find(x=>x.name===k);return s?s.displayValue:null;};
+    // 射門合併顯示:18 (6)
+    const hSh=gv(hst,"totalShots"), hSot=gv(hst,"shotsOnTarget"), aSh=gv(ast,"totalShots"), aSot=gv(ast,"shotsOnTarget");
+    if(hSh!=null&&aSh!=null) statPairs.push({key:"totalShots",label:"射門(射正)",h:`${hSh}${hSot!=null?` (${hSot})`:""}`,a:`${aSh}${aSot!=null?` (${aSot})`:""}`});
     Object.keys(GSTAT_ZH).forEach(k=>{
-      const hv=(hst.find(x=>x.name===k)||{}).displayValue, av=(ast.find(x=>x.name===k)||{}).displayValue;
+      const hv=gv(hst,k), av=gv(ast,k);
       if(hv!=null&&av!=null) statPairs.push({key:k,label:GSTAT_ZH[k],h:hv,a:av});
     });
+    // 陣型(有就顯示)
+    try{
+      const fOf=r=>r.formation||((r.team||{}).formation)||null;
+      const hR=(sum.rosters||[]).find(r=>norm((r.team||{}).displayName||"")===norm(g.hn));
+      const aR=(sum.rosters||[]).find(r=>norm((r.team||{}).displayName||"")===norm(g.an));
+      if(hR&&aR&&fOf(hR)&&fOf(aR)) statPairs.unshift({key:"formation",label:"陣型",h:fOf(hR),a:fOf(aR),noBar:true});
+    }catch(e){}
   }catch(e){}
   // --- 先發陣容 ---
   let lineups="";
@@ -1382,15 +1441,27 @@ async function showGame(g, fromPop){
     html+=probBar(p)+`<div class="predline" style="margin-bottom:14px"><span class="k">預測</span>看好 <span class="pick">${zhName(p.pick)}</span> · 比分 <b>${p.si}-${p.sj}</b> · 信心 ${p.conf}</div>
       <div class="why"><span class="k">理由</span>${reasonText(g.hn,g.an,p)}</div>`;
   }
-  if(goals.length||cards.length){
-    html+=`<div class="pos-group">比賽事件</div><div class="tl">`+
-      goals.map(x=>`<div class="tl-item goal"><span class="tl-min">${x.min}</span>⚽ ${x.txt}</div>`).join("")+
-      cards.map(x=>`<div class="tl-item card"><span class="tl-min">${x.min}</span>${x.red?"🟥":"🟨"} ${x.txt}</div>`).join("")+`</div>`;
+  if(evs.length){
+    const icon=k=>k==="goal"?"⚽":k==="red"?"🟥":k==="card"?"🟨":"⇄";
+    const cell=e=>`<div class="ce-nm">${e.a}${e.kind==="sub"?` <span class="ce-in">▸入</span>`:""}</div>${e.b?`<div class="ce-sub">${e.kind==="sub"?`${e.b} <span class="ce-out">◂出</span>`:e.b}</div>`:""}`;
+    let rows="",htShown=false;
+    evs.forEach(e=>{
+      if(!htShown&&e.mv>45){ rows+=`<div class="ct-row"><div></div><div class="ct-ht">中場休息</div><div></div></div>`; htShown=true; }
+      rows+=`<div class="ct-row">
+        <div class="ct-l">${e.side==="h"?cell(e):""}${e.side==="h"&&e.kind==="goal"?`<div class="ce-sc">${zhName(g.hn)} ${e.sc}</div>`:""}</div>
+        <div class="ct-c"><span class="ct-ico ${e.kind}">${icon(e.kind)}</span><span class="ct-min">${e.min}</span></div>
+        <div class="ct-r">${e.side==="a"?cell(e):""}${e.side==="a"&&e.kind==="goal"?`<div class="ce-sc">${e.sc} ${zhName(g.an)}</div>`:""}</div>
+      </div>`;
+    });
+    html+=`<div class="pos-group">比賽事件</div>
+      <div class="ct-head"><span class="ha hm">主</span> ${hz}<span style="flex:1"></span>${az} <span class="ha aw">客</span></div>
+      <div class="ctl">${rows}</div>`;
   }
   if(statPairs.length){
     html+=`<div class="pos-group">數據對比</div><div style="border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:14px 16px">
-      <div class="cmp-row" style="margin-bottom:12px"><div class="v h" style="color:var(--chalk);cursor:pointer" data-team="${g.hn.replace(/"/g,"&quot;")}"><span class="ha hm">主</span> ${hz} ›</div><div class="l">vs</div><div class="v" style="color:var(--chalk);cursor:pointer" data-team="${g.an.replace(/"/g,"&quot;")}">${az} <span class="ha aw">客</span> ›</div></div>`+
+      <div class="cmp-row" style="margin-bottom:12px"><div class="v h" style="color:var(--chalk);cursor:pointer" data-team="${g.hn.replace(/"/g,"&quot;")}">${g.hlogo?`<img src="${g.hlogo}" style="width:22px;height:22px;object-fit:contain;vertical-align:middle;margin-right:6px" onerror="this.style.display='none'">`:""}<span class="ha hm">主</span> ${hz} ›</div><div class="l">vs</div><div class="v" style="color:var(--chalk);cursor:pointer" data-team="${g.an.replace(/"/g,"&quot;")}">${az} <span class="ha aw">客</span> ${g.alogo?`<img src="${g.alogo}" style="width:22px;height:22px;object-fit:contain;vertical-align:middle;margin-left:6px" onerror="this.style.display='none'">`:""} ›</div></div>`+
       statPairs.map(s=>{
+        if(s.noBar) return `<div class="cmp-row"><div class="v h">${s.h}</div><div class="l">${s.label}</div><div class="v">${s.a}</div></div>`;
         const hn=parseFloat(s.h)||0, an=parseFloat(s.a)||0, tot=(hn+an)||1;
         return `<div class="cmp-row"><div class="v h">${s.h}<div class="cmp-bar" style="direction:rtl"><div style="width:${hn/tot*100}%"></div></div></div>
           <div class="l">${s.label}</div>
@@ -1398,6 +1469,27 @@ async function showGame(g, fromPop){
       }).join("")+`</div>`;
   }
   html+=lineups;
+  try{
+    const gi=sum.gameInfo||{};
+    const rows=[];
+    const vn=(gi.venue&&(gi.venue.fullName||gi.venue.displayName))||g.venue;
+    if(vn) rows.push(["球場",vn]);
+    const city=gi.venue&&gi.venue.address&&(gi.venue.address.city||gi.venue.address.summary);
+    if(city) rows.push(["城市",city]);
+    if(gi.attendance) rows.push(["觀眾",Number(gi.attendance).toLocaleString()]);
+    (gi.officials||[]).forEach(o=>{
+      const pos=((o.position&&(o.position.displayName||o.position.name))||"").toLowerCase();
+      const nm=o.fullName||o.displayName; if(!nm) return;
+      if(pos.includes("video")||pos==="var") rows.push(["VAR",nm]);
+      else if(pos.includes("referee")&&!pos.includes("assistant")) rows.push(["主審",nm]);
+    });
+    if(rows.length){
+      html+=`<div class="pos-group">比賽資訊</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:9px">`+
+        rows.map(([l,v])=>`<div style="background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:10px 15px">
+          <div style="font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase">${l}</div>
+          <div style="font-size:14px;margin-top:3px">${esc(v)}</div></div>`).join("")+`</div>`;
+    }
+  }catch(e){}
   if(!goals.length&&!statPairs.length&&!lineups){
     html+=`<div class="empty">${g.completed?"ESPN 未提供此場的詳細數據。":"尚未開賽——開賽後這裡會顯示進球事件、數據對比與先發陣容。"}</div>`;
   }
