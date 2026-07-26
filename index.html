@@ -458,7 +458,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e26";
+const BUILD = "e28";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS"},
   {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽"},
@@ -546,21 +546,16 @@ function migrateSnapshots(){
     const s=sc[k]; if(!s||!s.pred) continue;
     const p=s.pred;
     const isTeamPick = p.pick && p.pick!=="和局";
-    if(isTeamPick && p.si===p.sj){
-      const v=p.si;
-      const homePick = s.homePick===true;
-      if(homePick){ p.si=Math.max(1,v); p.sj=Math.max(0,p.si-1); }
-      else { p.sj=Math.max(1,v); p.si=Math.max(0,p.sj-1); }
-      changed=true;
-    }else if(p.pick==="和局" && p.si!==p.sj){
-      const m=Math.max(p.si,p.sj); p.si=m; p.sj=m; changed=true;
+    // 自相矛盾的舊預測(看好某隊卻平局/看好和局卻分勝負)→ 整筆作廢:不計命中/未中/Brier
+    if(!s.void && ((isTeamPick && p.si===p.sj) || (p.pick==="和局" && p.si!==p.sj) || p.si==null)){
+      p.si=null; p.sj=null; s.v=1; s.void=true; changed=true;
     }
   }
   if(changed) scSet(sc);
 }
 function computeTuning(){
   const sc=scGet();
-  const entries=Object.values(sc).filter(s=>s&&s.pred&&s.hnk);
+  const entries=Object.values(sc).filter(s=>s&&s.pred&&s.hnk&&!s.void);
   // --- 近況:每隊最近 5 場的勝負 ---
   FORM_CACHE={};
   const byTeam={};
@@ -575,7 +570,7 @@ function computeTuning(){
     FORM_CACHE[k]={pts, seq:last.slice().reverse().join("")};
   }
   // --- 調參(樣本 ≥8 才啟動,避免小樣本過擬合) ---
-  const all=Object.values(sc).filter(s=>s&&s.pred);
+  const all=Object.values(sc).filter(s=>s&&s.pred&&!s.void);
   const n=all.length;
   if(n>=8){
     const avgD=all.reduce((a,s)=>a+s.pred.D,0)/n;
@@ -1063,7 +1058,7 @@ function gradeFinished(games){
       brier:ex?ex.brier:+brier.toFixed(3),
       score:ex?ex.score:(predOut===realOut&&p.si===g.hs&&p.sj===g.as),
       hs:g.hs, as:g.as, hz:zhName(g.hn), az:zhName(g.an),
-      hnk:norm(g.hn), ank:norm(g.an), t:(ex&&ex.t)||Date.now(),
+      hnk:norm(g.hn), ank:norm(g.an), t:(ex&&ex.t)||Date.now(), v:ex?(ex.v||1):2,
       homePick:p.pick===g.hn, draw:g.hs===g.as, cal:!!(ex&&ex.cal),
       pred:{H:p.H,D:p.D,A:p.A,si:p.si,sj:p.sj,conf:p.conf,pick:p.pick}};
     // --- 評級自我校準:淨勝球誤差 → 微調兩隊評級(此消彼長,單場上限 ±2;每場只做一次) ---
@@ -1087,7 +1082,7 @@ function gradeFinished(games){
 function renderInsights(){
   const box=document.getElementById("insights"), tag=document.getElementById("insTag");
   if(!box) return;
-  const sc=scGet(); const ids=Object.keys(sc).filter(k=>sc[k].pred);
+  const sc=scGet(); const ids=Object.keys(sc).filter(k=>sc[k].pred&&!sc[k].void);
   const n=ids.length;
   if(!n){ box.innerHTML=`<div class="empty" style="text-align:left">完賽累積後,模型會在這裡整理檢討心得與評級調整。</div>`; tag.textContent=""; return; }
   tag.textContent=`已學習 ${n} 場`;
@@ -1129,11 +1124,19 @@ function renderInsights(){
   const fc=Object.keys(FORM_CACHE).length;
   if(fc) tune.push(`近況因子已涵蓋 ${fc} 隊(近5場戰績納入評級)`);
   if(tune.length) html+=`<div class="pos-group" style="margin:12px 0 6px">自動調參</div><div style="font-family:var(--mono);font-size:12px;color:var(--ink2)">${tune.join(" · ")}</div>`;
-  html+=`<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:12px">心得由模型依實際賽果自動生成 · 校準值存於此瀏覽器,持續累積會越來越準</div></div>`;
+  html+=`<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:12px">心得由模型依實際賽果自動生成 · 校準值存於此瀏覽器,持續累積會越來越準
+    · <a href="#" id="resetSC" style="color:var(--miss)">重設所有計分紀錄</a></div></div>`;
   box.innerHTML=html;
+  const rst=document.getElementById("resetSC");
+  if(rst) rst.onclick=(ev)=>{ev.preventDefault();
+    if(!confirm("確定重設?將清除所有預測成績、檢討與評級校準,從乾淨狀態重新累積(建議:早期紀錄曾受顯示問題影響)。"))return;
+    try{localStorage.removeItem("euroSC");localStorage.removeItem("euroADJ");}catch(e){}
+    inMemScorecard={}; inMemAdj={}; ADJ_CACHE={};
+    computeTuning(); renderScorecard(); renderInsights(); load();
+  };
 }
 function renderScorecard(){
-  const sc=scGet(); const ids=Object.keys(sc);
+  const sc=scGet(); const ids=Object.keys(sc).filter(k=>!sc[k].void);
   const n=ids.length, hit=ids.filter(k=>sc[k].hit).length;
   const brier=n?ids.reduce((s,k)=>s+sc[k].brier,0)/n:0;
   document.getElementById("scPct").textContent=n?Math.round(hit/n*100)+"%":"—";
@@ -1157,19 +1160,22 @@ function teamRow(name,logo,score,win,pred,ha){
 /* 賽後檢討:比對快照與實際,生成分析與教訓 */
 function makeReview(g){
   const s=scGet()[g.id]; if(!s||!s.pred) return null;
+  if(s.void) return {text:"此場早期預測自相矛盾(顯示異常),整筆作廢——不計入命中率、驗證數與 Brier。之後的新預測依 v2 制度誠實計分。",good:false};
   const p=s.pred, hz=s.hz, az=s.az;
   const parts=[];
-  const exact=(s.hit&&p.si===s.hs&&p.sj===s.as);
-  if(s.score||exact){ parts.push("方向與比分全中,模型校準精準"); }
+  const exact=(s.hit&&(s.v>=2)&&p.si===s.hs&&p.sj===s.as);
+  if(s.score===true||exact){ parts.push("方向與比分全中,模型校準精準"); }
   else if(s.hit){
-    parts.push("勝負方向命中,比分有誤差");
-    const gdR=Math.abs(s.hs-s.as), gdP=Math.abs(p.si-p.sj), dd=gdR-gdP;
+    if(!(s.v>=2)&&p.si===s.hs&&p.sj===s.as)
+      parts.push("勝負方向命中(早期版本的比分紀錄有顯示問題,不納入全中判定)");
+    else parts.push("勝負方向命中,比分有誤差");
+    const gdR=Math.abs(s.hs-s.as), gdP=(p.si!=null)?Math.abs(p.si-p.sj):null, dd=(gdP!=null)?gdR-gdP:0;
     if(dd>=2) parts.push(`實際差距(${s.hs}-${s.as})比預測懸殊,勝方壓制力被低估`);
     else if(dd===1) parts.push(`實際差距(${s.hs}-${s.as})比預測(${p.si}-${p.sj})稍大`);
     else if(dd===-1) parts.push(`實際(${s.hs}-${s.as})比預測(${p.si}-${p.sj})稍膠著`);
     else if(dd<=-2) parts.push(`實際比預測膠著許多(${s.hs}-${s.as} vs ${p.si}-${p.sj}),弱方抵抗力被低估`);
-    if(s.hs+s.as>p.si+p.sj+1) parts.push("雙方防線比預期鬆散");
-    else if(s.hs+s.as+1<p.si+p.sj) parts.push("進球數低於模型預期");
+    if(p.si!=null&&s.hs+s.as>p.si+p.sj+1) parts.push("雙方防線比預期鬆散");
+    else if(p.si!=null&&s.hs+s.as+1<p.si+p.sj) parts.push("進球數低於模型預期");
   }else if(s.draw){
     parts.push(`和局未在預期內(賽前和局機率僅 ${p.D}%),兩隊實際更均勢`);
   }else{
@@ -1191,16 +1197,18 @@ function gameCard(g){
   else if(done){
     // 依「當初存的快照成績」判章,不用事後重算的預測(避免校準漂移造成章與成績不符)
     const snap0=scGet()[g.id];
-    let hitFlag, exact=false;
-    if(snap0&&snap0.pred){
+    let hitFlag, exact=false, pillDone=false;
+    if(snap0&&snap0.void){
+      pill=`<span class="pill wait" title="早期預測自相矛盾(顯示異常),整筆作廢,不計入命中率與 Brier">不計</span>`;
+    }else if(snap0&&snap0.pred){
       hitFlag=!!snap0.hit;
-      exact=hitFlag&&(snap0.score||(snap0.pred.si===g.hs&&snap0.pred.sj===g.as));
+      exact=hitFlag&&(snap0.score===true||((snap0.v>=2)&&snap0.pred.si===g.hs&&snap0.pred.sj===g.as));
     }else{
       const realOut=g.hs>g.as?"H":g.hs<g.as?"A":"D";
       const predOut=p.H>=p.D&&p.H>=p.A?"H":p.A>=p.D&&p.A>=p.H?"A":"D";
       hitFlag=realOut===predOut; exact=hitFlag&&p.si===g.hs&&p.sj===g.as;
     }
-    pill= exact?`<span class="pill hit" title="勝負方向與比分皆預測正確">全中</span>`
+    if(!pill) pill= exact?`<span class="pill hit" title="勝負方向與比分皆預測正確">全中</span>`
         : hitFlag?`<span class="pill hit" title="勝負方向(主勝/和/客勝)預測正確;比分未全中">命中</span>`
         : `<span class="pill miss" title="勝負方向預測錯誤">未中</span>`;
   } else pill=`<span class="pill wait">未開賽</span>`;
@@ -1215,7 +1223,7 @@ function gameCard(g){
     const snap=scGet()[g.id];
     const sp=(snap&&snap.pred)?snap.pred:p;    // 用當初的預測快照,不因校準漂移
     const rv=makeReview(g);
-    body=`<div class="predline"><span class="k">賽前預測</span> 看好 <span class="pick">${zhName(sp.pick)}</span> · 比分 <b>${sp.si}-${sp.sj}</b> · 信心 ${sp.conf||p.conf}</div>
+    body=`<div class="predline"><span class="k">賽前預測</span> 看好 <span class="pick">${zhName(sp.pick)}</span> · 比分 <b>${sp.si!=null?`${sp.si}-${sp.sj}`:"—"}</b> · 信心 ${sp.conf||p.conf}</div>
       <div class="why"><span class="k">結果</span>${g.hs}-${g.as},實際 ${g.hs>g.as?zhName(g.hn):g.hs<g.as?zhName(g.an):'雙方戰平'}${g.hs===g.as?'':'勝出'}。</div>`+
       (rv?`<div class="review ${rv.good?'good':'bad'}"><span class="k">檢討</span>${rv.text}</div>`:"");
   }else{
