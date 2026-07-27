@@ -1,9 +1,9 @@
-/* 由 news_engine.py 自動產生於 2026/07/27 12:00 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/07/27 12:00";
+/* 由 news_engine.py 自動產生於 2026/07/27 18:08 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/07/27 18:08";
 const NEWS_DIAG = {real:6, note:"OK:site.api.espn.com/apis"};
 const AUTO_HEADLINES = [
-  {tag:"news", t:"Don't be fooled by Klopp, Zidane's new international jobs: Club soccer is still top of the game", d:"2026-07-27", team:"", link:"https://www.espn.com/soccer/story/_/id/49461196/jurgen-klopp-zinedine-zidane-germany-france-international-coaches-club-managers"},
-  {tag:"news", t:"Would the USMNT actually win the World Cup if the best U.S. athletes played soccer?", d:"2026-07-27", team:"", link:"https://www.espn.com/soccer/story/_/id/49441066/usmnt-world-cup-nba-nfl-mlb-bill-barnwell"},
+  {tag:"news", t:"Don't be fooled by Klopp's, Zidane's new international jobs: Club soccer is still top of the game", d:"2026-07-27", team:"", link:"https://www.espn.com/soccer/story/_/id/49461196/jurgen-klopp-zinedine-zidane-germany-france-international-coaches-club-managers"},
+  {tag:"news", t:"Would the U.S. actually win the World Cup if its best athletes played soccer?", d:"2026-07-27", team:"", link:"https://www.espn.com/soccer/story/_/id/49441066/usmnt-world-cup-nba-nfl-mlb-bill-barnwell"},
   {tag:"news", t:"Argentina's Lionel Scaloni defends players after World Cup, critics are 'people who don't know us'", d:"2026-07-27", team:"", link:"https://www.espn.com/soccer/story/_/id/49461219/argentina-lionel-scaloni-defends-players-world-cup-critics-people-know-us"},
   {tag:"news", t:"Slavko Vincic retires after refereeing World Cup final", d:"2026-07-27", team:"", link:"https://www.espn.com/soccer/story/_/id/49460832/slavko-vincic-world-cup-final-referee-argentina-spain-enzo-fernandez-red-card"},
   {tag:"news", t:"FIFA's Gianni Infantino slams World Cup critics for 'spreading hate'", d:"2026-07-27", team:"", link:"https://www.espn.com/soccer/story/_/id/49460279/fifa-gianni-infantino-slams-world-cup-critics-spreading-hate"},
