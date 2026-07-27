@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/07/27 18:08 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/07/27 18:08";
+/* 由 news_engine.py 自動產生於 2026/07/27 21:53 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/07/27 21:53";
 const NEWS_DIAG = {real:6, note:"OK:site.api.espn.com/apis"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Don't be fooled by Klopp's, Zidane's new international jobs: Club soccer is still top of the game", d:"2026-07-27", team:"", link:"https://www.espn.com/soccer/story/_/id/49461196/jurgen-klopp-zinedine-zidane-germany-france-international-coaches-club-managers"},
