@@ -117,9 +117,31 @@
   .lg.on{color:var(--btn-ink);border-color:transparent;
     background:linear-gradient(120deg,var(--gold),var(--gold2));font-weight:700}
   .lg.th,.lg.nav-p{font-size:11.5px;padding:4px 13px;letter-spacing:.04em}
-  select.lg{appearance:none;-webkit-appearance:none;background:var(--panel);color:var(--muted);
-    border:1px solid var(--line);border-radius:999px;padding:7px 16px;backdrop-filter:var(--blur)}
-  select.lg:hover{color:var(--chalk);border-color:var(--gold)}
+  select.lg{appearance:none;-webkit-appearance:none;background:var(--panel);color:var(--chalk);
+    border:1px solid var(--line);border-radius:999px;padding:7px 16px;backdrop-filter:var(--blur);
+    font-family:var(--cond);font-weight:600;font-size:14px}
+  select.lg:hover{border-color:var(--gold)}
+  select.lg option{background:#141c36;color:#eef0f6;font-weight:500}
+  body[data-theme="light"] select.lg option,body[data-theme="cream"] select.lg option{background:#faf8f2;color:#241f14}
+  .tg-lg{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:13px 16px;margin-bottom:11px;
+    backdrop-filter:var(--blur);box-shadow:var(--shadow)}
+  .tg-lgname{font-family:var(--cond);font-weight:700;font-size:15px;color:var(--gold);cursor:pointer;
+    padding-bottom:9px;margin-bottom:6px;border-bottom:1px solid var(--line)}
+  .tg-lgname:hover{filter:brightness(1.15)}
+  .tg-row{display:grid;grid-template-columns:52px 1fr 62px 1fr 74px;align-items:center;gap:8px;padding:7px 0;
+    cursor:pointer;border-radius:10px;transition:.15s}
+  .tg-row:hover{background:var(--wash)}
+  .tg-time{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+  .tg-team{font-size:14px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tg-team.th{text-align:left;font-weight:600}
+  .tg-sc{font-family:var(--cond);font-weight:600;font-size:16px;text-align:center;color:var(--gold)}
+  .tg-vs{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center}
+  .tg-st{text-align:right}
+  @media (max-width:600px){
+    .tg-row{grid-template-columns:46px 1fr 54px 1fr;gap:6px}
+    .tg-st{display:none}
+    .tg-team{font-size:13px}
+  }
   .tdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--gold);margin-left:7px;vertical-align:middle}
   .tdot.live{background:var(--miss);animation:blink 1.2s infinite;box-shadow:0 0 7px var(--miss)}
 
@@ -382,6 +404,10 @@
 
     <div class="leagues" id="leagueTabs"></div>
     <div id="todayLine" style="text-align:center;font-family:var(--mono);font-size:12px;color:var(--muted);padding:2px 0 4px"></div>
+    <section id="todaySec" class="hidden" style="margin-top:26px">
+      <div class="sec-head"><h2>今日賽事</h2><span class="tag" id="todayTag"></span></div>
+      <div id="todayBox"></div>
+    </section>
 
     <div class="datebar">
       <button class="nav" id="prevBtn">‹</button>
@@ -464,7 +490,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e34";
+const BUILD = "e35";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -537,9 +563,28 @@ const RATINGS = {
 };
 /* ---- 中文隊名(主要球隊;其餘顯示英文) ---- */
 const ZH = {
+  /* 台灣通用譯名補充 */
+  "everton":"艾佛頓","west ham united":"西漢姆聯","west ham":"西漢姆聯","leeds united":"里茲聯","leeds":"里茲聯",
+  "nottingham forest":"諾丁漢森林","brighton & hove albion":"布萊頓","brighton and hove albion":"布萊頓","brighton":"布萊頓",
+  "wolverhampton wanderers":"狼隊","wolves":"狼隊","crystal palace":"水晶宮","fulham":"富勒姆","brentford":"布倫特福德",
+  "bournemouth":"伯恩茅斯","afc bournemouth":"伯恩茅斯","burnley":"伯恩利","sunderland":"桑德蘭",
+  "sevilla":"塞維利亞","real betis":"皇家貝提斯","betis":"皇家貝提斯","valencia":"瓦倫西亞","villarreal":"比利亞雷亞爾",
+  "athletic club":"畢爾包競技","athletic bilbao":"畢爾包競技","celta vigo":"塞爾塔","rayo vallecano":"巴列卡諾",
+  "osasuna":"奧薩蘇納","getafe":"赫塔費","mallorca":"馬約卡","alaves":"阿拉維斯","espanyol":"西班牙人","elche":"埃爾切","levante":"萊萬特","girona":"吉羅納",
+  "olympique lyonnais":"里昂","lyon":"里昂","lille":"里爾","losc lille":"里爾","monaco":"摩納哥","as monaco":"摩納哥",
+  "nice":"尼斯","ogc nice":"尼斯","rennes":"雷恩","stade rennais":"雷恩","lens":"朗斯","rc lens":"朗斯",
+  "strasbourg":"史特拉斯堡","nantes":"南特","toulouse":"土魯斯","brest":"布雷斯特","auxerre":"歐塞爾","angers":"昂熱","le havre":"勒阿弗爾","metz":"梅斯","paris fc":"巴黎FC",
+  "atalanta":"亞特蘭大","fiorentina":"佛羅倫斯","lazio":"拉齊奧","as roma":"羅馬","roma":"羅馬","bologna":"波隆那",
+  "torino":"托里諾","udinese":"烏迪內斯","genoa":"熱那亞","cagliari":"卡利亞里","lecce":"萊切","hellas verona":"維羅納","verona":"維羅納",
+  "parma":"帕爾馬","como":"科莫","pisa":"比薩","cremonese":"克雷莫納","sassuolo":"薩索羅",
+  "bayer leverkusen":"勒沃庫森","leverkusen":"勒沃庫森","rb leipzig":"萊比錫紅牛","leipzig":"萊比錫紅牛",
+  "vfb stuttgart":"斯圖加特","stuttgart":"斯圖加特","eintracht frankfurt":"法蘭克福","borussia monchengladbach":"門興格拉德巴赫",
+  "vfl wolfsburg":"沃夫斯堡","wolfsburg":"沃夫斯堡","werder bremen":"不萊梅","sc freiburg":"弗萊堡","freiburg":"弗萊堡",
+  "1. fsv mainz 05":"美因茲","mainz":"美因茲","fc augsburg":"奧格斯堡","augsburg":"奧格斯堡","1. fc union berlin":"柏林聯","union berlin":"柏林聯",
+  "tsg hoffenheim":"霍芬海姆","hoffenheim":"霍芬海姆","fc st pauli":"聖保利","st pauli":"聖保利","fc koln":"科隆","koln":"科隆","cologne":"科隆","hamburger sv":"漢堡",
   "manchester city":"曼城","arsenal":"兵工廠","liverpool":"利物浦","chelsea":"切爾西","manchester united":"曼聯",
   "tottenham":"熱刺","newcastle":"紐卡索","aston villa":"阿斯頓維拉","real madrid":"皇家馬德里","barcelona":"巴塞隆納",
-  "atletico madrid":"馬德里競技","inter milan":"國際米蘭","napoli":"那不勒斯","juventus":"尤文圖斯","ac milan":"AC米蘭",
+  "atletico madrid":"馬德里競技","inter milan":"國際米蘭","napoli":"拿坡里","juventus":"尤文圖斯","ac milan":"AC米蘭",
   "atalanta":"亞特蘭大","bayern munich":"拜仁慕尼黑","bayer leverkusen":"勒沃庫森","borussia dortmund":"多特蒙德",
   "rb leipzig":"萊比錫","paris saint-germain":"巴黎聖日耳曼","marseille":"馬賽","monaco":"摩納哥","roma":"羅馬","lazio":"拉齊歐",
   "inter miami":"國際邁阿密","la galaxy":"洛杉磯銀河","los angeles fc":"洛杉磯FC","seattle sounders":"西雅圖海灣人",
@@ -1021,10 +1066,10 @@ async function checkTodayGames(){
     await Promise.all(ch.map(async lg=>{try{
       const sb=await jget(espnScore(lg.id,range));
       const evs=parseEvents(sb).filter(g=>g.localIso===today);
-      TODAY_GAMES[lg.id]={n:evs.length,live:evs.some(g=>g.state==="in")};
-    }catch(e){ TODAY_GAMES[lg.id]={n:0,live:false}; }}));
+      TODAY_GAMES[lg.id]={n:evs.length,live:evs.some(g=>g.state==="in"),games:evs};
+    }catch(e){ TODAY_GAMES[lg.id]={n:0,live:false,games:[]}; }}));
   }
-  decorateTabs(); renderTodayLine();
+  decorateTabs(); renderTodayLine(); renderTodaySection();
 }
 function decorateTabs(){
   const sel=document.getElementById("moreLg");
@@ -1038,6 +1083,33 @@ function decorateTabs(){
     if(t&&t.n>0){ const d=document.createElement("span"); d.className="tdot"+(t.live?" live":"");
       d.title=t.live?`進行中!今日 ${t.n} 場`:`今日 ${t.n} 場`; el.appendChild(d); }
   });
+}
+function renderTodaySection(){
+  const sec=document.getElementById("todaySec"), box=document.getElementById("todayBox"), tag=document.getElementById("todayTag");
+  if(!sec||!box) return;
+  const has=LEAGUES.filter(l=>TODAY_GAMES[l.id]&&TODAY_GAMES[l.id].n>0);
+  if(!has.length){ sec.classList.add("hidden"); return; }
+  sec.classList.remove("hidden");
+  const total=has.reduce((s,l)=>s+TODAY_GAMES[l.id].n,0);
+  const liveN=has.reduce((s,l)=>s+(TODAY_GAMES[l.id].games||[]).filter(g=>g.state==="in").length,0);
+  if(tag) tag.textContent=`${has.length} 個聯賽 · ${total} 場${liveN?` · ${liveN} 場進行中`:""}`;
+  box.innerHTML=has.map(l=>{
+    const t=TODAY_GAMES[l.id];
+    const rows=(t.games||[]).slice().sort((a,b)=>a.time.localeCompare(b.time)).map(g=>{
+      const live=g.state==="in", done=g.completed;
+      const sc = (live||done)?`<span class="tg-sc">${g.as} - ${g.hs}</span>`:`<span class="tg-vs">vs</span>`;
+      const st = live?`<span class="pill live" style="font-size:9.5px;padding:2px 9px"><span class="dot"></span>${g.detail||"進行中"}</span>`
+               : done?`<span class="pill wait" style="font-size:9.5px;padding:2px 9px">完場</span>`:"";
+      return `<div class="tg-row" data-golg="${l.id}">
+        <span class="tg-time">${g.time}</span>
+        <span class="tg-team">${zhName(g.an)} <span class="ha aw">客</span></span>
+        ${sc}
+        <span class="tg-team th"><span class="ha hm">主</span> ${zhName(g.hn)}</span>
+        <span class="tg-st">${st}</span></div>`;
+    }).join("");
+    return `<div class="tg-lg"><div class="tg-lgname" data-golg="${l.id}">${l.zh} <span style="color:var(--muted);font-weight:400;font-size:12px">${l.full}</span> <span style="color:var(--gold);font-family:var(--mono);font-size:11px">${t.n} 場 ›</span></div>${rows}</div>`;
+  }).join("");
+  box.querySelectorAll("[data-golg]").forEach(el=>el.onclick=()=>{ if(window.switchLeague) window.switchLeague(el.dataset.golg); });
 }
 function renderTodayLine(){
   const el=document.getElementById("todayLine"); if(!el) return;
@@ -1419,8 +1491,8 @@ function gameCard(g){
 
   const hWin=done&&g.hs>g.as, aWin=done&&g.as>g.hs;
   const rows=`<div class="teams">
-    ${teamRow(g.hn,g.hlogo,(done||live)?g.hs:null,hWin,(done||live)?null:p.si,"主")}
-    ${teamRow(g.an,g.alogo,(done||live)?g.as:null,aWin,(done||live)?null:p.sj,"客")}</div>`;
+    ${teamRow(g.an,g.alogo,(done||live)?g.as:null,aWin,(done||live)?null:p.sj,"客")}
+    ${teamRow(g.hn,g.hlogo,(done||live)?g.hs:null,hWin,(done||live)?null:p.si,"主")}</div>`;
 
   let body="";
   if(done){
