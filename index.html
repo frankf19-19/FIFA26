@@ -91,16 +91,24 @@
 
   /* ---------- 刊頭 ---------- */
   header{padding-top:2px}
-  .topline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-    font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;color:var(--muted);margin-bottom:34px}
+  .topline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;color:var(--muted);margin-bottom:18px}
   .topline .sp{flex:1}
   .buildtag{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--gold);
     border:1px solid var(--gold);padding:2px 10px;border-radius:999px;opacity:.9}
-  .brand{text-align:center;padding:6px 0 26px;animation:fadeup .8s ease-out both}
+  .brand{text-align:center;padding:2px 0 18px;animation:fadeup .8s ease-out both}
   .mast-en{font-family:var(--cond);font-weight:600;font-size:clamp(10px,2vw,12px);
     letter-spacing:.62em;text-indent:.62em;text-transform:uppercase;color:var(--gold);margin-bottom:14px}
-  .wordmark{font-family:var(--cond);font-weight:200;font-size:clamp(40px,9vw,68px);
-    line-height:1.06;letter-spacing:.06em;color:var(--chalk)}
+  .wordmark{font-family:var(--cond);font-weight:200;font-size:clamp(30px,6vw,46px);
+    line-height:1.08;letter-spacing:.05em;color:var(--chalk)}
+  .tl-brand{font-family:var(--cond);font-weight:700;letter-spacing:.3em;color:var(--gold)}
+  /* 控制台 */
+  .console{background:var(--panel);border:1px solid var(--line);border-radius:20px;
+    padding:12px 14px 10px;backdrop-filter:var(--blur);box-shadow:var(--shadow)}
+  .console-div{height:1px;background:linear-gradient(90deg,transparent,var(--line),transparent);margin:10px 0 4px}
+  .console .leagues{padding:2px 0 4px;gap:6px}
+  .console .datebar{padding:4px 0 2px;gap:8px}
+  #todayLine{text-align:center;font-family:var(--mono);font-size:11.5px;color:var(--muted);padding:8px 2px 2px}
   .wordmark b{font-weight:800;letter-spacing:.02em;
     background:linear-gradient(120deg,var(--gold),var(--gold2) 55%,var(--gold));
     -webkit-background-clip:text;background-clip:text;color:transparent}
@@ -116,7 +124,8 @@
   .lg:hover{color:var(--chalk);border-color:var(--gold)}
   .lg.on{color:var(--btn-ink);border-color:transparent;
     background:linear-gradient(120deg,var(--gold),var(--gold2));font-weight:700}
-  .lg.th,.lg.nav-p{font-size:11.5px;padding:4px 13px;letter-spacing:.04em}
+  .lg.th{font-size:13px;padding:3px 9px;letter-spacing:0;line-height:1.4}
+  .lg.nav-p{font-size:11.5px;padding:4px 13px;letter-spacing:.04em}
   select.lg{appearance:none;-webkit-appearance:none;background:var(--panel);color:var(--chalk);
     border:1px solid var(--line);border-radius:999px;padding:7px 16px;backdrop-filter:var(--blur);
     font-family:var(--cond);font-weight:600;font-size:14px}
@@ -168,22 +177,22 @@
 
   /* ---------- 記分列(超細大數字) ---------- */
   .score-row{display:flex;flex-wrap:wrap;gap:0;align-items:stretch;justify-content:center;
-    margin:22px 0 6px;padding:18px 8px;background:var(--panel);border:1px solid var(--line);
-    border-radius:20px;backdrop-filter:var(--blur);box-shadow:var(--shadow)}
-  .stat{padding:2px 34px;text-align:center;position:relative}
+    margin:14px 0 4px;padding:12px 8px;background:var(--panel);border:1px solid var(--line);
+    border-radius:18px;backdrop-filter:var(--blur);box-shadow:var(--shadow)}
+  .stat{padding:2px 26px;text-align:center;position:relative}
   .stat + .stat::before{content:"";position:absolute;left:0;top:14%;bottom:14%;width:1px;
     background:linear-gradient(180deg,transparent,var(--line),transparent)}
-  .stat .num{font-family:var(--cond);font-weight:200;font-size:clamp(34px,8vw,52px);line-height:1;
+  .stat .num{font-family:var(--cond);font-weight:200;font-size:clamp(28px,6vw,40px);line-height:1;
     background:linear-gradient(150deg,var(--gold2),var(--gold));
     -webkit-background-clip:text;background-clip:text;color:transparent}
-  .stat .num.small{font-weight:300;font-size:clamp(26px,6vw,40px);background:none;color:var(--chalk)}
-  .stat .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.26em;color:var(--muted);margin-top:8px}
-  .status{width:100%;text-align:center;font-family:var(--mono);font-size:11px;letter-spacing:.08em;
-    color:var(--muted);padding-top:12px;margin-left:0}
+  .stat .num.small{font-weight:300;font-size:clamp(22px,5vw,32px);background:none;color:var(--chalk)}
+  .stat .lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:var(--muted);margin-top:6px}
+  .status{width:100%;text-align:center;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;
+    color:var(--muted);padding-top:9px;margin-left:0}
   .status.err{color:var(--miss)}
 
   /* ---------- 章節標 ---------- */
-  section{margin-top:clamp(34px,7vw,52px)}
+  section{margin-top:clamp(26px,5vw,38px)}
   .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:18px}
   .sec-head h2{font-family:var(--cond);font-weight:600;font-size:clamp(14px,3.4vw,17px);
     letter-spacing:.34em;text-indent:.34em;text-transform:uppercase;color:var(--chalk);white-space:nowrap}
@@ -210,7 +219,8 @@
   .game{padding:17px clamp(15px,3vw,22px);margin-bottom:14px;transition:.2s;animation:fadeup .5s ease-out both}
   .game:hover{border-color:var(--gold);transform:translateY(-2px)}
   .game.done{background:var(--panel-2)}
-  .g-top{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin-bottom:13px}
+  .g-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;
+    padding-bottom:10px;border-bottom:1px solid var(--line)}
   .g-time{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;color:var(--muted)}
   .pill{font-family:var(--cond);font-weight:600;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
     padding:3px 12px;border-radius:999px;white-space:nowrap;border:1px solid}
@@ -225,7 +235,7 @@
     color:var(--gold);background:none;border:1px solid var(--line);border-radius:999px;
     padding:4px 15px;cursor:pointer;transition:.2s}
   .detail-btn:hover{border-color:var(--gold)}
-  .teams{display:flex;flex-direction:column;gap:10px}
+  .teams{display:flex;flex-direction:column;gap:9px}
   .team{display:flex;align-items:center;gap:12px}
   .ha{font-family:var(--cond);font-weight:700;font-size:10px;letter-spacing:.1em;flex:0 0 auto;
     padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
@@ -235,7 +245,7 @@
   .team .nm{font-weight:500;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
     cursor:pointer;transition:.15s}
   .team .nm:hover{color:var(--gold)}
-  .team .sc{font-family:var(--cond);font-weight:200;margin-left:auto;font-size:34px;color:var(--muted);line-height:1}
+  .team .sc{font-family:var(--cond);font-weight:200;margin-left:auto;font-size:30px;color:var(--muted);line-height:1;min-width:34px;text-align:right}
   .team.win .nm{font-weight:700;color:var(--chalk)}
   .team.win .sc{font-weight:600;
     background:linear-gradient(150deg,var(--gold2),var(--gold));
@@ -279,7 +289,10 @@
   table.stand tr.rel td:first-child{box-shadow:inset 3px 0 var(--miss)}
 
   /* ---------- 搜尋 ---------- */
-  .searchbar{display:flex;gap:8px;position:relative;margin-top:26px;margin-bottom:13px}
+  .toolcard{background:var(--panel);border:1px solid var(--line);border-radius:20px;
+    padding:12px 14px;margin-top:16px;backdrop-filter:var(--blur);box-shadow:var(--shadow)}
+  .toolcard .searchbar input{background:var(--wash);box-shadow:none}
+  .searchbar{display:flex;gap:8px;position:relative;margin-top:0;margin-bottom:10px}
   .searchbar input{flex:1;font-family:var(--body);font-size:15px;color:var(--chalk);background:var(--panel);
     border:1px solid var(--line);border-radius:999px;padding:12px 22px;outline:none;
     backdrop-filter:var(--blur);box-shadow:var(--shadow);transition:.2s}
@@ -374,9 +387,15 @@
   .hidden{display:none}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
   @media (max-width:600px){
-    .stat{padding:2px 18px}
-    .btn{width:100%;justify-content:center}
-    .datebar{justify-content:stretch}
+    .stat{padding:2px 13px}
+    .stat .lbl{letter-spacing:.12em}
+    .btn{flex:1 1 100%;justify-content:center;margin-top:4px}
+    .console{padding:10px 10px 8px;border-radius:16px}
+    .console .leagues{gap:5px}
+    .lg{padding:6px 13px;font-size:13px}
+    .toolcard{padding:10px;border-radius:16px}
+    .wordmark{letter-spacing:.02em}
+    input[type=date]{flex:1}
   }
 </style>
 </head>
@@ -384,37 +403,35 @@
 <div class="wrap">
   <header>
     <div class="topline">
-      <span>MATCHNIGHT · 台灣時間</span>
+      <span class="tl-brand">MATCHNIGHT</span>
       <span class="sp"></span>
       <span id="themeTabs">
-        <button class="lg th" data-th="navy">🌌 冠軍夜</button>
-        <button class="lg th" data-th="sky">🔷 皇家藍</button>
-        <button class="lg th" data-th="mint">💎 翡翠夜</button>
-        <button class="lg th" data-th="light">🌅 象牙</button>
-        <button class="lg th" data-th="cream">🥂 香檳</button>
+        <button class="lg th" data-th="navy">🌌</button>
+        <button class="lg th" data-th="sky">🔷</button>
+        <button class="lg th" data-th="mint">💎</button>
+        <button class="lg th" data-th="light">🌅</button>
+        <button class="lg th" data-th="cream">🥂</button>
       </span>
       <span class="buildtag" id="buildTag"></span>
     </div>
 
     <div class="brand">
-      <div class="mast-en">European Football &amp; MLS</div>
       <div class="wordmark">歐陸足球 <b>每日預測</b></div>
-      <div class="mast-sub"><span id="lgName">美國職業足球大聯盟 MLS</span> · 更新 <b id="upd">—</b></div>
+      <div class="mast-sub">28 聯賽 · 台灣時間 · <span id="lgName">美國職業足球大聯盟 MLS</span> · 更新 <b id="upd">—</b></div>
     </div>
 
-    <div class="leagues" id="leagueTabs"></div>
-    <div id="todayLine" style="text-align:center;font-family:var(--mono);font-size:12px;color:var(--muted);padding:2px 0 4px"></div>
-    <section id="todaySec" class="hidden" style="margin-top:26px">
-      <div class="sec-head"><h2>今日賽事</h2><span class="tag" id="todayTag"></span></div>
-      <div id="todayBox"></div>
-    </section>
-
-    <div class="datebar">
-      <button class="nav" id="prevBtn">‹</button>
-      <input type="date" id="datePick">
-      <button class="nav" id="nextBtn">›</button>
-      <button class="today-btn" id="todayBtn">今天</button>
-      <button class="btn" id="loadBtn"><span class="ico">⟳</span> 更新</button>
+    <!-- 控制台:聯賽 + 日期 + 更新,全部集中 -->
+    <div class="console">
+      <div class="leagues" id="leagueTabs"></div>
+      <div class="console-div"></div>
+      <div class="datebar">
+        <button class="nav" id="prevBtn">‹</button>
+        <input type="date" id="datePick">
+        <button class="nav" id="nextBtn">›</button>
+        <button class="today-btn" id="todayBtn">今天</button>
+        <button class="btn" id="loadBtn"><span class="ico">⟳</span> 更新</button>
+      </div>
+      <div id="todayLine"></div>
     </div>
 
     <div class="score-row">
@@ -425,7 +442,13 @@
     </div>
   </header>
 
-  <div class="searchbar" style="margin-top:18px">
+  <section id="todaySec" class="hidden">
+    <div class="sec-head"><h2>今日賽事</h2><span class="tag" id="todayTag"></span></div>
+    <div id="todayBox"></div>
+  </section>
+
+  <div class="toolcard">
+    <div class="searchbar" style="margin-top:18px">
     <input type="text" id="searchBox" placeholder="搜尋球員或球隊…例如 Haaland、姆巴佩、Arsenal">
   </div>
   <div class="filterbar" id="filterBar">
@@ -439,7 +462,7 @@
   </div>
   <div style="font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:6px 0 4px" id="searchInfo"></div>
   <div style="font-family:var(--mono);font-size:11.5px;color:var(--muted);margin:0 0 4px" id="injInfo"></div>
-  <div class="leagues" style="margin-top:10px">
+  <div class="leagues" style="margin-top:8px;gap:6px;padding:6px 0 0;border-top:1px solid var(--line)">
     <button class="lg nav-p" data-sec="hlSec">📰 頭條</button>
     <button class="lg nav-p" data-sec="fixturesSec">⚽ 賽事預測</button>
     <button class="lg nav-p" data-sec="insightSec">🧠 模型心得</button>
@@ -448,6 +471,8 @@
   <div class="search-results" id="searchResults"></div>
 
   <!-- 頭條(置頂) -->
+  </div>
+
   <section id="hlSec">
     <div class="sec-head"><h2>頭條</h2><span class="tag" id="hlTag"></span></div>
     <div id="headlines"></div>
@@ -490,7 +515,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e36";
+const BUILD = "e37";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
