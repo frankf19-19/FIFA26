@@ -490,7 +490,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e35";
+const BUILD = "e36";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -564,6 +564,12 @@ const RATINGS = {
 /* ---- 中文隊名(主要球隊;其餘顯示英文) ---- */
 const ZH = {
   /* 台灣通用譯名補充 */
+  "fc nordsjaelland":"北西蘭","nordsjaelland":"北西蘭","ac horsens":"霍森斯","horsens":"霍森斯",
+  "aalesund":"阿勒松","aalesunds fk":"阿勒松","aab":"奧爾堡","aalborg":"奧爾堡","lyngby":"靈比","lyngby bk":"靈比",
+  "hvidovre":"赫維多雷","kolding":"科靈","esbjerg":"埃斯比約","ac horsens fc":"霍森斯",
+  "sandnes ulf":"桑內斯","stabaek":"斯塔貝克","odd":"奧德","odds bk":"奧德","kristiansund":"克里斯蒂安松",
+  "start":"斯塔特","ik start":"斯塔特","raufoss":"勞福斯","mjondalen":"米約恩達倫",
+  "oster":"厄斯特","ostersund":"厄斯特松","varbergs":"瓦爾貝里","utsiktens":"烏茨克滕","osters if":"厄斯特",
   "everton":"艾佛頓","west ham united":"西漢姆聯","west ham":"西漢姆聯","leeds united":"里茲聯","leeds":"里茲聯",
   "nottingham forest":"諾丁漢森林","brighton & hove albion":"布萊頓","brighton and hove albion":"布萊頓","brighton":"布萊頓",
   "wolverhampton wanderers":"狼隊","wolves":"狼隊","crystal palace":"水晶宮","fulham":"富勒姆","brentford":"布倫特福德",
@@ -713,7 +719,10 @@ function avFallback(img){
   if(img.dataset.big){ d.style.cssText="width:84px;height:84px;flex:0 0 84px"; }
   d.textContent=img.dataset.init||"?"; img.replaceWith(d);
 }
-function norm(s){return (s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z\s]/g," ").replace(/\s+/g," ").trim();}
+function norm(s){return (s||"").toLowerCase()
+  .replace(/æ/g,"ae").replace(/ø/g,"o").replace(/œ/g,"oe").replace(/ß/g,"ss")
+  .replace(/ð/g,"d").replace(/þ/g,"th").replace(/đ/g,"d").replace(/ł/g,"l").replace(/ı/g,"i")
+  .normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z\s]/g," ").replace(/\s+/g," ").trim();}
 /* ---- 評級自我校準:依賽果微調,存在瀏覽器(euroADJ),越用越準 ---- */
 let inMemAdj={};
 function adjGet(){try{const v=localStorage.getItem("euroADJ");return v?JSON.parse(v):{};}catch(e){return inMemAdj;}}
@@ -1055,11 +1064,14 @@ async function mergeLeagueIndex(league){
   }catch(e){}
   MERGING[league]=0;
 }
-let TODAY_GAMES={};
-async function checkTodayGames(){
-  const today=isoDate(new Date());
-  const d0=new Date(); d0.setDate(d0.getDate()-1);
-  const range=ymd(d0)+"-"+ymd(new Date());
+let TODAY_GAMES={}, TODAY_ISO=null;
+async function checkTodayGames(targetIso){
+  const today=targetIso||isoDate(curDate||new Date());
+  const base=targetIso?new Date(targetIso+"T12:00:00"):(curDate||new Date());
+  const d0=new Date(base); d0.setDate(d0.getDate()-1);
+  const d1=new Date(base); d1.setDate(d1.getDate()+1);
+  const range=ymd(d0)+"-"+ymd(d1);
+  TODAY_ISO=today;
   const chunks=[]; const L=[...LEAGUES];
   for(let i=0;i<L.length;i+=4) chunks.push(L.slice(i,i+4));
   for(const ch of chunks){
@@ -1088,11 +1100,21 @@ function renderTodaySection(){
   const sec=document.getElementById("todaySec"), box=document.getElementById("todayBox"), tag=document.getElementById("todayTag");
   if(!sec||!box) return;
   const has=LEAGUES.filter(l=>TODAY_GAMES[l.id]&&TODAY_GAMES[l.id].n>0);
-  if(!has.length){ sec.classList.add("hidden"); return; }
+  if(!has.length){
+    if(TODAY_ISO && TODAY_ISO!==isoDate(new Date())){
+      sec.classList.remove("hidden");
+      const h2b=document.querySelector("#todaySec h2"); if(h2b) h2b.textContent="當日賽事";
+      if(tag) tag.textContent=TODAY_ISO;
+      box.innerHTML=`<div class="empty">${TODAY_ISO} 全 28 聯賽皆無賽事</div>`;
+    } else sec.classList.add("hidden");
+    return;
+  }
   sec.classList.remove("hidden");
   const total=has.reduce((s,l)=>s+TODAY_GAMES[l.id].n,0);
   const liveN=has.reduce((s,l)=>s+(TODAY_GAMES[l.id].games||[]).filter(g=>g.state==="in").length,0);
-  if(tag) tag.textContent=`${has.length} 個聯賽 · ${total} 場${liveN?` · ${liveN} 場進行中`:""}`;
+  const isToday=TODAY_ISO===isoDate(new Date());
+  const h2=document.querySelector("#todaySec h2"); if(h2) h2.textContent=isToday?"今日賽事":"當日賽事";
+  if(tag) tag.textContent=`${TODAY_ISO} · ${has.length} 個聯賽 · ${total} 場${liveN?` · ${liveN} 場進行中`:""}`;
   box.innerHTML=has.map(l=>{
     const t=TODAY_GAMES[l.id];
     const rows=(t.games||[]).slice().sort((a,b)=>a.time.localeCompare(b.time)).map(g=>{
@@ -1114,8 +1136,9 @@ function renderTodaySection(){
 function renderTodayLine(){
   const el=document.getElementById("todayLine"); if(!el) return;
   const has=LEAGUES.filter(l=>TODAY_GAMES[l.id]&&TODAY_GAMES[l.id].n>0);
-  if(!has.length){ el.innerHTML=`📅 今日各聯賽皆無賽事`; return; }
-  el.innerHTML=`📅 今日賽事:`+has.map(l=>{const t=TODAY_GAMES[l.id];
+  const lbl=(TODAY_ISO===isoDate(new Date()))?"今日":TODAY_ISO;
+  if(!has.length){ el.innerHTML=`📅 ${lbl} 各聯賽皆無賽事`; return; }
+  el.innerHTML=`📅 ${lbl}賽事:`+has.map(l=>{const t=TODAY_GAMES[l.id];
     return `<a href="#" data-golg="${l.id}" style="color:${t.live?'var(--miss)':'var(--gold)'};text-decoration:none;margin-right:12px">${l.zh} ${t.n} 場${t.live?' 🔴':''}</a>`;}).join("");
   el.querySelectorAll("[data-golg]").forEach(a=>a.onclick=(ev)=>{ev.preventDefault();
     if(window.switchLeague) window.switchLeague(a.dataset.golg);});
@@ -1932,6 +1955,7 @@ async function load(){
     const all=parseEvents(data);
     const games=all.filter(g=>g.localIso===isoDate(curDate));
     gradeFinished(all.filter(g=>g.completed));   // 兩天內所有完賽都納入學習,不只顯示日
+    if(TODAY_ISO!==isoDate(curDate)) checkTodayGames(isoDate(curDate));
     computeTuning();                              // 依累積賽果更新近況/和局/主場調參
     renderScorecard();
     renderInsights();
@@ -2051,7 +2075,7 @@ function init(){
   }, 1800000);
   setTimeout(loadInjuries, 2000);
   setTimeout(checkTodayGames, 2500);
-  setInterval(()=>{ if(!document.hidden) checkTodayGames(); }, 600000);            // 開站 2 秒後抓傷兵
+  setInterval(()=>{ if(!document.hidden) checkTodayGames(isoDate(curDate)); }, 600000);            // 開站 2 秒後抓傷兵
   setInterval(()=>{ if(!document.hidden) loadInjuries(); }, 600000);   // 每 10 分鐘更新傷兵
   setInterval(()=>{ if(!document.hidden) load(); }, 90000);  // 每 90 秒自動更新
 }
