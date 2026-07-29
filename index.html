@@ -137,8 +137,20 @@
   .tg-lgname{font-family:var(--cond);font-weight:700;font-size:15px;color:var(--gold);cursor:pointer;
     padding-bottom:9px;margin-bottom:6px;border-bottom:1px solid var(--line)}
   .tg-lgname:hover{filter:brightness(1.15)}
-  .tg-row{display:grid;grid-template-columns:52px 1fr 62px 1fr 74px;align-items:center;gap:8px;padding:7px 0;
-    cursor:pointer;border-radius:10px;transition:.15s}
+  .tg-row{display:grid;grid-template-columns:52px 1fr 62px 1fr 74px;align-items:center;gap:8px;padding:9px 0 10px;
+    cursor:pointer;border-radius:10px;transition:.15s;border-bottom:1px solid var(--line)}
+  .tg-row:last-child{border-bottom:none}
+  .tg-pred{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:7px;
+    font-size:12.5px;color:var(--ink2);padding:7px 2px 0;margin-top:5px}
+  .tp-k{font-family:var(--cond);font-weight:700;font-size:9.5px;letter-spacing:.2em;color:var(--muted);text-transform:uppercase}
+  .tp-pick{color:var(--gold);font-weight:700}
+  .tp-sc{font-family:var(--mono);color:var(--teal)}
+  .tp-sep{color:var(--muted);opacity:.5}
+  .tp-mk{font-family:var(--mono);font-size:11px;color:var(--teal)}
+  .tp-bar{flex:1;min-width:110px;height:5px;border-radius:3px;overflow:hidden;background:var(--wash2);display:flex}
+  .tp-bar i{display:block;height:100%}
+  .tp-bar i.h{background:var(--home)} .tp-bar i.d{background:var(--draw)} .tp-bar i.a{background:var(--awy)}
+  .tp-pct{font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap}
   .tg-row:hover{background:var(--wash)}
   .tg-time{font-family:var(--mono);font-size:11.5px;color:var(--muted)}
   .tg-team{font-size:14px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -147,9 +159,12 @@
   .tg-vs{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center}
   .tg-st{text-align:right}
   @media (max-width:600px){
-    .tg-row{grid-template-columns:46px 1fr 54px 1fr;gap:6px}
+    .tg-row{grid-template-columns:44px 1fr 50px 1fr;gap:5px}
     .tg-st{display:none}
-    .tg-team{font-size:13px}
+    .tg-team{font-size:12.5px}
+    .tg-pred{font-size:11.5px;gap:5px}
+    .tp-bar{min-width:100%;order:9}
+    .tp-pct{font-size:10px}
   }
   .tdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--gold);margin-left:7px;vertical-align:middle}
   .tdot.live{background:var(--miss);animation:blink 1.2s infinite;box-shadow:0 0 7px var(--miss)}
@@ -515,7 +530,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e37";
+const BUILD = "e38";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -589,6 +604,10 @@ const RATINGS = {
 /* ---- 中文隊名(主要球隊;其餘顯示英文) ---- */
 const ZH = {
   /* 台灣通用譯名補充 */
+  "hamarkameratene":"哈馬爾","ham kam":"哈馬爾","hamkam":"哈馬爾",
+  "wsg swarovski tirol":"提洛爾","wsg tirol":"提洛爾","swarovski tirol":"提洛爾",
+  "kfum oslo":"奧斯陸KFUM","kfum":"奧斯陸KFUM","fredrikstad fk":"弗雷德里克斯塔",
+  "grazer ak 1902":"格拉茨AK","sk sturm graz":"格拉茨風暴","sk rapid":"維也納快速","fk austria wien":"維也納奧地利",
   "fc nordsjaelland":"北西蘭","nordsjaelland":"北西蘭","ac horsens":"霍森斯","horsens":"霍森斯",
   "aalesund":"阿勒松","aalesunds fk":"阿勒松","aab":"奧爾堡","aalborg":"奧爾堡","lyngby":"靈比","lyngby bk":"靈比",
   "hvidovre":"赫維多雷","kolding":"科靈","esbjerg":"埃斯比約","ac horsens fc":"霍森斯",
@@ -1145,14 +1164,33 @@ function renderTodaySection(){
     const rows=(t.games||[]).slice().sort((a,b)=>a.time.localeCompare(b.time)).map(g=>{
       const live=g.state==="in", done=g.completed;
       const sc = (live||done)?`<span class="tg-sc">${g.as} - ${g.hs}</span>`:`<span class="tg-vs">vs</span>`;
-      const st = live?`<span class="pill live" style="font-size:9.5px;padding:2px 9px"><span class="dot"></span>${g.detail||"進行中"}</span>`
-               : done?`<span class="pill wait" style="font-size:9.5px;padding:2px 9px">完場</span>`:"";
+      const p=predict(g.hn,g.an,g.odds);
+      const snap=scGet()[g.id];
+      let st;
+      if(live) st=`<span class="pill live" style="font-size:9.5px;padding:2px 9px"><span class="dot"></span>${g.detail||"進行中"}</span>`;
+      else if(done){
+        if(snap&&snap.void) st=`<span class="pill wait" style="font-size:9.5px;padding:2px 9px">不計</span>`;
+        else if(snap) st=snap.hit?`<span class="pill hit" style="font-size:9.5px;padding:2px 9px">${(snap.score===true||((snap.v>=2)&&snap.pred&&snap.pred.si===g.hs&&snap.pred.sj===g.as))?"全中":"命中"}</span>`
+                              :`<span class="pill miss" style="font-size:9.5px;padding:2px 9px">未中</span>`;
+        else st=`<span class="pill wait" style="font-size:9.5px;padding:2px 9px">完場</span>`;
+      } else st="";
+      const pickZh=p.pick==="和局"?"和局":zhName(p.pick);
+      const conf=p.conf==="高"?"var(--hit)":p.conf==="中"?"var(--gold)":"var(--muted)";
       return `<div class="tg-row" data-golg="${l.id}">
         <span class="tg-time">${g.time}</span>
         <span class="tg-team">${zhName(g.an)} <span class="ha aw">客</span></span>
         ${sc}
         <span class="tg-team th"><span class="ha hm">主</span> ${zhName(g.hn)}</span>
-        <span class="tg-st">${st}</span></div>`;
+        <span class="tg-st">${st}</span>
+        <div class="tg-pred">
+          <span class="tp-k">預測</span>
+          <b class="tp-pick">${pickZh}</b>
+          <span class="tp-sep">·</span><span class="tp-sc">${p.si}-${p.sj}</span>
+          <span class="tp-sep">·</span><span style="color:${conf}">信心 ${p.conf}</span>
+          ${p.mk?`<span class="tp-sep">·</span><span class="tp-mk">含賠率</span>`:""}
+          <span class="tp-bar"><i class="h" style="width:${p.H}%"></i><i class="d" style="width:${p.D}%"></i><i class="a" style="width:${p.A}%"></i></span>
+          <span class="tp-pct">主 ${Math.round(p.H)}% · 和 ${Math.round(p.D)}% · 客 ${Math.round(p.A)}%</span>
+        </div></div>`;
     }).join("");
     return `<div class="tg-lg"><div class="tg-lgname" data-golg="${l.id}">${l.zh} <span style="color:var(--muted);font-weight:400;font-size:12px">${l.full}</span> <span style="color:var(--gold);font-family:var(--mono);font-size:11px">${t.n} 場 ›</span></div>${rows}</div>`;
   }).join("");
