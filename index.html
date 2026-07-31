@@ -546,7 +546,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e41";
+const BUILD = "e42";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -790,6 +790,7 @@ function adjSet(o){inMemAdj=o;try{localStorage.setItem("euroADJ",JSON.stringify(
 let ADJ_CACHE=adjGet();
 /* ===== 準度引擎:近況(近5場) + 和局/主場自動調參(全由累積賽果推算) ===== */
 let FORM_CACHE={};      // norm(team) -> {pts,seq:"WWDLW"}
+let LG_AVG=1.40;        // 本聯賽平均每隊每場進球(由積分榜自動計算)
 let DRAW_NUDGE=0;       // 和局機率補正(百分點)
 let HA_TUNE=0;          // 主場係數微調
 /* 一次性修復:e23 前的舊快照可能「看好某隊但比分平局」(當時的顯示 bug),
@@ -835,11 +836,60 @@ function computeTuning(){
     HA_TUNE=Math.max(-0.08,Math.min(0.08,(homeRate-avgH)/100*0.35));
   }else{ DRAW_NUDGE=0; HA_TUNE=0; }
 }
+/* ===== 真實近況與休息天數:ESPN 每隊賽程(每日快取,背景載入) ===== */
+let SCHED_CACHE={}, SCHED_DAY=null, SCHED_BUSY=false;
+function schedOf(name){ return SCHED_CACHE[norm(name)]||null; }
+async function loadSchedules(games){
+  const day=isoDate(new Date());
+  if(SCHED_DAY!==day){ SCHED_CACHE={}; SCHED_DAY=day; }
+  if(SCHED_BUSY) return false; SCHED_BUSY=true;
+  const want=[];
+  games.forEach(g=>{
+    if(g.hid&&!SCHED_CACHE[norm(g.hn)]) want.push({id:g.hid,nm:g.hn});
+    if(g.aid&&!SCHED_CACHE[norm(g.an)]) want.push({id:g.aid,nm:g.an});
+  });
+  const uniq=[...new Map(want.map(x=>[String(x.id),x])).values()];
+  let added=0;
+  for(let i=0;i<uniq.length;i+=4){
+    await Promise.all(uniq.slice(i,i+4).map(async t=>{try{
+      const d=await jget(`https://site.api.espn.com/apis/site/v2/sports/soccer/${curLeague}/teams/${t.id}/schedule`);
+      const done=[];
+      (d.events||[]).forEach(ev=>{try{
+        const c=(ev.competitions||[])[0]; if(!c)return;
+        const st=(c.status||ev.status||{}).type||{}; if(!st.completed)return;
+        const me=(c.competitors||[]).find(x=>String((x.team||{}).id)===String(t.id));
+        const op=(c.competitors||[]).find(x=>String((x.team||{}).id)!==String(t.id));
+        if(!me||!op)return;
+        const sv=x=>{const s=x.score; if(s==null)return null; return typeof s==="object"?+(s.value??s.displayValue):+s;};
+        const a=sv(me), b=sv(op); if(a==null||b==null||isNaN(a)||isNaN(b))return;
+        done.push({d:new Date(ev.date), r:a>b?"W":a<b?"L":"D"});
+      }catch(e){}});
+      if(!done.length)return;
+      done.sort((x,y)=>y.d-x.d);
+      const last5=done.slice(0,5);
+      const pts=last5.reduce((s,x)=>s+(x.r==="W"?1:x.r==="L"?-1:0),0);
+      const rest=Math.max(0,Math.round((Date.now()-done[0].d.getTime())/86400000));
+      SCHED_CACHE[norm(t.nm)]={seq:last5.map(x=>x.r).join(""),pts,rest};
+      added++;
+    }catch(e){}}));
+  }
+  SCHED_BUSY=false;
+  return added>0;
+}
+function restAdj(name){
+  const s=schedOf(name); if(!s||s.rest==null) return 1.0;
+  if(s.rest<=3) return 0.96;        // 三天內連戰:疲勞折扣
+  if(s.rest>=8) return 1.01;        // 休整一週以上:小幅加成
+  return 1.0;
+}
 function formBonus(name){
+  const rs=schedOf(name);
+  if(rs) return Math.max(-1.8,Math.min(1.8,rs.pts*0.45));   // 真實近況優先
   const f=FORM_CACHE[norm(name)];
   return f?Math.max(-1.8,Math.min(1.8,f.pts*0.45)):0;
 }
 function formSeq(name){
+  const rs=schedOf(name); if(rs&&rs.seq) return rs.seq;      // 真實近況優先
   const f=FORM_CACHE[norm(name)];
   return f?f.seq:"";
 }
@@ -884,7 +934,7 @@ function predict(homeName,awayName,mkt){
   // 本季攻防形狀(來自積分榜真實進失球;樣本越多權重越高)
   const sh=standOf(homeName), sa=standOf(awayName);
   if(sh&&sa&&+sh.gp>=4&&+sa.gp>=4){
-    const LG=1.40, gpH=+sh.gp, gpA=+sa.gp;
+    const LG=LG_AVG, gpH=+sh.gp, gpA=+sa.gp;
     const lh2=LG*((+sh.gf/gpH)/LG)*((+sa.ga/gpA)/LG)*Math.exp(HA/2);
     const la2=LG*((+sa.gf/gpA)/LG)*((+sh.ga/gpH)/LG)*Math.exp(-HA/2);
     const wS=Math.min(0.6, 0.3+0.03*Math.min(gpH,gpA));
@@ -892,6 +942,7 @@ function predict(homeName,awayName,mkt){
     la=la*(1-wS)+Math.max(.2,Math.min(la2,4.2))*wS;
   }
   lh*=injAdj(homeName); la*=injAdj(awayName);   // 傷兵折扣:主力缺陣自動下修預期進球
+  lh*=restAdj(homeName); la*=restAdj(awayName); // 賽程疲勞:三天內連戰 -4%,休整逾週 +1%
   lh=Math.max(0.2,Math.min(lh,4.2)); la=Math.max(0.2,Math.min(la,4.2));
   let H=0,D=0,A=0;
   const best={H:{p:-1,i:1,j:0}, D:{p:-1,i:1,j:1}, A:{p:-1,i:0,j:1}};   // 各結果下最可能的單一比分
@@ -923,7 +974,12 @@ function analysisRows(hn,an,p){
   if(sh&&sa&&+sh.gp>=4&&+sa.gp>=4)
     rows.push(["本季攻防", `${hz} 場均進 ${(+sh.gf/+sh.gp).toFixed(2)}、失 ${(+sh.ga/+sh.gp).toFixed(2)}(${+sh.gp} 場) · ${az} 場均進 ${(+sa.gf/+sa.gp).toFixed(2)}、失 ${(+sa.ga/+sa.gp).toFixed(2)}(${+sa.gp} 場)`]);
   const fh=formSeq(hn), fa=formSeq(an);
-  if(fh||fa) rows.push(["近況(新→舊)", `${hz} ${fh||"—"} · ${az} ${fa||"—"}`]);
+  if(fh||fa) rows.push(["近況(新→舊)", `${hz} ${fh||"—"} · ${az} ${fa||"—"}${schedOf(hn)?"(真實賽程)":""}`]);
+  const srh=schedOf(hn), sra=schedOf(an);
+  if(srh&&sra&&srh.rest!=null&&sra.rest!=null){
+    const tagd=d=>d<=3?`${d} 天(連戰疲勞 -4%)`:d>=8?`${d} 天(休整 +1%)`:`${d} 天`;
+    rows.push(["休息天數", `${hz} ${tagd(srh.rest)} · ${az} ${tagd(sra.rest)}`]);
+  }
   const ih=injAdj(hn), ia=injAdj(an);
   if(ih<0.999||ia<0.999) rows.push(["傷兵影響", `${hz} 預期進球 ${((1-ih)*100).toFixed(0)}% 下修 · ${az} ${((1-ia)*100).toFixed(0)}% 下修`]);
   rows.push(["主場加成", `係數 ${(0.24+HA_TUNE).toFixed(2)}${Math.abs(HA_TUNE)>0.005?`(依實際主勝率自動校準,基準 0.24)`:""}`]);
@@ -1444,6 +1500,7 @@ function parseEvents(data){
     out.push({
       id:ev.id, localIso: isoDate(new Date(ev.date)),
       hn:home.team.displayName, an:away.team.displayName,
+      hid:home.team.id, aid:away.team.id,
       hlogo:home.team.logo||"", alogo:away.team.logo||"",
       hs:home.score!=null?parseInt(home.score):null, as:away.score!=null?parseInt(away.score):null,
       state:st.state||"pre",             // pre / in / post
@@ -1704,7 +1761,15 @@ function renderGames(games){
   box.querySelectorAll(".detail-btn").forEach(el=>el.onclick=()=>{const g=GAMES_BY_ID[el.dataset.gid]; if(g) showGame(g);});
 }
 
+function computeLgAvg(){
+  const vals=Object.values(STAND_CACHE).filter(s=>+s.gp>=4);
+  if(vals.length>=6){
+    const gf=vals.reduce((a,s)=>a+ +s.gf,0), gp=vals.reduce((a,s)=>a+ +s.gp,0);
+    if(gp>0) LG_AVG=Math.max(1.0,Math.min(2.0,gf/gp));
+  } else LG_AVG=1.40;
+}
 function renderStandings(data){
+  setTimeout(computeLgAvg,0);
   const box=document.getElementById("standings"), tag=document.getElementById("standTag");
   const val=(e,name)=>{const s=(e.stats||[]).find(x=>x.name===name||x.type===name);return s?(s.displayValue??s.value):"";};
   const groups=[];
@@ -2124,6 +2189,8 @@ async function load(){
     renderGames(games);
     renderHeadlines(games);
     st.textContent=`已更新 · ${games.length} 場`;
+    window.__lastGames=games;
+    loadSchedules(games).then(chg=>{ if(chg&&window.__lastGames===games){ renderGames(games); renderTodaySection&&renderTodaySection(); } });
   }catch(e){
     document.getElementById("games").innerHTML=`<div class="empty">無法載入賽事資料。<br>可能是網路、跨域限制或該聯賽代碼異常。稍後再試或切換聯賽。<br><span style="color:var(--miss)">${e.message}</span></div>`;
     st.className="status err"; st.textContent="載入失敗";
