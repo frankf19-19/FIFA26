@@ -152,6 +152,8 @@
     font-size:12.5px;color:var(--ink2);padding:6px 2px 0}
   .tp-pick{color:var(--gold);font-weight:700;white-space:nowrap}
   .tp-mk{font-family:var(--mono);font-size:11px;color:var(--teal)}
+  .tp-nodata{font-family:var(--mono);font-size:11px;color:var(--miss);border:1px solid var(--miss);
+    border-radius:999px;padding:1px 9px}
   .an-btn{font-family:var(--cond);font-weight:600;font-size:11.5px;letter-spacing:.04em;color:var(--muted);
     background:none;border:1px solid var(--line);border-radius:999px;padding:3px 12px;cursor:pointer;transition:.15s}
   .an-btn:hover{color:var(--gold);border-color:var(--gold)}
@@ -554,7 +556,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e42";
+const BUILD = "e44";
 const LG_ZH = {
   "cze.1":"捷克甲級聯賽","cze.2":"捷克乙級聯賽","ukr.1":"烏克蘭超級聯賽","rou.1":"羅馬尼亞甲級聯賽",
   "blr.1":"白俄羅斯超級聯賽","pol.1":"波蘭甲級聯賽","cro.1":"克羅埃西亞甲級聯賽","srb.1":"塞爾維亞超級聯賽",
@@ -572,7 +574,7 @@ const LG_ZH = {
   "ger.dfb_pokal":"德國盃","ger.super_cup":"德國超級盃","fra.coupe_de_france":"法國盃","fra.super_cup":"法國超級盃",
   "ned.cup":"荷蘭盃","ned.supercup":"荷蘭超級盃","por.taca.portugal":"葡萄牙盃","sco.tennents":"蘇格蘭盃","sco.cis":"蘇格蘭聯賽盃",
   "uefa.champions_qual":"歐冠資格賽","uefa.europa_qual":"歐霸資格賽","uefa.europa.conf_qual":"歐會盃資格賽","uefa.super_cup":"歐洲超級盃",
-  "club.friendly":"俱樂部友誼賽","nonfifa":"非FIFA友誼賽","fifa.friendly":"國際友誼賽","fifa.worldq.uefa":"世界盃歐洲區資格賽",
+  "fifa.worldq.uefa":"世界盃歐洲區資格賽",
   "bra.1":"巴西甲級聯賽","bra.2":"巴西乙級聯賽","arg.1":"阿根廷甲級聯賽","mex.1":"墨西哥甲級聯賽","mex.2":"墨西哥擴充聯賽",
   "chi.1":"智利甲級聯賽","col.1":"哥倫比亞甲級聯賽","per.1":"秘魯甲級聯賽","uru.1":"烏拉圭甲級聯賽","ecu.1":"厄瓜多甲級聯賽",
   "par.1":"巴拉圭甲級聯賽","bol.1":"玻利維亞甲級聯賽","ven.1":"委內瑞拉甲級聯賽",
@@ -612,6 +614,48 @@ const LEAGUES = [
   {id:"swe.1", zh:"瑞典超", full:"瑞典超級聯賽", more:1},
   {id:"rus.1", zh:"俄超", full:"俄羅斯超級聯賽", more:1},
   {id:"irl.1", zh:"愛超", full:"愛爾蘭超級聯賽", more:1},
+  {id:"uefa.champions_qual", zh:"歐冠資格", full:"歐冠資格賽", more:1},
+  {id:"uefa.europa_qual", zh:"歐霸資格", full:"歐霸資格賽", more:1},
+  {id:"uefa.europa.conf_qual", zh:"歐會資格", full:"歐會盃資格賽", more:1},
+  {id:"cze.1", zh:"捷甲", full:"捷克甲級聯賽", more:1},
+  {id:"ukr.1", zh:"烏超", full:"烏克蘭超級聯賽", more:1},
+  {id:"rou.1", zh:"羅甲", full:"羅馬尼亞甲級聯賽", more:1},
+  {id:"blr.1", zh:"白俄超", full:"白俄羅斯超級聯賽", more:1},
+  {id:"pol.1", zh:"波甲", full:"波蘭甲級聯賽", more:1},
+  {id:"cro.1", zh:"克甲", full:"克羅埃西亞甲級聯賽", more:1},
+  {id:"srb.1", zh:"塞超", full:"塞爾維亞超級聯賽", more:1},
+  {id:"bul.1", zh:"保甲", full:"保加利亞甲級聯賽", more:1},
+  {id:"hun.1", zh:"匈甲", full:"匈牙利甲級聯賽", more:1},
+  {id:"svk.1", zh:"斯洛伐克超", full:"斯洛伐克超級聯賽", more:1},
+  {id:"slo.1", zh:"斯洛維尼亞", full:"斯洛維尼亞甲級聯賽", more:1},
+  {id:"mda.1", zh:"摩爾多瓦", full:"摩爾多瓦超級聯賽", more:1},
+  {id:"fin.1", zh:"芬超", full:"芬蘭超級聯賽", more:1},
+  {id:"isl.1", zh:"冰超", full:"冰島超級聯賽", more:1},
+  {id:"isr.1", zh:"以超", full:"以色列超級聯賽", more:1},
+  {id:"cyp.1", zh:"賽普勒斯", full:"賽普勒斯甲級聯賽", more:1},
+  {id:"kaz.1", zh:"哈薩克", full:"哈薩克超級聯賽", more:1},
+  {id:"geo.1", zh:"喬治亞", full:"喬治亞超級聯賽", more:1},
+  {id:"arm.1", zh:"亞美尼亞", full:"亞美尼亞超級聯賽", more:1},
+  {id:"aze.1", zh:"亞塞拜然", full:"亞塞拜然超級聯賽", more:1},
+  {id:"lva.1", zh:"拉脫維亞", full:"拉脫維亞超級聯賽", more:1},
+  {id:"ltu.1", zh:"立陶宛", full:"立陶宛甲級聯賽", more:1},
+  {id:"est.1", zh:"愛沙尼亞", full:"愛沙尼亞超級聯賽", more:1},
+  {id:"wal.1", zh:"威超", full:"威爾斯超級聯賽", more:1},
+  {id:"nir.1", zh:"北愛超", full:"北愛爾蘭超級聯賽", more:1},
+  {id:"mlt.1", zh:"馬爾他", full:"馬爾他超級聯賽", more:1},
+  {id:"lux.1", zh:"盧森堡", full:"盧森堡甲級聯賽", more:1},
+  {id:"alb.1", zh:"阿爾巴尼亞", full:"阿爾巴尼亞超級聯賽", more:1},
+  {id:"mkd.1", zh:"北馬其頓", full:"北馬其頓甲級聯賽", more:1},
+  {id:"mne.1", zh:"蒙特內哥羅", full:"蒙特內哥羅甲級聯賽", more:1},
+  {id:"bih.1", zh:"波士尼亞", full:"波士尼亞超級聯賽", more:1},
+  {id:"far.1", zh:"法羅群島", full:"法羅群島超級聯賽", more:1},
+  {id:"afc.champions", zh:"亞冠", full:"亞足聯冠軍聯賽", more:1},
+  {id:"bra.1", zh:"巴甲", full:"巴西甲級聯賽", more:1},
+  {id:"arg.1", zh:"阿甲", full:"阿根廷甲級聯賽", more:1},
+  {id:"mex.1", zh:"墨甲", full:"墨西哥甲級聯賽", more:1},
+  {id:"ksa.1", zh:"沙職", full:"沙烏地職業聯賽", more:1},
+  {id:"kor.1", zh:"K聯賽", full:"韓國K聯賽", more:1},
+  {id:"aus.1", zh:"澳職", full:"澳洲A聯賽", more:1},
 ];
 let curLeague = "usa.1";     // 預設美職聯(現在是賽季中;歐洲 8 月開賽後可自行切換)
 let curDate = new Date();
@@ -1214,6 +1258,22 @@ async function checkTodayGames(targetIso){
   TODAY_ISO=today;
   TODAY_GAMES={};
   let got=false;
+  // 逐聯賽查詢:分組、開賽時間、預測資料都正確(併行 6 支一批)
+  {
+    const L=[...LEAGUES]; const chunks=[];
+    for(let i=0;i<L.length;i+=6) chunks.push(L.slice(i,i+6));
+    for(const ch of chunks){
+      await Promise.all(ch.map(async lg=>{
+        if(isFriendlyLg(lg.id)) return;                       // 熱身賽不掃
+        try{
+        const sb=await jget(espnScore(lg.id,range));
+        const evs=parseEvents(sb).filter(g=>g.localIso===today&&!isFriendlyEv(g));
+        if(evs.length) TODAY_GAMES[lg.id]={n:evs.length,live:evs.some(g=>g.state==="in"),games:evs,name:lg.full};
+      }catch(e){}}));
+    }
+    if(Object.keys(TODAY_GAMES).length) got=true;
+  }
+  if(false)
   // ① 一次抓全世界(ESPN soccer/all):自動涵蓋捷克/烏克蘭/羅馬尼亞/白俄等所有聯賽
   try{
     const seen=new Set(); const all=[];
@@ -1358,8 +1418,9 @@ function renderTodaySection(){
       const predOut = p.pick==="和局"?"D":(p.pick===g.hn?"H":"A");
       const cell=(lab,pct,side)=>`<div class="ov-cell${predOut===side?" on":""}">
         <div class="ov-odds">${od(pct)}</div><div class="ov-pct">${Math.round(pct)}%</div></div>`;
+      const noData = !standOf(g.hn) && !standOf(g.an) && baseRating(g.hn)===68 && baseRating(g.an)===68;
       const ana=analysisRows(g.hn,g.an,p).map(r=>`<div class="an-row"><span class="an-k">${r[0]}</span><span class="an-v">${r[1]}</span></div>`).join("");
-      return `<div class="tg-row" data-gid="${g.id}" data-golg="${l.id}">
+      return `<div class="tg-row" data-gid="${g.id}"${l.id!=="other"?` data-golg="${l.id}"`:""}>
         <div class="ov-time"><div>${g.time}</div>${st}</div>
         <div class="ov-teams">
           <div class="ov-t"><span class="ha aw">客</span><span class="ov-nm">${zhName(g.an)}</span>${(live||done)?`<b class="ov-sc">${g.as}</b>`:""}</div>
@@ -1372,12 +1433,13 @@ function renderTodaySection(){
           <span class="tp-sep">·</span><span class="tp-sc" title="客 ${p.sj} - 主 ${p.si}">預測比分 客 ${p.sj} - ${p.si} 主</span>
           <span class="tp-sep">·</span><span class="tp-conf ${p.conf==="高"?"hi":p.conf==="中"?"mid":"lo"}">信心 ${p.conf}</span>
           ${p.mk?`<span class="tp-mk">含市場賠率</span>`:""}
+          ${noData?`<span class="tp-nodata" title="ESPN 未提供這兩隊的積分榜與歷史數據,模型只能給預設值,此預測無參考價值">⚠ 資料不足</span>`:""}
           <button class="an-btn" data-an="${g.id}">詳細分析 ▾</button>
         </div>
         <div class="an-box" id="an-${g.id}">${ana}</div>
       </div>`;
     }).join("");
-    return `<div class="tg-lg"><div class="tg-lgname" data-golg="${l.id}">${l.full&&l.full!==l.zh&&!l.full.startsWith(l.zh)?l.zh:""} <span style="color:var(--muted);font-weight:400;font-size:12px">${l.full||l.zh}</span> <span style="color:var(--gold);font-family:var(--mono);font-size:11px">${t.n} 場 ›</span></div>
+    return `<div class="tg-lg"><div class="tg-lgname"${l.id!=="other"?` data-golg="${l.id}"`:` style="cursor:default"`}>${l.full&&l.full!==l.zh&&!l.full.startsWith(l.zh)?l.zh:""} <span style="color:var(--muted);font-weight:400;font-size:12px">${l.full||l.zh}</span> <span style="color:var(--gold);font-family:var(--mono);font-size:11px">${t.n} 場 ›</span></div>
       <div class="ov-head"><span></span><span></span><span>客場</span><span>和局</span><span>主場</span></div>${rows}</div>`;
   }).join("");
   box.querySelectorAll("[data-golg]").forEach(el=>el.onclick=(ev)=>{
@@ -1556,6 +1618,11 @@ function showPlayer(p, fromPop){
   });
 }
 
+/* 友誼賽/熱身賽:全站排除 */
+function isFriendlyLg(id){ const s=String(id||"").toLowerCase();
+  return s.includes("friendly")||s.includes("nonfifa")||s.includes("club.friendly"); }
+function isFriendlyEv(g){ const s=(String(g.lgId||"")+" "+String(g.lgName||"")).toLowerCase();
+  return s.includes("friendly")||s.includes("friendlies")||s.includes("nonfifa")||s.includes("友誼")||s.includes("熱身"); }
 function parseEvents(data){
   const out=[];
   (data.events||[]).forEach(ev=>{
@@ -2208,7 +2275,7 @@ async function load(){
     // 先抓積分榜:攻防形狀與戰績橫幅都靠它(失敗不影響賽事)
     try{ const sd0=await jget(espnStand(curLeague)); renderStandings(sd0); }catch(e){}
     const data=await jget(espnScore(curLeague, ymd(d0)+"-"+dateStr));
-    const all=parseEvents(data);
+    const all=parseEvents(data).filter(g=>!isFriendlyEv(g));
     const games=all.filter(g=>g.localIso===isoDate(curDate));
     gradeFinished(all.filter(g=>g.completed));   // 兩天內所有完賽都納入學習,不只顯示日
     if(TODAY_ISO!==isoDate(curDate)) checkTodayGames(isoDate(curDate));
@@ -2251,6 +2318,7 @@ function buildLeagueTabs(){
     +`<select id="moreLg" class="lg" style="cursor:pointer"><option value="">更多歐洲聯賽 ▾</option>`
     +LEAGUES.filter(l=>l.more).map(l=>`<option value="${l.id}">${l.zh} ${l.full}</option>`).join("")+`</select>`;
   function switchLeague(id){
+    if(!LEAGUES.some(l=>l.id===id)) return;      // 防止切到不存在的聯賽(如「其他」)
     curLeague=id;
     document.querySelectorAll(".lg").forEach(x=>x.classList.toggle("on",x.dataset.lg===curLeague));
     const lg=LEAGUES.find(l=>l.id===curLeague)||{full:LG_ZH[curLeague]||curLeague};
