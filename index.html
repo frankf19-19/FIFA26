@@ -458,7 +458,7 @@
 
     <div class="brand">
       <div class="wordmark">歐陸足球 <b>每日預測</b></div>
-      <div class="mast-sub">28 聯賽 · 台灣時間 · <span id="lgName">美國職業足球大聯盟 MLS</span> · 更新 <b id="upd">—</b></div>
+      <div class="mast-sub">44 競賽 · 台灣時間 · <span id="lgName">美國職業足球大聯盟 MLS</span> · 更新 <b id="upd">—</b></div>
     </div>
 
     <!-- 控制台:聯賽 + 日期 + 更新,全部集中 -->
@@ -556,7 +556,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e44";
+const BUILD = "e45";
 const LG_ZH = {
   "cze.1":"捷克甲級聯賽","cze.2":"捷克乙級聯賽","ukr.1":"烏克蘭超級聯賽","rou.1":"羅馬尼亞甲級聯賽",
   "blr.1":"白俄羅斯超級聯賽","pol.1":"波蘭甲級聯賽","cro.1":"克羅埃西亞甲級聯賽","srb.1":"塞爾維亞超級聯賽",
@@ -601,6 +601,9 @@ const LEAGUES = [
   {id:"bel.1", zh:"比甲", full:"比利時甲級聯賽"},
   {id:"tur.1", zh:"土超", full:"土耳其超級聯賽"},
   {id:"uefa.europa.conf", zh:"歐會盃", full:"歐足聯歐洲協會聯賽", more:1},
+  {id:"uefa.champions_qual", zh:"歐冠資格", full:"歐冠資格賽", more:1},
+  {id:"uefa.europa_qual", zh:"歐霸資格", full:"歐霸資格賽", more:1},
+  {id:"uefa.europa.conf_qual", zh:"歐會資格", full:"歐會盃資格賽", more:1},
   {id:"eng.2", zh:"英冠", full:"英格蘭冠軍聯賽", more:1},
   {id:"esp.2", zh:"西乙", full:"西班牙乙級聯賽", more:1},
   {id:"ita.2", zh:"義乙", full:"義大利乙級聯賽", more:1},
@@ -613,42 +616,13 @@ const LEAGUES = [
   {id:"nor.1", zh:"挪超", full:"挪威超級聯賽", more:1},
   {id:"swe.1", zh:"瑞典超", full:"瑞典超級聯賽", more:1},
   {id:"rus.1", zh:"俄超", full:"俄羅斯超級聯賽", more:1},
-  {id:"irl.1", zh:"愛超", full:"愛爾蘭超級聯賽", more:1},
-  {id:"uefa.champions_qual", zh:"歐冠資格", full:"歐冠資格賽", more:1},
-  {id:"uefa.europa_qual", zh:"歐霸資格", full:"歐霸資格賽", more:1},
-  {id:"uefa.europa.conf_qual", zh:"歐會資格", full:"歐會盃資格賽", more:1},
+  {id:"pol.1", zh:"波甲", full:"波蘭甲級聯賽", more:1},
   {id:"cze.1", zh:"捷甲", full:"捷克甲級聯賽", more:1},
   {id:"ukr.1", zh:"烏超", full:"烏克蘭超級聯賽", more:1},
   {id:"rou.1", zh:"羅甲", full:"羅馬尼亞甲級聯賽", more:1},
-  {id:"blr.1", zh:"白俄超", full:"白俄羅斯超級聯賽", more:1},
-  {id:"pol.1", zh:"波甲", full:"波蘭甲級聯賽", more:1},
   {id:"cro.1", zh:"克甲", full:"克羅埃西亞甲級聯賽", more:1},
   {id:"srb.1", zh:"塞超", full:"塞爾維亞超級聯賽", more:1},
-  {id:"bul.1", zh:"保甲", full:"保加利亞甲級聯賽", more:1},
-  {id:"hun.1", zh:"匈甲", full:"匈牙利甲級聯賽", more:1},
-  {id:"svk.1", zh:"斯洛伐克超", full:"斯洛伐克超級聯賽", more:1},
-  {id:"slo.1", zh:"斯洛維尼亞", full:"斯洛維尼亞甲級聯賽", more:1},
-  {id:"mda.1", zh:"摩爾多瓦", full:"摩爾多瓦超級聯賽", more:1},
-  {id:"fin.1", zh:"芬超", full:"芬蘭超級聯賽", more:1},
-  {id:"isl.1", zh:"冰超", full:"冰島超級聯賽", more:1},
   {id:"isr.1", zh:"以超", full:"以色列超級聯賽", more:1},
-  {id:"cyp.1", zh:"賽普勒斯", full:"賽普勒斯甲級聯賽", more:1},
-  {id:"kaz.1", zh:"哈薩克", full:"哈薩克超級聯賽", more:1},
-  {id:"geo.1", zh:"喬治亞", full:"喬治亞超級聯賽", more:1},
-  {id:"arm.1", zh:"亞美尼亞", full:"亞美尼亞超級聯賽", more:1},
-  {id:"aze.1", zh:"亞塞拜然", full:"亞塞拜然超級聯賽", more:1},
-  {id:"lva.1", zh:"拉脫維亞", full:"拉脫維亞超級聯賽", more:1},
-  {id:"ltu.1", zh:"立陶宛", full:"立陶宛甲級聯賽", more:1},
-  {id:"est.1", zh:"愛沙尼亞", full:"愛沙尼亞超級聯賽", more:1},
-  {id:"wal.1", zh:"威超", full:"威爾斯超級聯賽", more:1},
-  {id:"nir.1", zh:"北愛超", full:"北愛爾蘭超級聯賽", more:1},
-  {id:"mlt.1", zh:"馬爾他", full:"馬爾他超級聯賽", more:1},
-  {id:"lux.1", zh:"盧森堡", full:"盧森堡甲級聯賽", more:1},
-  {id:"alb.1", zh:"阿爾巴尼亞", full:"阿爾巴尼亞超級聯賽", more:1},
-  {id:"mkd.1", zh:"北馬其頓", full:"北馬其頓甲級聯賽", more:1},
-  {id:"mne.1", zh:"蒙特內哥羅", full:"蒙特內哥羅甲級聯賽", more:1},
-  {id:"bih.1", zh:"波士尼亞", full:"波士尼亞超級聯賽", more:1},
-  {id:"far.1", zh:"法羅群島", full:"法羅群島超級聯賽", more:1},
   {id:"afc.champions", zh:"亞冠", full:"亞足聯冠軍聯賽", more:1},
   {id:"bra.1", zh:"巴甲", full:"巴西甲級聯賽", more:1},
   {id:"arg.1", zh:"阿甲", full:"阿根廷甲級聯賽", more:1},
@@ -1485,7 +1459,7 @@ async function buildAllLeaguesIndex(){
   }
   PLAYER_INDEX=merged; allIndexLoaded=true; indexedLeague="ALL"; allBuilding=false;
   const t=new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
-  if(si) si.textContent=`可搜尋全部 ${merged.length} 名球員(28 聯賽)· 名冊 ${t} 自動更新`+(lgMissing.length?` · ⚠ 名冊缺:${lgMissing.join("/")}`:"");
+  if(si) si.textContent=`可搜尋全部 ${merged.length} 名球員(44 競賽)· 名冊 ${t} 自動更新`+(lgMissing.length?` · ⚠ 名冊缺:${lgMissing.join("/")}`:"");
 }
 
 function searchPlayers(q){
