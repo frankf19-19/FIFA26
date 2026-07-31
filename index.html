@@ -554,7 +554,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e41";
+const BUILD = "e42";
 const LG_ZH = {
   "cze.1":"捷克甲級聯賽","cze.2":"捷克乙級聯賽","ukr.1":"烏克蘭超級聯賽","rou.1":"羅馬尼亞甲級聯賽",
   "blr.1":"白俄羅斯超級聯賽","pol.1":"波蘭甲級聯賽","cro.1":"克羅埃西亞甲級聯賽","srb.1":"塞爾維亞超級聯賽",
@@ -1216,16 +1216,30 @@ async function checkTodayGames(targetIso){
   let got=false;
   // ① 一次抓全世界(ESPN soccer/all):自動涵蓋捷克/烏克蘭/羅馬尼亞/白俄等所有聯賽
   try{
-    const sb=await jget(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?dates=${range}`);
     const seen=new Set(); const all=[];
-    const takeEv=(ev,lid,lname)=>{
-      if(!ev||seen.has(ev.id))return; seen.add(ev.id);
-      const g=parseEvents({events:[ev]})[0]; if(!g)return;
-      g.lgId=g.lgId||lid||"other"; g.lgName=g.lgName||lname||"其他"; all.push(g);
-    };
-    (sb.events||[]).forEach(ev=>takeEv(ev,null,null));
-    (sb.leagues||[]).forEach(L=>(L.events||[]).forEach(ev=>takeEv(ev,L.slug||L.abbreviation||L.id,L.name)));
-    (sb.sports||[]).forEach(sp=>(sp.leagues||[]).forEach(L=>(L.events||[]).forEach(ev=>takeEv(ev,L.slug||L.abbreviation||L.id,L.name))));
+    // ESPN 全球端點只吃「單日」,台灣一天橫跨兩個 UTC 日 → 查兩天
+    const days=[ymd(d0),ymd(base)];
+    for(const dstr of days){
+      let sb; try{ sb=await jget(`https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard?dates=${dstr}`); }catch(e){ continue; }
+      // 聯賽對照表:numeric id / uid → slug + 名稱
+      const lmap={};
+      const addL=L=>{ if(!L)return; const slug=L.slug||L.abbreviation||L.id;
+        if(L.id!=null) lmap[String(L.id)]={slug,name:L.name||L.shortName||slug};
+        if(L.uid){ const m=String(L.uid).match(/l:(\d+)/); if(m) lmap[m[1]]={slug,name:L.name||slug}; } };
+      (sb.leagues||[]).forEach(addL);
+      (sb.sports||[]).forEach(sp=>(sp.leagues||[]).forEach(addL));
+      const takeEv=(ev,lid,lname)=>{
+        if(!ev||seen.has(ev.id))return; seen.add(ev.id);
+        const g=parseEvents({events:[ev]})[0]; if(!g)return;
+        let id=g.lgId||lid, nm=g.lgName||lname;
+        if(!id&&ev.uid){ const m=String(ev.uid).match(/l:(\d+)/); if(m&&lmap[m[1]]){ id=lmap[m[1]].slug; nm=lmap[m[1]].name; } }
+        if(!id&&ev.links){ for(const lk of ev.links){ const m=String(lk.href||"").match(/\/league\/([a-z0-9._-]+)/i); if(m){ id=m[1].toLowerCase(); break; } } }
+        g.lgId=id||"other"; g.lgName=nm||LG_ZH[g.lgId]||"其他賽事"; all.push(g);
+      };
+      (sb.events||[]).forEach(ev=>takeEv(ev,null,null));
+      (sb.leagues||[]).forEach(L=>(L.events||[]).forEach(ev=>takeEv(ev,L.slug||L.abbreviation||L.id,L.name)));
+      (sb.sports||[]).forEach(sp=>(sp.leagues||[]).forEach(L=>(L.events||[]).forEach(ev=>takeEv(ev,L.slug||L.abbreviation||L.id,L.name))));
+    }
     const todays=all.filter(g=>g.localIso===today);
     if(all.length){
       todays.forEach(g=>{
@@ -1236,6 +1250,27 @@ async function checkTodayGames(targetIso){
       });
       got=true;
       registerDiscovered();
+      // 若大量比賽歸不出聯賽,用已知聯賽逐一查詢補正確分組
+      if(TODAY_GAMES["other"] && TODAY_GAMES["other"].n>0){
+        const ids=new Set(TODAY_GAMES["other"].games.map(g=>g.id));
+        const chunks=[]; const L=[...LEAGUES];
+        for(let i=0;i<L.length;i+=5) chunks.push(L.slice(i,i+5));
+        for(const ch of chunks){
+          await Promise.all(ch.map(async lg=>{try{
+            const sb2=await jget(espnScore(lg.id,range));
+            const evs=parseEvents(sb2).filter(g=>g.localIso===today&&ids.has(g.id));
+            if(evs.length){
+              if(!TODAY_GAMES[lg.id]) TODAY_GAMES[lg.id]={n:0,live:false,games:[],name:lg.full};
+              evs.forEach(g=>{ if(!TODAY_GAMES[lg.id].games.some(x=>x.id===g.id)){
+                TODAY_GAMES[lg.id].games.push(g); TODAY_GAMES[lg.id].n++; if(g.state==="in") TODAY_GAMES[lg.id].live=true; }
+                ids.delete(g.id); });
+            }
+          }catch(e){}}));
+        }
+        const left=TODAY_GAMES["other"].games.filter(g=>ids.has(g.id));
+        if(left.length){ TODAY_GAMES["other"]={n:left.length,live:left.some(g=>g.state==="in"),games:left,name:"其他賽事(聯賽未標示)"}; }
+        else delete TODAY_GAMES["other"];
+      }
     }
   }catch(e){}
   // ② 備援:逐聯賽抓(全域端點失效時)
@@ -2185,8 +2220,15 @@ async function load(){
     renderHeadlines(games);
     st.textContent=`已更新 · ${games.length} 場`;
   }catch(e){
+    if(!load._retried){                       // 連線抖動 → 自動重試一次
+      load._retried=1; LOADING=false;
+      st.className="status"; st.textContent="連線不穩,1.5 秒後自動重試…";
+      btn.classList.remove("spin"); btn.disabled=false;
+      setTimeout(()=>{ load._retried=0; load(); }, 1500);
+      return;
+    }
     document.getElementById("games").innerHTML=`<div class="empty">無法載入賽事資料。<br>可能是網路、跨域限制或該聯賽代碼異常。稍後再試或切換聯賽。<br><span style="color:var(--miss)">${e.message}</span></div>`;
-    st.className="status err"; st.textContent="載入失敗";
+    st.className="status err"; st.textContent="載入失敗:"+String(e&&e.message||"ESPN 無回應").slice(0,60)+" — 可按「更新」重試";
   }
   // standings(獨立,失敗不影響賽事)
   try{
