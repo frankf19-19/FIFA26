@@ -137,16 +137,29 @@
   .tg-lgname{font-family:var(--cond);font-weight:700;font-size:15px;color:var(--gold);cursor:pointer;
     padding-bottom:9px;margin-bottom:6px;border-bottom:1px solid var(--line)}
   .tg-lgname:hover{filter:brightness(1.15)}
-  .tg-row{display:grid;grid-template-columns:52px 1fr 62px 1fr 74px;align-items:center;gap:8px;padding:9px 0 10px;
+  .tg-row{display:grid;grid-template-columns:52px 1fr 62px 1fr 74px;align-items:center;column-gap:8px;row-gap:3px;padding:10px 0 11px;
     cursor:pointer;border-radius:10px;transition:.15s;border-bottom:1px solid var(--line)}
   .tg-row:last-child{border-bottom:none}
-  .tg-pred{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:7px;
-    font-size:12.5px;color:var(--ink2);padding:7px 2px 0;margin-top:5px}
-  .tp-k{font-family:var(--cond);font-weight:700;font-size:9.5px;letter-spacing:.2em;color:var(--muted);text-transform:uppercase}
-  .tp-pick{color:var(--gold);font-weight:700}
-  .tp-sc{font-family:var(--mono);color:var(--teal)}
-  .tp-sep{color:var(--muted);opacity:.5}
+  .tp-k{font-family:var(--cond);font-weight:700;font-size:9.5px;letter-spacing:.16em;color:var(--muted);
+    text-transform:uppercase;align-self:center}
+  .tp-side{font-family:var(--mono);font-size:12px;color:var(--muted);align-self:center}
+  .tp-side.aw{text-align:right} .tp-side.hm{text-align:left}
+  .tp-sc{font-family:var(--cond);font-weight:600;font-size:14px;color:var(--teal);text-align:center;align-self:center}
+  .tp-conf{font-family:var(--mono);font-size:11px;text-align:right;align-self:center}
+  .tg-pred{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:8px;
+    font-size:12.5px;color:var(--ink2);padding:6px 2px 0}
+  .tp-pick{color:var(--gold);font-weight:700;white-space:nowrap}
   .tp-mk{font-family:var(--mono);font-size:11px;color:var(--teal)}
+  .an-btn{font-family:var(--cond);font-weight:600;font-size:11.5px;letter-spacing:.04em;color:var(--muted);
+    background:none;border:1px solid var(--line);border-radius:999px;padding:3px 12px;cursor:pointer;transition:.15s}
+  .an-btn:hover{color:var(--gold);border-color:var(--gold)}
+  .an-box{grid-column:1/-1;display:none;margin-top:8px;padding:11px 13px;background:var(--wash);
+    border:1px solid var(--line);border-radius:13px}
+  .an-box.open{display:block;animation:fadeup .25s ease-out}
+  .an-row{display:grid;grid-template-columns:78px 1fr;gap:10px;padding:4px 0;font-size:12.5px;align-items:baseline}
+  .an-row + .an-row{border-top:1px solid var(--line)}
+  .an-k{font-family:var(--cond);font-weight:700;font-size:10.5px;letter-spacing:.1em;color:var(--gold)}
+  .an-v{color:var(--ink2);line-height:1.65}
   .tp-bar{flex:1;min-width:110px;height:5px;border-radius:3px;overflow:hidden;background:var(--wash2);display:flex}
   .tp-bar i{display:block;height:100%}
   .tp-bar i.h{background:var(--home)} .tp-bar i.d{background:var(--draw)} .tp-bar i.a{background:var(--awy)}
@@ -162,9 +175,12 @@
     .tg-row{grid-template-columns:44px 1fr 50px 1fr;gap:5px}
     .tg-st{display:none}
     .tg-team{font-size:12.5px}
-    .tg-pred{font-size:11.5px;gap:5px}
+    .tg-pred{font-size:11.5px;gap:6px}
     .tp-bar{min-width:100%;order:9}
     .tp-pct{font-size:10px}
+    .tp-conf{display:none}
+    .an-row{grid-template-columns:1fr;gap:2px}
+    .an-k{letter-spacing:.06em}
   }
   .tdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--gold);margin-left:7px;vertical-align:middle}
   .tdot.live{background:var(--miss);animation:blink 1.2s infinite;box-shadow:0 0 7px var(--miss)}
@@ -530,7 +546,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e38";
+const BUILD = "e39";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -896,7 +912,28 @@ function predict(homeName,awayName,mkt){
   const si=best[predOut].i, sj=best[predOut].j;
   const conf = Math.max(H,D,A)>=55?"高":Math.max(H,D,A)>=42?"中":"低";
   const pick = predOut==="H" ? homeName : predOut==="A" ? awayName : "和局";
-  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,conf,pick,mk:!!mkt};
+  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,conf,pick,mk:!!mkt,lh:+lh.toFixed(2),la:+la.toFixed(2)};
+}
+/* 詳細分析:逐項列出模型依據(無資料的項目自動略過,不編造) */
+function analysisRows(hn,an,p){
+  const rows=[], hz=zhName(hn), az=zhName(an);
+  const rh=rating(hn), ra=rating(an), d=rh-ra;
+  rows.push(["實力評級", `${hz} ${rh.toFixed(1)} · ${az} ${ra.toFixed(1)}(差 ${d>=0?"+":""}${d.toFixed(1)},${Math.abs(d)<3?"接近":Math.abs(d)<8?"略有差距":"差距明顯"})`]);
+  const sh=standOf(hn), sa=standOf(an);
+  if(sh&&sa&&+sh.gp>=4&&+sa.gp>=4)
+    rows.push(["本季攻防", `${hz} 場均進 ${(+sh.gf/+sh.gp).toFixed(2)}、失 ${(+sh.ga/+sh.gp).toFixed(2)}(${+sh.gp} 場) · ${az} 場均進 ${(+sa.gf/+sa.gp).toFixed(2)}、失 ${(+sa.ga/+sa.gp).toFixed(2)}(${+sa.gp} 場)`]);
+  const fh=formSeq(hn), fa=formSeq(an);
+  if(fh||fa) rows.push(["近況(新→舊)", `${hz} ${fh||"—"} · ${az} ${fa||"—"}`]);
+  const ih=injAdj(hn), ia=injAdj(an);
+  if(ih<0.999||ia<0.999) rows.push(["傷兵影響", `${hz} 預期進球 ${((1-ih)*100).toFixed(0)}% 下修 · ${az} ${((1-ia)*100).toFixed(0)}% 下修`]);
+  rows.push(["主場加成", `係數 ${(0.24+HA_TUNE).toFixed(2)}${Math.abs(HA_TUNE)>0.005?`(依實際主勝率自動校準,基準 0.24)`:""}`]);
+  if(p.mk) rows.push(["市場賠率", `已融合 ESPN 賠率(模型 62% + 市場 38%)`]);
+  else if(DRAW_NUDGE>0) rows.push(["和局補正", `+${DRAW_NUDGE.toFixed(1)}%(歷史顯示模型低估和局)`]);
+  rows.push(["預期進球", `${hz} ${p.lh} · ${az} ${p.la} → 最可能比分 ${hz} ${p.si} - ${p.sj} ${az}`]);
+  const top=Math.max(p.H,p.D,p.A);
+  const pickZh=p.pick==="和局"?"和局":zhName(p.pick);
+  rows.push(["結論", `${pickZh} 機率最高(${top.toFixed(1)}%),信心 ${p.conf}${p.conf==="低"?"(勢均力敵,參考性較低)":""}`]);
+  return rows;
 }
 function reasonText(hn,an,p){
   const hz=zhName(hn),az=zhName(an),gap=Math.abs(p.H-p.A);
@@ -1175,26 +1212,39 @@ function renderTodaySection(){
         else st=`<span class="pill wait" style="font-size:9.5px;padding:2px 9px">完場</span>`;
       } else st="";
       const pickZh=p.pick==="和局"?"和局":zhName(p.pick);
+      const pickSide=p.pick==="和局"?"":(p.pick===g.hn?"主":"客");
       const conf=p.conf==="高"?"var(--hit)":p.conf==="中"?"var(--gold)":"var(--muted)";
-      return `<div class="tg-row" data-golg="${l.id}">
+      const ana=analysisRows(g.hn,g.an,p).map(r=>`<div class="an-row"><span class="an-k">${r[0]}</span><span class="an-v">${r[1]}</span></div>`).join("");
+      return `<div class="tg-row" data-gid="${g.id}" data-golg="${l.id}">
         <span class="tg-time">${g.time}</span>
         <span class="tg-team">${zhName(g.an)} <span class="ha aw">客</span></span>
         ${sc}
         <span class="tg-team th"><span class="ha hm">主</span> ${zhName(g.hn)}</span>
         <span class="tg-st">${st}</span>
+        <!-- 預測列:欄位與上方一一對齊(左客右主),不會錯位 -->
+        <span class="tp-k">預測</span>
+        <span class="tp-side aw">${Math.round(p.A)}%</span>
+        <span class="tp-sc" title="客 ${p.sj} - 主 ${p.si}">${p.sj} - ${p.si}</span>
+        <span class="tp-side hm">${Math.round(p.H)}%</span>
+        <span class="tp-conf" style="color:${conf}">信心 ${p.conf}</span>
         <div class="tg-pred">
-          <span class="tp-k">預測</span>
-          <b class="tp-pick">${pickZh}</b>
-          <span class="tp-sep">·</span><span class="tp-sc">${p.si}-${p.sj}</span>
-          <span class="tp-sep">·</span><span style="color:${conf}">信心 ${p.conf}</span>
-          ${p.mk?`<span class="tp-sep">·</span><span class="tp-mk">含賠率</span>`:""}
-          <span class="tp-bar"><i class="h" style="width:${p.H}%"></i><i class="d" style="width:${p.D}%"></i><i class="a" style="width:${p.A}%"></i></span>
-          <span class="tp-pct">主 ${Math.round(p.H)}% · 和 ${Math.round(p.D)}% · 客 ${Math.round(p.A)}%</span>
-        </div></div>`;
+          <b class="tp-pick">看好 ${pickSide?`<span class="ha ${pickSide==="主"?"hm":"aw"}">${pickSide}</span> `:""}${pickZh}</b>
+          <span class="tp-bar"><i class="a" style="width:${p.A}%"></i><i class="d" style="width:${p.D}%"></i><i class="h" style="width:${p.H}%"></i></span>
+          <span class="tp-pct">客 ${Math.round(p.A)}% · 和 ${Math.round(p.D)}% · 主 ${Math.round(p.H)}%</span>
+          ${p.mk?`<span class="tp-mk">含市場賠率</span>`:""}
+          <button class="an-btn" data-an="${g.id}">詳細分析 ▾</button>
+        </div>
+        <div class="an-box" id="an-${g.id}">${ana}</div>
+      </div>`;
     }).join("");
     return `<div class="tg-lg"><div class="tg-lgname" data-golg="${l.id}">${l.zh} <span style="color:var(--muted);font-weight:400;font-size:12px">${l.full}</span> <span style="color:var(--gold);font-family:var(--mono);font-size:11px">${t.n} 場 ›</span></div>${rows}</div>`;
   }).join("");
-  box.querySelectorAll("[data-golg]").forEach(el=>el.onclick=()=>{ if(window.switchLeague) window.switchLeague(el.dataset.golg); });
+  box.querySelectorAll("[data-golg]").forEach(el=>el.onclick=(ev)=>{
+    if(ev.target.closest(".an-btn")||ev.target.closest(".an-box")) return;
+    if(window.switchLeague) window.switchLeague(el.dataset.golg); });
+  box.querySelectorAll(".an-btn").forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();
+    const bx=document.getElementById("an-"+b.dataset.an); if(!bx) return;
+    const open=bx.classList.toggle("open"); b.textContent=open?"收合分析 ▴":"詳細分析 ▾";});
 }
 function renderTodayLine(){
   const el=document.getElementById("todayLine"); if(!el) return;
@@ -1585,11 +1635,11 @@ function gameCard(g){
     const snap=scGet()[g.id];
     const sp=(snap&&snap.pred)?snap.pred:p;    // 用當初的預測快照,不因校準漂移
     const rv=makeReview(g);
-    body=`<div class="predline"><span class="k">賽前預測</span> 看好 <span class="pick">${zhName(sp.pick)}</span> · 比分 <b>${sp.si!=null?`${sp.si}-${sp.sj}`:"—"}</b> · 信心 ${sp.conf||p.conf}</div>
+    body=`<div class="predline"><span class="k">賽前預測</span> 看好 <span class="pick">${zhName(sp.pick)}</span> · 比分 <b>${sp.si!=null?`<span class="ha hm">主</span> ${sp.si} - ${sp.sj} <span class="ha aw">客</span>`:"—"}</b> · 信心 ${sp.conf||p.conf}</div>
       <div class="why"><span class="k">結果</span>${g.hs}-${g.as},實際 ${g.hs>g.as?zhName(g.hn):g.hs<g.as?zhName(g.an):'雙方戰平'}${g.hs===g.as?'':'勝出'}。</div>`+
       (rv?`<div class="review ${rv.good?'good':'bad'}"><span class="k">檢討</span>${rv.text}</div>`:"");
   }else{
-    body=probBar(p)+`<div class="predline"><span class="k">預測</span>看好 <span class="pick">${zhName(p.pick)}</span> · 比分 <b>${p.si}-${p.sj}</b> · 信心 ${p.conf}${p.mk?' · <span class="k" style="color:var(--teal)">含市場賠率</span>':''}</div>
+    body=probBar(p)+`<div class="predline"><span class="k">預測</span>看好 <span class="pick">${zhName(p.pick)}</span> · 比分 <b><span class="ha hm">主</span> ${p.si} - ${p.sj} <span class="ha aw">客</span></b> · 信心 ${p.conf}${p.mk?' · <span class="k" style="color:var(--teal)">含市場賠率</span>':''}</div>
       <div class="why"><span class="k">理由</span>${reasonText(g.hn,g.an,p)}</div>`;
   }
   return `<div class="game ${done?'done':''}"><div class="g-top"><span class="g-time">${g.time}</span>${pill}<button class="detail-btn" data-gid="${g.id}">詳情 ›</button></div>${rows}${body}</div>`;
@@ -1913,7 +1963,7 @@ async function showGame(g, fromPop){
   if(rv0) narrative+=` 檢討:${rv0.text}`;
   let html=venueLine+`<div class="why" style="border-top:none;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:13px 15px;margin-bottom:14px"><span class="k">解說</span>${narrative}</div>`;
   if(!g.completed&&g.state!=="in"){
-    html+=probBar(p)+`<div class="predline" style="margin-bottom:14px"><span class="k">預測</span>看好 <span class="pick">${zhName(p.pick)}</span> · 比分 <b>${p.si}-${p.sj}</b> · 信心 ${p.conf}</div>
+    html+=probBar(p)+`<div class="predline" style="margin-bottom:14px"><span class="k">預測</span>看好 <span class="pick">${zhName(p.pick)}</span> · 比分 <b><span class="ha hm">主</span> ${p.si} - ${p.sj} <span class="ha aw">客</span></b> · 信心 ${p.conf}</div>
       <div class="why"><span class="k">理由</span>${reasonText(g.hn,g.an,p)}</div>`;
   }
   if(evs.length){
