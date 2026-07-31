@@ -137,7 +137,7 @@
   .tg-lgname{font-family:var(--cond);font-weight:700;font-size:15px;color:var(--gold);cursor:pointer;
     padding-bottom:9px;margin-bottom:6px;border-bottom:1px solid var(--line)}
   .tg-lgname:hover{filter:brightness(1.15)}
-  .tg-row{display:grid;grid-template-columns:52px 1fr 62px 1fr 74px;align-items:center;column-gap:8px;row-gap:3px;padding:10px 0 11px;
+  .tg-row{display:grid;grid-template-columns:52px 1fr 62px 1fr 96px;align-items:center;column-gap:8px;row-gap:3px;padding:10px 0 11px;
     cursor:pointer;border-radius:10px;transition:.15s;border-bottom:1px solid var(--line)}
   .tg-row:last-child{border-bottom:none}
   .tp-k{font-family:var(--cond);font-weight:700;font-size:9.5px;letter-spacing:.16em;color:var(--muted);
@@ -170,10 +170,27 @@
   .tg-team.th{text-align:left;font-weight:600}
   .tg-sc{font-family:var(--cond);font-weight:600;font-size:16px;text-align:center;color:var(--gold)}
   .tg-vs{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center}
-  .tg-st{text-align:right}
+  .tg-st{display:flex;flex-direction:column;gap:5px;align-items:flex-end;justify-content:center}
+  .stx{display:inline-block;font-family:var(--cond);font-weight:700;font-size:13.5px;letter-spacing:.06em;
+    padding:5px 14px;border-radius:999px;white-space:nowrap;line-height:1.3}
+  .st-pre{color:var(--muted);border:1.5px solid var(--line);background:var(--wash)}
+  .st-live{color:#fff;background:var(--miss);box-shadow:0 0 14px color-mix(in srgb,var(--miss) 55%,transparent);animation:pulseGlow 1.6s infinite}
+  .st-live .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#fff;margin-right:6px;animation:blink 1.2s infinite;vertical-align:middle}
+  .st-done{color:var(--ink2);background:var(--wash2);border:1.5px solid var(--line)}
+  .r-hit{color:var(--hit);border:1.5px solid var(--hit);background:color-mix(in srgb,var(--hit) 14%,transparent)}
+  .r-exact{color:#1c1608;background:linear-gradient(160deg,var(--gold),#e8cf8e);box-shadow:0 2px 10px color-mix(in srgb,var(--gold) 45%,transparent)}
+  .r-miss{color:var(--miss);border:1.5px solid var(--miss);background:color-mix(in srgb,var(--miss) 13%,transparent)}
+  .r-void{color:var(--muted);border:1.5px dashed var(--line)}
+  @keyframes pulseGlow{0%,100%{box-shadow:0 0 8px color-mix(in srgb,var(--miss) 40%,transparent)}50%{box-shadow:0 0 18px color-mix(in srgb,var(--miss) 75%,transparent)}}
+  /* 整列左色條:掃一眼就知道狀態 */
+  .tg-row{border-left:4px solid transparent;padding-left:7px;margin-left:-7px}
+  .tg-row.live{border-left-color:var(--miss);background:color-mix(in srgb,var(--miss) 5%,transparent)}
+  .tg-row.hit{border-left-color:var(--hit)}
+  .tg-row.exact{border-left-color:var(--gold);background:color-mix(in srgb,var(--gold) 5%,transparent)}
+  .tg-row.miss{border-left-color:var(--miss)}
+  .tg-row.done{border-left-color:var(--line)}
   @media (max-width:600px){
     .tg-row{grid-template-columns:44px 1fr 50px 1fr;gap:5px}
-    .tg-st{display:none}
     .tg-team{font-size:12.5px}
     .tg-pred{font-size:11.5px;gap:6px}
     .tp-bar{min-width:100%;order:9}
@@ -482,6 +499,8 @@
     .tg-lg{padding:11px 11px;border-radius:14px}
     .tg-lgname{font-size:14px}
     .tg-row{grid-template-columns:40px 1fr 44px 1fr;column-gap:5px}
+    .tg-st{display:flex !important;grid-column:1/-1;flex-direction:row;justify-content:flex-end;gap:6px;margin-top:3px}
+    .stx{font-size:12.5px;padding:4px 12px}
     .tg-time{font-size:10.5px}
     .tg-team{font-size:12.5px}
     .tp-sc{font-size:12.5px}
@@ -624,7 +643,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e44";
+const BUILD = "e45";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -1355,19 +1374,27 @@ function renderTodaySection(){
       const sc = (live||done)?`<span class="tg-sc">${g.as} - ${g.hs}</span>`:`<span class="tg-vs">vs</span>`;
       const p=predict(g.hn,g.an,g.odds);
       const snap=scGet()[g.id];
-      let st;
-      if(live) st=`<span class="pill live" style="font-size:9.5px;padding:2px 9px"><span class="dot"></span>${g.detail||"進行中"}</span>`;
-      else if(done){
-        if(snap&&snap.void) st=`<span class="pill wait" style="font-size:9.5px;padding:2px 9px">不計</span>`;
-        else if(snap) st=snap.hit?`<span class="pill hit" style="font-size:9.5px;padding:2px 9px">${(snap.score===true||((snap.v>=2)&&snap.pred&&snap.pred.si===g.hs&&snap.pred.sj===g.as))?"全中":"命中"}</span>`
-                              :`<span class="pill miss" style="font-size:9.5px;padding:2px 9px">未中</span>`;
-        else st=`<span class="pill wait" style="font-size:9.5px;padding:2px 9px">完場</span>`;
-      } else st="";
+      let st, rowCls="pre";
+      if(live){
+        st=`<span class="stx st-live"><span class="dot"></span>${g.detail||"進行中"}</span>`;
+        rowCls="live";
+      } else if(done){
+        st=`<span class="stx st-done">完場</span>`;
+        if(snap&&snap.void){ st+=`<span class="stx r-void">不計</span>`; rowCls="done"; }
+        else if(snap){
+          const exact=(snap.score===true||((snap.v>=2)&&snap.pred&&snap.pred.si===g.hs&&snap.pred.sj===g.as));
+          if(snap.hit&&exact){ st+=`<span class="stx r-exact">★ 全中</span>`; rowCls="exact"; }
+          else if(snap.hit){ st+=`<span class="stx r-hit">✓ 命中</span>`; rowCls="hit"; }
+          else { st+=`<span class="stx r-miss">✗ 未中</span>`; rowCls="miss"; }
+        } else rowCls="done";
+      } else {
+        st=`<span class="stx st-pre">未開賽</span>`;
+      }
       const pickZh=p.pick==="和局"?"和局":zhName(p.pick);
       const pickSide=p.pick==="和局"?"":(p.pick===g.hn?"主":"客");
       const conf=p.conf==="高"?"var(--hit)":p.conf==="中"?"var(--gold)":"var(--muted)";
       const ana=analysisRows(g.hn,g.an,p).map(r=>`<div class="an-row"><span class="an-k">${r[0]}</span><span class="an-v">${r[1]}</span></div>`).join("");
-      return `<div class="tg-row" data-gid="${g.id}" data-golg="${l.id}">
+      return `<div class="tg-row ${rowCls}" data-gid="${g.id}" data-golg="${l.id}">
         <span class="tg-time">${g.time}</span>
         <span class="tg-team">${zhName(g.an)} <span class="ha aw">客</span></span>
         ${sc}
