@@ -546,7 +546,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e40";
+const BUILD = "e41";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -1472,8 +1472,21 @@ function scSet(o){
   inMemScorecard=o;
   try{localStorage.setItem("euroSC",JSON.stringify(o));}catch(e){}
 }
-function gradeFinished(games){
+async function gradeFinished(games){
   const sc=scGet(); let changed=false;
+  // 只對「本次新計分」的比賽抓場面數據(射正/控球),每場一次、失敗不影響計分
+  const fresh=games.filter(g=>g.completed&&g.hs!=null&&g.as!=null&&!(sc[g.id]&&sc[g.id].pred));
+  const perfMap={};
+  await Promise.all(fresh.map(async g=>{try{
+    const sum=await jget(espnSummary(curLeague,g.id));
+    const tms=(sum.boxscore&&sum.boxscore.teams)||[];
+    if(tms.length===2){
+      const idx=norm((tms[0].team||{}).displayName||"")===norm(g.hn)?0:1;
+      const gv=(i,k)=>{const s=(tms[i].statistics||[]).find(x=>x.name===k);const v=s?parseFloat(s.displayValue):NaN;return isNaN(v)?null:v;};
+      const p={hsot:gv(idx,"shotsOnTarget"),asot:gv(1-idx,"shotsOnTarget"),hpos:gv(idx,"possessionPct"),apos:gv(1-idx,"possessionPct")};
+      if(p.hsot!=null&&p.asot!=null) perfMap[g.id]=p;
+    }
+  }catch(e){}}));
   games.forEach(g=>{
     if(!g.completed||g.hs==null||g.as==null)return;
     const ex=sc[g.id];
@@ -1494,7 +1507,17 @@ function gradeFinished(games){
     // --- 評級自我校準:淨勝球誤差 → 微調兩隊評級(此消彼長,單場上限 ±2;每場只做一次) ---
     if(!sc[g.id].cal){
       const err=(g.hs-g.as)-(p.si-p.sj);
-      const delta=Math.max(-2,Math.min(2, 1.6*Math.tanh(err/2)));
+      // 表現感知:結果與場面背離(勝方射正被壓 ≥3)→ 校準減半,避免被幸運結果騙
+      let factor=1, luck=null;
+      const pf=perfMap[g.id];
+      if(pf){
+        sc[g.id].perf=pf;
+        const domDiff=pf.hsot-pf.asot, resDiff=g.hs-g.as;
+        if(resDiff!==0 && domDiff!==0 && Math.sign(domDiff)!==Math.sign(resDiff) && Math.abs(domDiff)>=3){ factor=0.5; luck="lucky"; }
+        else if(resDiff!==0 && Math.sign(domDiff)===Math.sign(resDiff) && Math.abs(domDiff)>=4){ luck="solid"; }
+        if(luck) sc[g.id].luck=luck;
+      }
+      const delta=Math.max(-2,Math.min(2, factor*1.6*Math.tanh(err/2)));
       if(Math.abs(delta)>0.05){
         const hn=norm(g.hn), an=norm(g.an);
         ADJ_CACHE[hn]=Math.max(-8,Math.min(8,(ADJ_CACHE[hn]||0)+delta));
@@ -1611,6 +1634,13 @@ function makeReview(g){
   }else{
     const w=s.hs>s.as?hz:az;
     parts.push(`預測失準:看好 ${zhName(p.pick)},實際 ${w} 勝出`);
+  }
+  if(s.perf&&s.perf.hsot!=null){
+    let line=`場面:射正 ${s.perf.hsot}-${s.perf.asot}`;
+    if(s.perf.hpos!=null) line+=`、控球 ${s.perf.hpos}%-${s.perf.apos}%`;
+    if(s.luck==="lucky") line+="(結果與場面背離,本場校準減半防過度反應)";
+    else if(s.luck==="solid") line+="(壓制力與結果一致)";
+    parts.push(line);
   }
   if(s.adj){
     const up=s.adj>0?hz:az, dn=s.adj>0?az:hz;
@@ -2085,7 +2115,7 @@ async function load(){
     const data=await jget(espnScore(curLeague, ymd(d0)+"-"+dateStr));
     const all=parseEvents(data);
     const games=all.filter(g=>g.localIso===isoDate(curDate));
-    gradeFinished(all.filter(g=>g.completed));   // 兩天內所有完賽都納入學習,不只顯示日
+    await gradeFinished(all.filter(g=>g.completed));   // 兩天內所有完賽都納入學習(含場面數據)
     if(TODAY_ISO!==isoDate(curDate)) checkTodayGames(isoDate(curDate));
     computeTuning();                              // 依累積賽果更新近況/和局/主場調參
     renderScorecard();
