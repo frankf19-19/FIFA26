@@ -428,6 +428,84 @@
     .wordmark{letter-spacing:.02em}
     input[type=date]{flex:1}
   }
+
+  /* ===== e44 響應式強化:防截斷、防溢出、手機可讀性 ===== */
+  html,body{overflow-x:hidden}
+  html{-webkit-text-size-adjust:100%}
+  .wrap{min-width:0}
+  /* 隊名:改為最多兩行換行,不再硬截斷 */
+  .tg-team,.team .nm{
+    white-space:normal;line-height:1.3;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+    word-break:break-word}
+  .tg-row{align-items:center}
+  .tg-team{min-width:0}.team{min-width:0}
+  /* 區塊標題:允許換行不推擠 */
+  .sec-head{flex-wrap:wrap;row-gap:4px}
+  /* 詳情頁與球隊頁:全域寬度保護 */
+  #gameView,#teamView{min-width:0}
+  #gameView *,#teamView *{min-width:0}
+  #gameView img,#gameView svg,#teamView img,#teamView svg{max-width:100%;height:auto}
+  #gameView table,#teamView table{max-width:100%}
+  .table-wrap{-webkit-overflow-scrolling:touch}
+  /* 搜尋/篩選:窄幕換行 */
+  .searchbar{flex-wrap:wrap}
+  .filterbar{flex-wrap:wrap}
+  @media (max-width:640px){
+    body{padding:12px 10px 64px}
+    /* 分頁列:單行橫向滑動,省掉四行高度;兩側漸層提示可滑 */
+    .console{padding:10px 10px 8px;border-radius:16px}
+    .console .leagues{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;
+      scrollbar-width:none;-webkit-overflow-scrolling:touch;
+      -webkit-mask-image:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 14px),transparent);
+      mask-image:linear-gradient(90deg,transparent,#000 14px,#000 calc(100% - 14px),transparent);
+      padding:2px 2px 6px}
+    .console .leagues::-webkit-scrollbar{display:none}
+    .lg{padding:6px 12px;font-size:13px;flex:0 0 auto}
+    /* 日期列 */
+    .datebar{gap:6px}
+    input[type=date]{flex:1 1 120px;min-width:0}
+    .nav{width:34px;height:34px}
+    .btn{flex:1 1 100%;justify-content:center;margin-top:4px}
+    /* 記分卡:三格不溢出 */
+    .score-row{padding:10px 4px;margin:12px 0 4px}
+    .stat{padding:2px 9px}
+    .stat .num{font-size:clamp(24px,7.5vw,34px)}
+    .stat .num.small{font-size:clamp(19px,6vw,27px)}
+    .stat .lbl{font-size:9px;letter-spacing:.12em;margin-top:4px}
+    .status{font-size:10px;padding-top:7px}
+    /* 刊頭 */
+    .wordmark{font-size:clamp(26px,7.5vw,34px);letter-spacing:.02em}
+    .mast-sub{font-size:11.5px;padding:0 4px}
+    .topline{margin-bottom:12px}
+    /* 今日賽事列 */
+    .tg-lg{padding:11px 11px;border-radius:14px}
+    .tg-lgname{font-size:14px}
+    .tg-row{grid-template-columns:40px 1fr 44px 1fr;column-gap:5px}
+    .tg-time{font-size:10.5px}
+    .tg-team{font-size:12.5px}
+    .tp-sc{font-size:12.5px}
+    .tp-pct{white-space:normal;font-size:10px;line-height:1.5}
+    .tp-pick{font-size:12px}
+    .an-btn{padding:3px 10px;font-size:11px}
+    .an-box{padding:9px 10px}
+    /* 賽事卡 */
+    .game{padding:13px 12px;border-radius:15px}
+    .team .nm{font-size:13.5px}
+    .team .sc{font-size:26px;min-width:28px}
+    .g-top{gap:7px}
+    .pill{font-size:9.5px;padding:2px 9px}
+    /* 積分榜表格字級 */
+    th{font-size:10px;padding:10px 8px}
+    td{font-size:12px;padding:9px 8px}
+    /* 詳情頁 */
+    .g-time{font-size:12px}
+    footer{font-size:10.5px;padding:0 6px}
+  }
+  @media (max-width:380px){
+    .tg-row{grid-template-columns:34px 1fr 40px 1fr;column-gap:4px}
+    .stat{padding:2px 6px}
+  }
 </style>
 </head>
 <body>
@@ -546,7 +624,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e43";
+const BUILD = "e44";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
