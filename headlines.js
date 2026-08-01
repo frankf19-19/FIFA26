@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/01 15:42 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/01 15:42";
+/* 由 news_engine.py 自動產生於 2026/08/01 20:02 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/01 20:02";
 const NEWS_DIAG = {real:6, note:"OK:site.api.espn.com/apis"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Marcotti: Infantino's sell-off plan never made sense", d:"2026-08-01", team:"", link:"https://www.espn.com/video/clip/_/id/49503925/infantino-sell-plan-never-made-sense"},
