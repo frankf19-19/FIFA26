@@ -546,7 +546,7 @@
 
     <div class="brand">
       <div class="wordmark">歐陸足球 <b>每日預測</b></div>
-      <div class="mast-sub">28 聯賽 · 台灣時間 · <span id="lgName">美國職業足球大聯盟 MLS</span> · 更新 <b id="upd">—</b></div>
+      <div class="mast-sub">45 聯賽 · 台灣時間 · <span id="lgName">美國職業足球大聯盟 MLS</span> · 更新 <b id="upd">—</b></div>
     </div>
 
     <!-- 控制台:聯賽 + 日期 + 更新,全部集中 -->
@@ -644,7 +644,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e47";
+const BUILD = "e48";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -674,6 +674,22 @@ const LEAGUES = [
   {id:"swe.1", zh:"瑞典超", full:"瑞典超級聯賽", more:1},
   {id:"rus.1", zh:"俄超", full:"俄羅斯超級聯賽", more:1},
   {id:"irl.1", zh:"愛超", full:"愛爾蘭超級聯賽", more:1},
+  {id:"cze.1", zh:"捷甲", full:"捷克甲級聯賽", more:1},
+  {id:"fin.1", zh:"芬超", full:"芬蘭超級聯賽", more:1},
+  {id:"pol.1", zh:"波甲", full:"波蘭甲級聯賽", more:1},
+  {id:"ukr.1", zh:"烏超", full:"烏克蘭超級聯賽", more:1},
+  {id:"rou.1", zh:"羅甲", full:"羅馬尼亞甲級聯賽", more:1},
+  {id:"cro.1", zh:"克甲", full:"克羅埃西亞甲級聯賽", more:1},
+  {id:"srb.1", zh:"塞超", full:"塞爾維亞超級聯賽", more:1},
+  {id:"isl.1", zh:"冰超", full:"冰島超級聯賽", more:1},
+  {id:"isr.1", zh:"以超", full:"以色列超級聯賽", more:1},
+  {id:"kor.1", zh:"K聯賽", full:"韓國K聯賽", more:1},
+  {id:"chn.1", zh:"中超", full:"中國超級聯賽", more:1},
+  {id:"aus.1", zh:"澳職", full:"澳洲A聯賽", more:1},
+  {id:"ksa.1", zh:"沙職", full:"沙烏地職業聯賽", more:1},
+  {id:"bra.1", zh:"巴甲", full:"巴西甲級聯賽", more:1},
+  {id:"arg.1", zh:"阿甲", full:"阿根廷甲級聯賽", more:1},
+  {id:"mex.1", zh:"墨甲", full:"墨西哥甲級聯賽", more:1},
 ];
 let curLeague = "usa.1";     // 預設美職聯(現在是賽季中;歐洲 8 月開賽後可自行切換)
 let curDate = new Date();
@@ -717,6 +733,52 @@ const RATINGS = {
 };
 /* ---- 中文隊名(主要球隊;其餘顯示英文) ---- */
 const ZH = {
+  "helsingborg":"赫爾辛堡","helsingborgs if":"赫爾辛堡","ostersunds fk":"厄斯特松",
+  /* 捷甲 */
+  "teplice":"特普利采","fk teplice":"特普利采","slovan liberec":"利貝雷茨","liberec":"利貝雷茨",
+  "slavia prague":"布拉格斯拉維亞","sk slavia praha":"布拉格斯拉維亞","sparta prague":"布拉格斯巴達","ac sparta praha":"布拉格斯巴達",
+  "banik ostrava":"奧斯特拉瓦巴尼克","ostrava":"奧斯特拉瓦巴尼克","viktoria plzen":"比爾森勝利","plzen":"比爾森勝利",
+  "zbrojovka brno":"布爾諾體育","brno":"布爾諾體育","slovacko":"斯洛瓦茨科","fc slovacko":"斯洛瓦茨科",
+  "sigma olomouc":"奧洛穆茨","olomouc":"奧洛穆茨","mlada boleslav":"姆拉達博萊斯拉夫","hradec kralove":"赫拉德茨",
+  "jablonec":"亞布洛內茨","dukla prague":"布拉格杜克拉","bohemians 1905":"波希米亞1905","pardubice":"帕爾杜比采",
+  "karvina":"卡爾維納","zlin":"茲林","dynamo ceske budejovice":"布傑約維采",
+  /* 芬超 */
+  "fc lahti":"拉赫蒂","lahti":"拉赫蒂","fc jaro":"查路","jaro":"查路","kups":"庫奧皮奧","kups kuopio":"庫奧皮奧",
+  "hjk helsinki":"赫爾辛基HJK","hjk":"赫爾辛基HJK","fc inter turku":"圖爾庫國際","inter turku":"圖爾庫國際",
+  "ilves":"伊爾維斯","fc ilves":"伊爾維斯","fc haka":"哈卡","haka":"哈卡","vps vaasa":"瓦薩","vps":"瓦薩",
+  "sjk seinajoki":"塞納約基","sjk":"塞納約基","ekenas":"埃克奈斯","gnistan":"格尼斯坦","ktp":"科特卡",
+  /* 波甲 */
+  "legia warsaw":"華沙萊吉亞","lech poznan":"波茲南萊赫","rakow czestochowa":"琴斯托霍瓦","wisla krakow":"克拉科夫維斯瓦",
+  "pogon szczecin":"什切青","jagiellonia":"亞捷隆尼亞","gornik zabrze":"礦工扎布熱","cracovia":"克拉科維亞",
+  "widzew lodz":"羅茲維茲夫","slask wroclaw":"弗羅茨瓦夫","piast gliwice":"格利维采","radomiak":"拉多米亞克",
+  /* 烏超 */
+  "shakhtar donetsk":"頓內茨克礦工","dynamo kyiv":"基輔迪納摩","zorya luhansk":"盧甘斯克黎明",
+  "kolos kovalivka":"科瓦利夫卡","dnipro-1":"第聶伯1","oleksandriya":"奧列克桑德里亞",
+  "vorskla poltava":"波爾塔瓦","rukh lviv":"利沃夫魯赫","polissya":"波利西亞","obolon":"奧博隆",
+  /* 羅甲 */
+  "fcsb":"布加勒斯特星","cfr cluj":"克盧日","universitatea craiova":"克拉約瓦大學","rapid bucuresti":"布加勒斯特快速",
+  "dinamo bucuresti":"布加勒斯特迪納摩","farul constanta":"康斯坦察","sepsi":"塞普西","uta arad":"阿拉德",
+  "petrolul ploiesti":"普洛耶什蒂","otelul galati":"加拉茨","hermannstadt":"赫爾曼施塔特","arges pitesti":"阿爾傑什",
+  /* 克甲 */
+  "dinamo zagreb":"薩格勒布迪納摩","hajduk split":"斯普利特哈伊杜克","rijeka":"里耶卡","hnk rijeka":"里耶卡",
+  "osijek":"奧西耶克","nk osijek":"奧西耶克","slaven belupo":"斯拉文","varazdin":"瓦拉日丁","lokomotiva zagreb":"薩格勒布火車頭",
+  /* 塞超 */
+  "red star belgrade":"貝爾格勒紅星","crvena zvezda":"貝爾格勒紅星","partizan":"貝爾格勒游擊隊",
+  "vojvodina":"伏伊伏丁那","cukaricki":"丘卡里奇基","radnicki nis":"尼什工人","tsc backa topola":"巴奇卡托波拉",
+  /* 冰超 */
+  "valur":"瓦魯爾","kr reykjavik":"雷克雅維克KR","breidablik":"布雷達布利克","vikingur reykjavik":"雷克雅維克維京",
+  "stjarnan":"斯詹納","fh hafnarfjordur":"哈夫納夫約杜爾","ka akureyri":"阿庫雷里","fram":"弗拉姆",
+  /* 以超 */
+  "maccabi tel aviv":"特拉維夫馬卡比","maccabi haifa":"海法馬卡比","hapoel beer sheva":"貝爾謝巴夏普爾",
+  "hapoel tel aviv":"特拉維夫夏普爾","beitar jerusalem":"耶路撒冷貝塔","maccabi netanya":"內坦亞馬卡比",
+  /* 其他洲 */
+  "ulsan hyundai":"蔚山現代","jeonbuk hyundai motors":"全北現代","fc seoul":"首爾FC","pohang steelers":"浦項制鐵",
+  "shanghai port":"上海海港","shandong taishan":"山東泰山","beijing guoan":"北京國安","shanghai shenhua":"上海申花",
+  "al hilal":"利雅得新月","al nassr":"利雅得勝利","al ittihad":"吉達聯合","al ahli":"吉達國民",
+  "flamengo":"弗拉門戈","palmeiras":"帕爾梅拉斯","corinthians":"科林蒂安","sao paulo":"聖保羅","gremio":"格雷米奧",
+  "boca juniors":"博卡青年","river plate":"河床","racing club":"競技俱樂部","independiente":"獨立隊",
+  "club america":"美洲隊","chivas guadalajara":"瓜達拉哈拉","cruz azul":"藍十字","tigres uanl":"老虎",
+  "melbourne victory":"墨爾本勝利","sydney fc":"雪梨FC","western sydney wanderers":"西雪梨流浪者",
   /* 台灣通用譯名補充 */
   "hamarkameratene":"哈馬爾","ham kam":"哈馬爾","hamkam":"哈馬爾",
   "wsg swarovski tirol":"提洛爾","wsg tirol":"提洛爾","swarovski tirol":"提洛爾",
@@ -1357,7 +1419,7 @@ function renderTodaySection(){
       if(VIEW==="today") sec.classList.remove("hidden");
       const h2b=document.querySelector("#todaySec h2"); if(h2b) h2b.textContent="當日賽事";
       if(tag) tag.textContent=TODAY_ISO;
-      box.innerHTML=`<div class="empty">${TODAY_ISO} 全 28 聯賽皆無賽事</div>`;
+      box.innerHTML=`<div class="empty">${TODAY_ISO} 全 45 聯賽皆無賽事</div>`;
     } else sec.classList.add("hidden");
     return;
   }
@@ -1462,7 +1524,7 @@ async function buildAllLeaguesIndex(){
   }
   PLAYER_INDEX=merged; allIndexLoaded=true; indexedLeague="ALL"; allBuilding=false;
   const t=new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
-  if(si) si.textContent=`可搜尋全部 ${merged.length} 名球員(28 聯賽)· 名冊 ${t} 自動更新`+(lgMissing.length?` · ⚠ 名冊缺:${lgMissing.join("/")}`:"");
+  if(si) si.textContent=`可搜尋全部 ${merged.length} 名球員(45 聯賽)· 名冊 ${t} 自動更新`+(lgMissing.length?` · ⚠ 名冊缺:${lgMissing.join("/")}`:"");
 }
 
 function searchPlayers(q){
