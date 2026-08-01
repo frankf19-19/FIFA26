@@ -133,6 +133,19 @@
   select.lg:hover{border-color:var(--gold)}
   select.lg option{background:#141c36;color:#eef0f6;font-weight:500}
   body[data-theme="light"] select.lg option,body[data-theme="cream"] select.lg option{background:#faf8f2;color:#241f14}
+  .stfilter{display:flex;gap:7px;flex-wrap:wrap;margin:2px 0 14px}
+  .sf{font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:.03em;color:var(--muted);
+    background:var(--wash);border:1.5px solid var(--line);border-radius:999px;padding:6px 15px;cursor:pointer;transition:.15s}
+  .sf b{font-family:var(--mono);font-size:11px;font-weight:400;opacity:.75;margin-left:3px}
+  .sf:hover{color:var(--chalk);border-color:var(--muted)}
+  .sf.on{color:var(--chalk);border-color:var(--gold);background:rgba(217,185,104,.14)}
+  .sf.sf-live.on{color:#fff;background:var(--miss);border-color:var(--miss)}
+  .sf.sf-pre.on{color:var(--teal);border-color:var(--teal);background:rgba(100,220,210,.12)}
+  .sf.sf-done.on{color:#eef0f6;background:#454f78;border-color:#454f78}
+  .sf.zero{opacity:.4}
+  .sf .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--miss);margin-right:5px;vertical-align:middle}
+  .sf.sf-live.on .dot{background:#fff;animation:blink 1.2s infinite}
+  @media (max-width:640px){ .sf{font-size:12px;padding:5px 12px} .stfilter{gap:5px;margin-bottom:11px} }
   .tg-lg{background:var(--card,#161d38);border:1px solid var(--line);border-radius:16px;padding:13px 16px;margin-bottom:11px;
     box-shadow:var(--shadow)}
   .tg-lgname{font-family:var(--cond);font-weight:700;font-size:15px;color:var(--gold);cursor:pointer;
@@ -573,6 +586,12 @@
 
   <section id="todaySec" class="hidden">
     <div class="sec-head"><h2>今日賽事</h2><span class="tag" id="todayTag"></span></div>
+    <div class="stfilter" id="stFilter">
+      <button class="sf on" data-sf="all">全部 <b>0</b></button>
+      <button class="sf sf-live" data-sf="live"><span class="dot"></span>進行中 <b>0</b></button>
+      <button class="sf sf-pre" data-sf="pre">未開賽 <b>0</b></button>
+      <button class="sf sf-done" data-sf="done">完場 <b>0</b></button>
+    </div>
     <div id="todayBox"></div>
   </section>
 
@@ -644,7 +663,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e49";
+const BUILD = "e50";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -1413,7 +1432,7 @@ async function mergeLeagueIndex(league){
   }catch(e){}
   MERGING[league]=0;
 }
-let TODAY_GAMES={}, TODAY_ISO=null;
+let TODAY_GAMES={}, TODAY_ISO=null, ST_FILTER="all";
 let VIEW="today";   // "today"=全聯賽今日總覽(預設) / "league"=單一聯盟視圖
 function applyView(){
   const secs=["hlSec","fixturesSec","insightSec","standSec"];
@@ -1482,9 +1501,20 @@ function renderTodaySection(){
   const isToday=TODAY_ISO===isoDate(new Date());
   const h2=document.querySelector("#todaySec h2"); if(h2) h2.textContent=isToday?"今日賽事":"當日賽事";
   if(tag) tag.textContent=`${TODAY_ISO} · ${has.length} 個聯賽 · ${total} 場${liveN?` · ${liveN} 場進行中`:""}`;
+  // 各狀態場數
+  const stOf=g=>g.state==="in"?"live":(g.completed?"done":"pre");
+  const cnt={all:0,live:0,pre:0,done:0};
+  has.forEach(l=>(TODAY_GAMES[l.id].games||[]).forEach(g=>{cnt.all++;cnt[stOf(g)]++;}));
+  document.querySelectorAll("#stFilter .sf").forEach(b=>{
+    const k=b.dataset.sf, n=cnt[k]||0;
+    b.querySelector("b").textContent=n;
+    b.classList.toggle("on", k===ST_FILTER);
+    b.classList.toggle("zero", n===0 && k!=="all");
+  });
   box.innerHTML=has.map(l=>{
     const t=TODAY_GAMES[l.id];
-    const rows=(t.games||[]).slice().sort((a,b)=>a.time.localeCompare(b.time)).map(g=>{
+    const rows=(t.games||[]).filter(g=>ST_FILTER==="all"||stOf(g)===ST_FILTER)
+      .slice().sort((a,b)=>a.time.localeCompare(b.time)).map(g=>{
       const live=g.state==="in", done=g.completed;
       const sc = (live||done)?`<span class="tg-sc">${g.as} - ${g.hs}</span>`:`<span class="tg-vs">vs</span>`;
       const p=predict(g.hn,g.an,g.odds);
@@ -1531,11 +1561,17 @@ function renderTodaySection(){
         <div class="an-box" id="an-${g.id}">${ana}</div>
       </div>`;
     }).join("");
+    if(!rows) return "";
     return `<div class="tg-lg"><div class="tg-lgname" data-golg="${l.id}">${l.zh} <span style="color:var(--muted);font-weight:400;font-size:12px">${l.full}</span> <span style="color:var(--gold);font-family:var(--mono);font-size:11px">${t.n} 場 ›</span></div>${rows}</div>`;
   }).join("");
+  if(!box.innerHTML.trim()){
+    const zh={live:"進行中",pre:"未開賽",done:"完場"}[ST_FILTER]||"";
+    box.innerHTML=`<div class="empty">目前沒有${zh}的比賽</div>`;
+  }
   box.querySelectorAll("[data-golg]").forEach(el=>el.onclick=(ev)=>{
     if(ev.target.closest(".an-btn")||ev.target.closest(".an-box")) return;
     if(window.switchLeague) window.switchLeague(el.dataset.golg); });
+  document.querySelectorAll("#stFilter .sf").forEach(b=>b.onclick=()=>{ ST_FILTER=b.dataset.sf; renderTodaySection(); });
   box.querySelectorAll(".an-btn").forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();
     const bx=document.getElementById("an-"+b.dataset.an); if(!bx) return;
     const open=bx.classList.toggle("open"); b.textContent=open?"收合分析 ▴":"詳細分析 ▾";});
