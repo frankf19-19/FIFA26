@@ -546,7 +546,7 @@
 
     <div class="brand">
       <div class="wordmark">歐陸足球 <b>每日預測</b></div>
-      <div class="mast-sub">45 聯賽 · 台灣時間 · <span id="lgName">美國職業足球大聯盟 MLS</span> · 更新 <b id="upd">—</b></div>
+      <div class="mast-sub">66 聯賽 · 台灣時間 · <span id="lgName">美國職業足球大聯盟 MLS</span> · 更新 <b id="upd">—</b></div>
     </div>
 
     <!-- 控制台:聯賽 + 日期 + 更新,全部集中 -->
@@ -644,7 +644,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e48";
+const BUILD = "e49";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -676,6 +676,28 @@ const LEAGUES = [
   {id:"irl.1", zh:"愛超", full:"愛爾蘭超級聯賽", more:1},
   {id:"cze.1", zh:"捷甲", full:"捷克甲級聯賽", more:1},
   {id:"fin.1", zh:"芬超", full:"芬蘭超級聯賽", more:1},
+  {id:"swe.2", zh:"瑞典超甲", full:"瑞典超級甲級聯賽", more:1},
+  {id:"nor.2", zh:"挪甲", full:"挪威甲級聯賽", more:1},
+  {id:"den.2", zh:"丹甲", full:"丹麥甲級聯賽", more:1},
+  {id:"fin.2", zh:"芬甲", full:"芬蘭甲級聯賽", more:1},
+  {id:"isl.2", zh:"冰甲", full:"冰島甲級聯賽", more:1},
+  {id:"blr.1", zh:"白俄超", full:"白俄羅斯超級聯賽", more:1},
+  {id:"est.1", zh:"愛沙尼亞", full:"愛沙尼亞超級聯賽", more:1},
+  {id:"lva.1", zh:"拉脫維亞", full:"拉脫維亞超級聯賽", more:1},
+  {id:"ltu.1", zh:"立陶宛", full:"立陶宛甲級聯賽", more:1},
+  {id:"kaz.1", zh:"哈薩克", full:"哈薩克超級聯賽", more:1},
+  {id:"geo.1", zh:"喬治亞", full:"喬治亞超級聯賽", more:1},
+  {id:"arm.1", zh:"亞美尼亞", full:"亞美尼亞超級聯賽", more:1},
+  {id:"aze.1", zh:"亞塞拜然", full:"亞塞拜然超級聯賽", more:1},
+  {id:"slo.1", zh:"斯洛維尼亞", full:"斯洛維尼亞甲級聯賽", more:1},
+  {id:"svk.1", zh:"斯洛伐克", full:"斯洛伐克超級聯賽", more:1},
+  {id:"hun.1", zh:"匈甲", full:"匈牙利甲級聯賽", more:1},
+  {id:"bul.1", zh:"保甲", full:"保加利亞甲級聯賽", more:1},
+  {id:"mda.1", zh:"摩爾多瓦", full:"摩爾多瓦超級聯賽", more:1},
+  {id:"wal.1", zh:"威超", full:"威爾斯超級聯賽", more:1},
+  {id:"nir.1", zh:"北愛超", full:"北愛爾蘭超級聯賽", more:1},
+  {id:"far.1", zh:"法羅", full:"法羅群島超級聯賽", more:1},
+  {id:"mlt.1", zh:"馬爾他", full:"馬爾他超級聯賽", more:1},
   {id:"pol.1", zh:"波甲", full:"波蘭甲級聯賽", more:1},
   {id:"ukr.1", zh:"烏超", full:"烏克蘭超級聯賽", more:1},
   {id:"rou.1", zh:"羅甲", full:"羅馬尼亞甲級聯賽", more:1},
@@ -684,7 +706,6 @@ const LEAGUES = [
   {id:"isl.1", zh:"冰超", full:"冰島超級聯賽", more:1},
   {id:"isr.1", zh:"以超", full:"以色列超級聯賽", more:1},
   {id:"kor.1", zh:"K聯賽", full:"韓國K聯賽", more:1},
-  {id:"chn.1", zh:"中超", full:"中國超級聯賽", more:1},
   {id:"aus.1", zh:"澳職", full:"澳洲A聯賽", more:1},
   {id:"ksa.1", zh:"沙職", full:"沙烏地職業聯賽", more:1},
   {id:"bra.1", zh:"巴甲", full:"巴西甲級聯賽", more:1},
@@ -733,6 +754,37 @@ const RATINGS = {
 };
 /* ---- 中文隊名(主要球隊;其餘顯示英文) ---- */
 const ZH = {
+  /* 瑞典超甲 Superettan */
+  "landskrona bois":"蘭斯克魯納","landskrona":"蘭斯克魯納","if brage":"布萊格","brage":"布萊格",
+  "orebro":"厄勒布魯","orebro sk":"厄勒布魯","helsingborgs if":"赫爾辛堡","oster":"厄斯特","osters if":"厄斯特",
+  "sandvikens":"桑德維肯","utsiktens bk":"烏茨克滕","varnamo":"韋納穆","trelleborgs":"特雷勒堡",
+  "orgryte":"厄格里特","sodertalje":"南泰利耶","kalmar ff":"卡爾馬","falkenbergs":"法爾肯貝里",
+  /* 白俄超 */
+  "vitebsk":"維捷布斯克","fc vitebsk":"維捷布斯克","gomel":"戈梅爾","fc gomel":"戈梅爾",
+  "bate borisov":"巴特鮑里索夫","bate":"巴特鮑里索夫","dinamo minsk":"明斯克迪納摩","shakhtyor soligorsk":"索利戈爾斯克礦工",
+  "neman grodno":"格羅德諾涅曼","dnepr mogilev":"第聶伯莫吉列夫","naftan novopolotsk":"新波洛茨克",
+  "slavia mozyr":"莫濟里斯拉維亞","isloch":"伊斯洛奇","torpedo zhodino":"日蒂諾魚雷","minsk":"明斯克",
+  /* 挪甲/丹甲/芬甲 */
+  "aalesund":"阿勒松","sogndal":"松達爾","ranheim":"拉恩海姆","stabaek":"斯塔貝克","start":"斯塔特",
+  "hodd":"霍德","asane":"奧薩訥","levanger":"萊萬格","egersund":"埃格松","mjondalen":"米約恩達倫",
+  "hvidovre":"赫維多雷","kolding":"科靈","esbjerg":"埃斯比約","hobro":"霍布羅","hillerod":"希勒勒",
+  "roskilde":"羅斯基勒","b93":"B93","naestved":"奈斯特韋茲",
+  /* 波羅的海/高加索/中歐 */
+  "flora tallinn":"塔林弗洛拉","levadia tallinn":"塔林列瓦迪亞","paide":"派德","narva trans":"納爾瓦",
+  "riga fc":"里加FC","rfs":"里加RFS","valmiera":"瓦爾米耶拉","liepaja":"利耶帕亞",
+  "zalgiris vilnius":"維爾紐斯扎爾基里斯","suduva":"蘇杜瓦","panevezys":"帕內韋日斯","kauno zalgiris":"考納斯",
+  "astana":"阿斯塔納","kairat":"卡伊拉特","tobol":"托博爾","ordabasy":"奧爾達巴瑟",
+  "dinamo tbilisi":"第比利斯迪納摩","dinamo batumi":"巴統迪納摩","torpedo kutaisi":"庫塔伊西",
+  "pyunik":"皮尤尼克","ararat-armenia":"阿拉拉特亞美尼亞","urartu":"烏拉爾圖",
+  "qarabag":"卡拉巴赫","neftci baku":"巴庫石油","sabah":"薩巴赫","zira":"齊拉",
+  "maribor":"馬里博爾","olimpija ljubljana":"盧布爾雅那","celje":"采列","bravo":"布拉沃",
+  "slovan bratislava":"布拉迪斯拉發斯洛萬","spartak trnava":"特爾納瓦","dunajska streda":"敦拿斯卡","zilina":"日利納",
+  "ferencvaros":"費倫茨瓦羅斯","puskas akademia":"普斯卡什學院","fehervar":"費黑爾瓦爾","debrecen":"德布勒森",
+  "ludogorets":"盧多戈雷茨","levski sofia":"索菲亞列夫斯基","cska sofia":"索菲亞中央陸軍","botev plovdiv":"波特夫",
+  "sheriff tiraspol":"謝里夫","zimbru chisinau":"辛布魯","petrocub":"彼得羅庫布",
+  "the new saints":"新聖徒","connahs quay":"康納斯基","linfield":"林菲爾德","larne":"拉恩","glentoran":"格倫托蘭",
+  "klaksvik":"克拉克斯維克","ki klaksvik":"克拉克斯維克","hb torshavn":"托爾斯港","vikingur gota":"戈塔維京",
+  "valletta":"瓦萊塔","hibernians":"希伯尼安斯","birkirkara":"比爾基卡拉",
   "helsingborg":"赫爾辛堡","helsingborgs if":"赫爾辛堡","ostersunds fk":"厄斯特松",
   /* 捷甲 */
   "teplice":"特普利采","fk teplice":"特普利采","slovan liberec":"利貝雷茨","liberec":"利貝雷茨",
@@ -1419,7 +1471,7 @@ function renderTodaySection(){
       if(VIEW==="today") sec.classList.remove("hidden");
       const h2b=document.querySelector("#todaySec h2"); if(h2b) h2b.textContent="當日賽事";
       if(tag) tag.textContent=TODAY_ISO;
-      box.innerHTML=`<div class="empty">${TODAY_ISO} 全 45 聯賽皆無賽事</div>`;
+      box.innerHTML=`<div class="empty">${TODAY_ISO} 全 66 聯賽皆無賽事</div>`;
     } else sec.classList.add("hidden");
     return;
   }
@@ -1524,7 +1576,7 @@ async function buildAllLeaguesIndex(){
   }
   PLAYER_INDEX=merged; allIndexLoaded=true; indexedLeague="ALL"; allBuilding=false;
   const t=new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
-  if(si) si.textContent=`可搜尋全部 ${merged.length} 名球員(45 聯賽)· 名冊 ${t} 自動更新`+(lgMissing.length?` · ⚠ 名冊缺:${lgMissing.join("/")}`:"");
+  if(si) si.textContent=`可搜尋全部 ${merged.length} 名球員(66 聯賽)· 名冊 ${t} 自動更新`+(lgMissing.length?` · ⚠ 名冊缺:${lgMissing.join("/")}`:"");
 }
 
 function searchPlayers(q){
