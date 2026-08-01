@@ -12,7 +12,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;500;600;700;800&family=Chivo+Mono:wght@450;600&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   /* ============ 冠軍之夜:午夜玻璃 × 香檳金 ============ */
-  :root{ /* 冠軍夜(預設;navy=移除 data-theme) */
+  :root{
+  --card:#161d38; /* 冠軍夜(預設;navy=移除 data-theme) */
     --bg0:#0a0e1c; --bg1:#141c36; --glowA:rgba(72,102,190,.20); --glowB:rgba(217,185,104,.10);
     --field:#0a0e1c;
     --panel:rgba(255,255,255,.045); --panel-2:rgba(255,255,255,.085);
@@ -132,8 +133,8 @@
   select.lg:hover{border-color:var(--gold)}
   select.lg option{background:#141c36;color:#eef0f6;font-weight:500}
   body[data-theme="light"] select.lg option,body[data-theme="cream"] select.lg option{background:#faf8f2;color:#241f14}
-  .tg-lg{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:13px 16px;margin-bottom:11px;
-    backdrop-filter:var(--blur);box-shadow:var(--shadow)}
+  .tg-lg{background:var(--card,#161d38);border:1px solid var(--line);border-radius:16px;padding:13px 16px;margin-bottom:11px;
+    box-shadow:var(--shadow)}
   .tg-lgname{font-family:var(--cond);font-weight:700;font-size:15px;color:var(--gold);cursor:pointer;
     padding-bottom:9px;margin-bottom:6px;border-bottom:1px solid var(--line)}
   .tg-lgname:hover{filter:brightness(1.15)}
@@ -174,19 +175,18 @@
   .stx{display:inline-block;font-family:var(--cond);font-weight:700;font-size:13.5px;letter-spacing:.06em;
     padding:5px 14px;border-radius:999px;white-space:nowrap;line-height:1.3}
   .st-pre{color:var(--muted);border:1.5px solid var(--line);background:var(--wash)}
-  .st-live{color:#fff;background:var(--miss);box-shadow:0 0 14px color-mix(in srgb,var(--miss) 55%,transparent);animation:pulseGlow 1.6s infinite}
+  .st-live{color:#fff;background:var(--miss);box-shadow:0 0 10px rgba(255,106,106,.45)}
   .st-live .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#fff;margin-right:6px;animation:blink 1.2s infinite;vertical-align:middle}
   .st-done{color:var(--ink2);background:var(--wash2);border:1.5px solid var(--line)}
-  .r-hit{color:var(--hit);border:1.5px solid var(--hit);background:color-mix(in srgb,var(--hit) 14%,transparent)}
-  .r-exact{color:#1c1608;background:linear-gradient(160deg,var(--gold),#e8cf8e);box-shadow:0 2px 10px color-mix(in srgb,var(--gold) 45%,transparent)}
-  .r-miss{color:var(--miss);border:1.5px solid var(--miss);background:color-mix(in srgb,var(--miss) 13%,transparent)}
+  .r-hit{color:var(--hit);border:2px solid var(--hit);background:rgba(80,200,120,.12)}
+  .r-exact{color:#1c1608;background:linear-gradient(160deg,var(--gold),#e8cf8e);box-shadow:0 2px 10px rgba(217,185,104,.4)}
+  .r-miss{color:var(--miss);border:2px solid var(--miss);background:rgba(255,106,106,.12)}
   .r-void{color:var(--muted);border:1.5px dashed var(--line)}
-  @keyframes pulseGlow{0%,100%{box-shadow:0 0 8px color-mix(in srgb,var(--miss) 40%,transparent)}50%{box-shadow:0 0 18px color-mix(in srgb,var(--miss) 75%,transparent)}}
   /* 整列左色條:掃一眼就知道狀態 */
-  .tg-row{border-left:4px solid transparent;padding-left:7px;margin-left:-7px}
-  .tg-row.live{border-left-color:var(--miss);background:color-mix(in srgb,var(--miss) 5%,transparent)}
+  .tg-row{border-left:4px solid transparent;padding-left:9px}
+  .tg-row.live{border-left-color:var(--miss)}
   .tg-row.hit{border-left-color:var(--hit)}
-  .tg-row.exact{border-left-color:var(--gold);background:color-mix(in srgb,var(--gold) 5%,transparent)}
+  .tg-row.exact{border-left-color:var(--gold)}
   .tg-row.miss{border-left-color:var(--miss)}
   .tg-row.done{border-left-color:var(--line)}
   @media (max-width:600px){
@@ -643,7 +643,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e45";
+const BUILD = "e46";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
