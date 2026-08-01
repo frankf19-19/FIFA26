@@ -663,7 +663,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e50";
+const BUILD = "e51";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -1513,6 +1513,7 @@ function renderTodaySection(){
   });
   box.innerHTML=has.map(l=>{
     const t=TODAY_GAMES[l.id];
+    (t.games||[]).forEach(g=>{ g.league=g.league||l.id; GAMES_BY_ID[g.id]=g; });
     const rows=(t.games||[]).filter(g=>ST_FILTER==="all"||stOf(g)===ST_FILTER)
       .slice().sort((a,b)=>a.time.localeCompare(b.time)).map(g=>{
       const live=g.state==="in", done=g.completed;
@@ -1568,9 +1569,16 @@ function renderTodaySection(){
     const zh={live:"進行中",pre:"未開賽",done:"完場"}[ST_FILTER]||"";
     box.innerHTML=`<div class="empty">目前沒有${zh}的比賽</div>`;
   }
-  box.querySelectorAll("[data-golg]").forEach(el=>el.onclick=(ev)=>{
-    if(ev.target.closest(".an-btn")||ev.target.closest(".an-box")) return;
+  // 聯賽標題 → 切到該聯盟
+  box.querySelectorAll(".tg-lgname[data-golg]").forEach(el=>el.onclick=(ev)=>{
+    ev.stopPropagation();
     if(window.switchLeague) window.switchLeague(el.dataset.golg); });
+  // 比賽列 → 直接開該場比賽詳情
+  box.querySelectorAll(".tg-row[data-gid]").forEach(el=>el.onclick=(ev)=>{
+    if(ev.target.closest(".an-btn")||ev.target.closest(".an-box")) return;
+    const g=GAMES_BY_ID[el.dataset.gid];
+    if(g && window.showGame) showGame(g);
+  });
   document.querySelectorAll("#stFilter .sf").forEach(b=>b.onclick=()=>{ ST_FILTER=b.dataset.sf; renderTodaySection(); });
   box.querySelectorAll(".an-btn").forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();
     const bx=document.getElementById("an-"+b.dataset.an); if(!bx) return;
@@ -2011,7 +2019,7 @@ function renderGames(games){
   document.getElementById("fxTag").textContent=`${games.length} 場`;
   if(!games.length){ box.innerHTML=`<div class="empty">這天沒有${LEAGUES.find(l=>l.id===curLeague).zh}賽事。<br>歐洲聯賽賽季約 8 月至隔年 5 月,休賽期無比賽——用上方日期切換到有賽事的日子。</div>`; return; }
   games.sort((a,b)=>a.time.localeCompare(b.time));
-  GAMES_BY_ID={}; games.forEach(g=>GAMES_BY_ID[g.id]=g);
+  games.forEach(g=>{ g.league=g.league||curLeague; GAMES_BY_ID[g.id]=g; });   // 合併保留(今日總覽的場次不被清掉)
   box.innerHTML=games.map(gameCard).join("");
   box.querySelectorAll(".nm[data-team]").forEach(el=>el.onclick=()=>showTeam(el.dataset.team));
   box.querySelectorAll(".detail-btn").forEach(el=>el.onclick=()=>{const g=GAMES_BY_ID[el.dataset.gid]; if(g) showGame(g);});
@@ -2536,7 +2544,7 @@ function init(){
     else if(s.v==="player") showPlayer(s.p,true);
     else if(s.v==="game"&&s.g) showGame(s.g,true);
   });
-  document.getElementById("gameBackBtn").onclick=()=>{ if(history.state&&history.state.v){history.back();} else hideTeam(); };
+  document.getElementById("gameBackBtn").onclick=()=>{ if(history.state&&history.state.v){history.back();} else { VIEW="today"; hideTeam(); } };
   const sb=document.getElementById("searchBox");
   let sTimer=null;
   sb.addEventListener("input",e=>{ clearTimeout(sTimer); sTimer=setTimeout(()=>searchPlayers(e.target.value),180); });
