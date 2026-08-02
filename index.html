@@ -585,7 +585,7 @@
   </header>
 
   <section id="todaySec" class="hidden">
-    <div class="sec-head"><h2>今日賽事</h2><span class="tag" id="todayTag"></span></div>
+    <div class="sec-head"><h2>今日賽事</h2><span class="tag" id="todayTag"></span><span class="tag" id="todaySync" style="color:var(--teal)"></span></div>
     <div class="stfilter" id="stFilter">
       <button class="sf on" data-sf="all">全部 <b>0</b></button>
       <button class="sf sf-live" data-sf="live"><span class="dot"></span>進行中 <b>0</b></button>
@@ -663,7 +663,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e51";
+const BUILD = "e52";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -1448,23 +1448,43 @@ function applyView(){
   document.querySelectorAll("#leagueTabs .lg[data-lg]").forEach(x=>x.classList.toggle("on", VIEW==="league"&&x.dataset.lg===curLeague));
   const tb=document.getElementById("todayTab"); if(tb) tb.classList.toggle("on", VIEW==="today");
 }
-async function checkTodayGames(targetIso){
-  const today=targetIso||isoDate(curDate||new Date());
-  const base=targetIso?new Date(targetIso+"T12:00:00"):(curDate||new Date());
-  const d0=new Date(base); d0.setDate(d0.getDate()-1);
-  const d1=new Date(base); d1.setDate(d1.getDate()+1);
-  const range=ymd(d0)+"-"+ymd(d1);
-  TODAY_ISO=today;
-  const chunks=[]; const L=[...LEAGUES];
-  for(let i=0;i<L.length;i+=4) chunks.push(L.slice(i,i+4));
-  for(const ch of chunks){
-    await Promise.all(ch.map(async lg=>{try{
-      const sb=await jget(espnScore(lg.id,range));
-      const evs=parseEvents(sb).filter(g=>g.localIso===today);
-      TODAY_GAMES[lg.id]={n:evs.length,live:evs.some(g=>g.state==="in"),games:evs};
-    }catch(e){ TODAY_GAMES[lg.id]={n:0,live:false,games:[]}; }}));
-  }
-  decorateTabs(); renderTodayLine(); renderTodaySection();
+let SWEEP_BUSY=false, SWEEP_AT=0;
+function setSweepTag(t){ const el=document.getElementById("todaySync"); if(el) el.textContent=t||""; }
+/* fast=true:只重掃「今天有賽事」的聯賽(即時比分用,快很多) */
+async function checkTodayGames(targetIso, fast){
+  if(SWEEP_BUSY) return;                                  // 防重入:上一輪未完就不再疊
+  SWEEP_BUSY=true;
+  const t0=Date.now();
+  try{
+    const today=targetIso||isoDate(curDate||new Date());
+    const base=targetIso?new Date(targetIso+"T12:00:00"):(curDate||new Date());
+    const d0=new Date(base); d0.setDate(d0.getDate()-1);
+    const d1=new Date(base); d1.setDate(d1.getDate()+1);
+    const range=ymd(d0)+"-"+ymd(d1);
+    const dayChanged=(TODAY_ISO!==today);
+    TODAY_ISO=today;
+    let L=[...LEAGUES];
+    if(fast && !dayChanged){
+      const act=LEAGUES.filter(l=>TODAY_GAMES[l.id]&&TODAY_GAMES[l.id].n>0);
+      if(act.length) L=act;                               // 快速模式:只重掃有賽事的聯賽
+    }
+    setSweepTag(fast?"· 更新中":"· 掃描中");
+    const CONC=8, next={};
+    for(let i=0;i<L.length;i+=CONC){
+      await Promise.all(L.slice(i,i+CONC).map(async lg=>{try{
+        const sb=await jget(espnScore(lg.id,range));
+        const evs=parseEvents(sb).filter(g=>g.localIso===today);
+        if(evs.length) next[lg.id]={n:evs.length,live:evs.some(g=>g.state==="in"),games:evs};
+      }catch(e){}}));
+      if(!fast && i===0){ Object.assign(TODAY_GAMES,next); renderTodaySection(); }   // 首批先上畫面
+    }
+    if(fast && L.length<LEAGUES.length) Object.assign(TODAY_GAMES,next);   // 快速模式:只覆蓋掃到的
+    else TODAY_GAMES=next;
+    SWEEP_AT=Date.now();
+    decorateTabs(); renderTodayLine(); renderTodaySection();
+    setSweepTag("");
+  }catch(e){ setSweepTag("· 更新失敗"); }
+  finally{ SWEEP_BUSY=false; }
 }
 function decorateTabs(){
   const sel=document.getElementById("moreLg");
@@ -1480,6 +1500,14 @@ function decorateTabs(){
   });
 }
 function renderTodaySection(){
+  const _open=new Set([...document.querySelectorAll(".an-box.open")].map(x=>x.id));
+  const _sy=window.scrollY;
+  const _r=()=>{
+    _open.forEach(id=>{ const b=document.getElementById(id); if(b){ b.classList.add("open");
+      const btn=document.querySelector(`.an-btn[data-an="${id.replace(/^an-/,"")}"]`); if(btn) btn.textContent="收合分析 ▴"; } });
+    if(Math.abs(window.scrollY-_sy)>4) window.scrollTo(0,_sy);
+  };
+  setTimeout(_r,0);
   const sec=document.getElementById("todaySec"), box=document.getElementById("todayBox"), tag=document.getElementById("todayTag");
   if(!sec||!box) return;
   const has=LEAGUES.filter(l=>TODAY_GAMES[l.id]&&TODAY_GAMES[l.id].n>0);
@@ -1500,7 +1528,8 @@ function renderTodaySection(){
   const liveN=has.reduce((s,l)=>s+(TODAY_GAMES[l.id].games||[]).filter(g=>g.state==="in").length,0);
   const isToday=TODAY_ISO===isoDate(new Date());
   const h2=document.querySelector("#todaySec h2"); if(h2) h2.textContent=isToday?"今日賽事":"當日賽事";
-  if(tag) tag.textContent=`${TODAY_ISO} · ${has.length} 個聯賽 · ${total} 場${liveN?` · ${liveN} 場進行中`:""}`;
+  const upd=SWEEP_AT?` · 更新 ${new Date(SWEEP_AT).toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit"})}`:"";
+  if(tag) tag.textContent=`${TODAY_ISO} · ${has.length} 個聯賽 · ${total} 場${liveN?` · ${liveN} 場進行中`:""}${upd}`;
   // 各狀態場數
   const stOf=g=>g.state==="in"?"live":(g.completed?"done":"pre");
   const cnt={all:0,live:0,pre:0,done:0};
@@ -2578,7 +2607,17 @@ function init(){
   try{history.replaceState({v:"today"},"");}catch(e){}
   applyView();
   setTimeout(checkTodayGames, 2500);
-  setInterval(()=>{ if(!document.hidden) checkTodayGames(isoDate(curDate)); }, 600000);            // 開站 2 秒後抓傷兵
+  // 即時節奏:有進行中的比賽 → 45 秒更新;否則 3 分鐘;每 20 分鐘做一次全聯賽完整掃描
+  setInterval(()=>{
+    if(document.hidden) return;
+    const liveNow=Object.values(TODAY_GAMES).some(t=>t&&t.live);
+    const since=Date.now()-SWEEP_AT;
+    if(liveNow ? since>=45000 : since>=180000) checkTodayGames(isoDate(curDate), true);
+  }, 15000);
+  setInterval(()=>{ if(!document.hidden) checkTodayGames(isoDate(curDate)); }, 1200000);
+  document.addEventListener("visibilitychange",()=>{
+    if(!document.hidden && Date.now()-SWEEP_AT>30000) checkTodayGames(isoDate(curDate), true);
+  });            // 開站 2 秒後抓傷兵
   setInterval(()=>{ if(!document.hidden) loadInjuries(); }, 600000);   // 每 10 分鐘更新傷兵
   setInterval(()=>{ if(!document.hidden) load(); }, 90000);  // 每 90 秒自動更新
 }
