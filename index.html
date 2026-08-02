@@ -153,6 +153,11 @@
   .cal-v{font-family:var(--mono);font-size:11px;color:var(--ink2);white-space:nowrap}
   .cal-card{border-color:var(--gold)}
   @media (max-width:640px){ .cal-row{grid-template-columns:52px 1fr;row-gap:1px} .cal-v{grid-column:2;font-size:10.5px} }
+  .tg-rv{grid-column:1/-1;font-size:12px;line-height:1.65;color:var(--ink2);
+    border-left:3px solid var(--line);padding:6px 0 6px 10px;margin-top:6px}
+  .tg-rv.ok{border-left-color:var(--hit)}
+  .tg-rv.bad{border-left-color:var(--miss)}
+  @media (max-width:640px){ .tg-rv{font-size:11.5px} }
   .tg-lg{background:var(--card,#161d38);border:1px solid var(--line);border-radius:16px;padding:13px 16px;margin-bottom:11px;
     box-shadow:var(--shadow)}
   .tg-lgname{font-family:var(--cond);font-weight:700;font-size:15px;color:var(--gold);cursor:pointer;
@@ -672,7 +677,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e56";
+const BUILD = "e57";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -784,7 +789,7 @@ const RATINGS = {
 const ZH = {
   /* 美職聯 MLS 全隊 */
   "inter miami cf":"國際邁阿密","inter miami":"國際邁阿密","new york city fc":"紐約城","nycfc":"紐約城",
-  "new york red bulls":"紐約紅牛","ny red bulls":"紐約紅牛","toronto fc":"多倫多FC","cf montreal":"蒙特婁",
+  "new york red bulls":"紐約紅牛","ny red bulls":"紐約紅牛","red bull new york":"紐約紅牛","red bulls":"紐約紅牛","toronto fc":"多倫多FC","cf montreal":"蒙特婁",
   "cf montréal":"蒙特婁","montreal impact":"蒙特婁","new england revolution":"新英格蘭革命",
   "philadelphia union":"費城聯合","columbus crew":"哥倫布機員","fc cincinnati":"辛辛那提",
   "orlando city sc":"奧蘭多城","orlando city":"奧蘭多城","atlanta united fc":"亞特蘭大聯","atlanta united":"亞特蘭大聯",
@@ -1567,6 +1572,16 @@ async function checkTodayGames(targetIso, fast){
     }
     if(fast && L.length<LEAGUES.length) Object.assign(TODAY_GAMES,next);   // 快速模式:只覆蓋掃到的
     else TODAY_GAMES=next;
+    // 完賽即時評分:不必等切到該聯盟,總覽掃到就立刻評
+    try{
+      const sc0=scGet();
+      const fresh=[];
+      Object.keys(TODAY_GAMES).forEach(lid=>(TODAY_GAMES[lid].games||[]).forEach(g=>{
+        g.league=g.league||lid;
+        if(g.completed&&g.hs!=null&&g.as!=null&&!(sc0[g.id]&&sc0[g.id].pred)) fresh.push(g);
+      }));
+      if(fresh.length){ await gradeFinished(fresh); if(typeof renderScorecard==="function") renderScorecard(); if(typeof renderInsights==="function") renderInsights(); }
+    }catch(e){}
     SWEEP_AT=Date.now();
     decorateTabs(); renderTodayLine(); renderTodaySection();
     setSweepTag("");
@@ -1680,6 +1695,11 @@ function renderTodaySection(){
           ${p.mk?`<span class="tp-mk">含市場賠率</span>`:""}
           <button class="an-btn" data-an="${g.id}">詳細分析 ▾</button>
         </div>
+        ${(()=>{ if(!done) return "";
+          const rv=(typeof makeReview==="function")?makeReview(g):null;
+          if(!rv||!rv.text) return "";
+          return `<div class="tg-rv ${rv.good?"ok":"bad"}">${rv.good?"✓":"✗"} ${rv.text}</div>`;
+        })()}
         <div class="an-box" id="an-${g.id}">${ana}</div>
       </div>`;
     }).join("");
@@ -1920,7 +1940,7 @@ async function gradeFinished(games){
   const fresh=games.filter(g=>g.completed&&g.hs!=null&&g.as!=null&&!(sc[g.id]&&sc[g.id].pred));
   const perfMap={};
   await Promise.all(fresh.map(async g=>{try{
-    const sum=await jget(espnSummary(curLeague,g.id));
+    const sum=await jget(espnSummary(g.league||curLeague,g.id));
     const tms=(sum.boxscore&&sum.boxscore.teams)||[];
     if(tms.length===2){
       const idx=norm((tms[0].team||{}).displayName||"")===norm(g.hn)?0:1;
