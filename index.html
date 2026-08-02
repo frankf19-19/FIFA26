@@ -146,6 +146,13 @@
   .sf .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--miss);margin-right:5px;vertical-align:middle}
   .sf.sf-live.on .dot{background:#fff;animation:blink 1.2s infinite}
   @media (max-width:640px){ .sf{font-size:12px;padding:5px 12px} .stfilter{gap:5px;margin-bottom:11px} }
+  .cal-row{display:grid;grid-template-columns:64px 1fr auto;gap:9px;align-items:center;padding:3px 0;font-size:12px}
+  .cal-k{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .cal-bar{height:7px;border-radius:4px;background:var(--wash2);overflow:hidden}
+  .cal-bar i{display:block;height:100%}
+  .cal-v{font-family:var(--mono);font-size:11px;color:var(--ink2);white-space:nowrap}
+  .cal-card{border-color:var(--gold)}
+  @media (max-width:640px){ .cal-row{grid-template-columns:52px 1fr;row-gap:1px} .cal-v{grid-column:2;font-size:10.5px} }
   .tg-lg{background:var(--card,#161d38);border:1px solid var(--line);border-radius:16px;padding:13px 16px;margin-bottom:11px;
     box-shadow:var(--shadow)}
   .tg-lgname{font-family:var(--cond);font-weight:700;font-size:15px;color:var(--gold);cursor:pointer;
@@ -663,7 +670,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e52";
+const BUILD = "e54";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -1131,6 +1138,25 @@ function baseRating(name){
   for(const k in RATN){ if(k&&(n.includes(k)||k.includes(n))) return RATN[k]; }
   return 68;
 }
+/* 攻防分離校準:各隊「進攻」「防守」乘數,依實際進失球獨立學習 */
+let AD_CACHE={};
+function adGet(){try{const v=localStorage.getItem("euroAD");return v?JSON.parse(v):{};}catch(e){return {};}}
+function adSet(o){try{localStorage.setItem("euroAD",JSON.stringify(o));}catch(e){}}
+function atkOf(n){const k=norm(n);return (AD_CACHE[k]&&AD_CACHE[k].a)||1;}
+function defOf(n){const k=norm(n);return (AD_CACHE[k]&&AD_CACHE[k].d)||1;}
+/* 市場權重:模型表現差時自動讓位給市場賠率(誠實的自我認知) */
+let MKT_W=0.55;
+function mktWGet(){try{const v=parseFloat(localStorage.getItem("euroMKTW"));return isNaN(v)?0.55:Math.max(0.35,Math.min(0.85,v));}catch(e){return 0.55;}}
+function mktWTune(){
+  const rows=Object.values(scGet()).filter(s=>s&&!s.void&&typeof s.brier==="number");
+  if(rows.length<25) return;
+  const recent=rows.sort((a,b)=>(b.t||0)-(a.t||0)).slice(0,60);
+  const b=recent.reduce((s,x)=>s+x.brier,0)/recent.length;
+  // 基準:恆用歷史基準率的 Brier ≈ 0.646。比基準差 → 更信市場;明顯優於基準 → 允許更信模型
+  if(b>0.63) MKT_W=Math.min(0.85,MKT_W+0.03);
+  else if(b<0.57) MKT_W=Math.max(0.35,MKT_W-0.02);
+  try{localStorage.setItem("euroMKTW",String(MKT_W));}catch(e){}
+}
 function rating(name){
   const d=ADJ_CACHE[norm(name)]||0;
   return baseRating(name)+Math.max(-8,Math.min(8,d))+formBonus(name);   // 校準 ±8 + 近況 ±1.8
@@ -1174,27 +1200,55 @@ function predict(homeName,awayName,mkt){
   }
   lh*=injAdj(homeName); la*=injAdj(awayName);   // 傷兵折扣:主力缺陣自動下修預期進球
   lh*=restAdj(homeName); la*=restAdj(awayName); // 賽程疲勞:三天內連戰 -4%,休整逾週 +1%
+  lh*=atkOf(homeName)*defOf(awayName);          // 攻防分離校準:主隊進攻力 × 客隊防守漏洞
+  la*=atkOf(awayName)*defOf(homeName);
   lh=Math.max(0.2,Math.min(lh,4.2)); la=Math.max(0.2,Math.min(la,4.2));
   let H=0,D=0,A=0;
   const best={H:{p:-1,i:1,j:0}, D:{p:-1,i:1,j:1}, A:{p:-1,i:0,j:1}};   // 各結果下最可能的單一比分
-  for(let i=0;i<8;i++)for(let j=0;j<8;j++){const p=poisson(i,lh)*poisson(j,la);
+  // Dixon-Coles 低分修正:獨立卜瓦松會低估 0-0/1-1(和局),高估 1-0/0-1
+  const RHO=-0.13;
+  const tau=(i,j)=>{
+    if(i===0&&j===0) return Math.max(0.01, 1-lh*la*RHO);
+    if(i===0&&j===1) return Math.max(0.01, 1+lh*RHO);
+    if(i===1&&j===0) return Math.max(0.01, 1+la*RHO);
+    if(i===1&&j===1) return Math.max(0.01, 1-RHO);
+    return 1;
+  };
+  for(let i=0;i<8;i++)for(let j=0;j<8;j++){const p=poisson(i,lh)*poisson(j,la)*tau(i,j);
     const k=i>j?"H":i===j?"D":"A";
     if(k==="H")H+=p;else if(k==="D")D+=p;else A+=p;
     if(p>best[k].p) best[k]={p,i,j};}
   const t=H+D+A; H=H/t*100;D=D/t*100;A=A/t*100;
-  if(mkt){ // 市場賠率融合(62% 模型 + 38% 市場):市場是免費資料中最強的校準訊號
-    H=H*0.62+mkt.h*100*0.38; D=D*0.62+mkt.d*100*0.38; A=A*0.62+mkt.a*100*0.38;
+  if(mkt){ // 市場賠率融合:權重依模型實測表現自動調整(模型不如市場時自動讓位)
+    const w=1-MKT_W;
+    H=H*w+mkt.h*100*MKT_W; D=D*w+mkt.d*100*MKT_W; A=A*w+mkt.a*100*MKT_W;
     const t2=H+D+A; H=H/t2*100; D=D/t2*100; A=A/t2*100;
   }else if(DRAW_NUDGE>0 && Math.abs(H-A)<14){ // 無市場資料才用歷史和局補正
     const shift=Math.min(DRAW_NUDGE, Math.max(H,A)-32);
     if(shift>0){ if(H>=A)H-=shift; else A-=shift; D+=shift; }
   }
+  // ===== 資料品質收縮:資料越少,越往基準率靠(不假裝有把握) =====
+  let dq=0;                                     // 0=毫無資料,1=資料充分
+  if(mkt) dq+=0.55;                             // 有市場賠率 = 最強訊號
+  if(sh&&sa&&+sh.gp>=4&&+sa.gp>=4) dq+=0.30*Math.min(1,Math.min(+sh.gp,+sa.gp)/10);
+  if(schedOf(homeName)&&schedOf(awayName)) dq+=0.10;
+  if(baseRating(homeName)!==68||baseRating(awayName)!==68) dq+=0.05;
+  dq=Math.max(0,Math.min(1,dq));
+  const shrink=0.30*(1-dq);                     // 資料全無時,把 30% 權重讓給基準率
+  if(shrink>0.001){
+    const bH=45.5,bD=25.5,bA=29.0;              // 足球長期基準率
+    H=H*(1-shrink)+bH*shrink; D=D*(1-shrink)+bD*shrink; A=A*(1-shrink)+bA*shrink;
+    const t3=H+D+A; H=H/t3*100; D=D/t3*100; A=A/t3*100;
+  }
   // 預測結果與顯示比分保持一致:先定結果,再取該結果下最可能的比分
   const predOut = H>=D&&H>=A ? "H" : A>=D&&A>=H ? "A" : "D";
   const si=best[predOut].i, sj=best[predOut].j;
-  const conf = Math.max(H,D,A)>=55?"高":Math.max(H,D,A)>=42?"中":"低";
+  const top=Math.max(H,D,A);
+  // 信心分級同時看機率高度與資料品質:資料不足時不給「高」
+  const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
   const pick = predOut==="H" ? homeName : predOut==="A" ? awayName : "和局";
-  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,conf,pick,mk:!!mkt,lh:+lh.toFixed(2),la:+la.toFixed(2)};
+  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,conf,pick,mk:!!mkt,
+          lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2)};
 }
 /* 詳細分析:逐項列出模型依據(無資料的項目自動略過,不編造) */
 function analysisRows(hn,an,p){
@@ -1233,7 +1287,13 @@ function reasonText(hn,an,p){
 }
 
 /* ================= ESPN 資料 ================= */
-async function jget(url){const r=await fetch(url);if(!r.ok)throw new Error("HTTP "+r.status);return r.json();}
+async function jget(url,live){
+  // live=true:破除瀏覽器/CDN 快取,確保拿到最新比分
+  const u = live ? url+(url.includes("?")?"&":"?")+"_="+Date.now() : url;
+  const r = await fetch(u, live?{cache:"no-store"}:undefined);
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return r.json();
+}
 function espnScore(league,date){return `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/scoreboard?dates=${date}`;}
 function espnInjuries(league){return `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/injuries`;}
 let INJURIES={};        // norm(team) -> [{name,status,out}]
@@ -1353,7 +1413,7 @@ async function getTeamList(league){
   // 路徑3:從近兩天賽程萃取(至少涵蓋有比賽的球隊)
   try{
     const d0=new Date(); const d1=new Date(); d1.setDate(d1.getDate()-1);
-    const sb=await jget(espnScore(league, ymd(d1)+"-"+ymd(d0)));
+    const sb=await jget(espnScore(league, ymd(d1)+"-"+ymd(d0)), true);
     const seen={}; const teams=[];
     (sb.events||[]).forEach(ev=>{const c=(ev.competitions||[])[0];((c&&c.competitors)||[]).forEach(x=>{
       const t=x.team||{}; if(t.id&&!seen[t.id]){seen[t.id]=1;teams.push({id:t.id,displayName:t.displayName});}});});
@@ -1472,7 +1532,7 @@ async function checkTodayGames(targetIso, fast){
     const CONC=8, next={};
     for(let i=0;i<L.length;i+=CONC){
       await Promise.all(L.slice(i,i+CONC).map(async lg=>{try{
-        const sb=await jget(espnScore(lg.id,range));
+        const sb=await jget(espnScore(lg.id,range), true);
         const evs=parseEvents(sb).filter(g=>g.localIso===today);
         if(evs.length) next[lg.id]={n:evs.length,live:evs.some(g=>g.state==="in"),games:evs};
       }catch(e){}}));
@@ -1853,6 +1913,7 @@ async function gradeFinished(games){
       hs:g.hs, as:g.as, hz:zhName(g.hn), az:zhName(g.an),
       hnk:norm(g.hn), ank:norm(g.an), t:(ex&&ex.t)||Date.now(), v:ex?(ex.v||1):2,
       homePick:p.pick===g.hn, draw:g.hs===g.as, cal:!!(ex&&ex.cal),
+      pp:[+p.H.toFixed(1),+p.D.toFixed(1),+p.A.toFixed(1)], dq:p.dq, out:realOut,
       pred:{H:p.H,D:p.D,A:p.A,si:p.si,sj:p.sj,conf:p.conf,pick:p.pick}};
     // --- 評級自我校準:淨勝球誤差 → 微調兩隊評級(此消彼長,單場上限 ±2;每場只做一次) ---
     if(!sc[g.id].cal){
@@ -1867,6 +1928,20 @@ async function gradeFinished(games){
         else if(resDiff!==0 && Math.sign(domDiff)===Math.sign(resDiff) && Math.abs(domDiff)>=4){ luck="solid"; }
         if(luck) sc[g.id].luck=luck;
       }
+      // 攻防分離學習:主隊進球超出預期 → 主攻↑、客防↓(反之亦然)
+      try{
+        AD_CACHE=Object.keys(AD_CACHE).length?AD_CACHE:adGet();
+        const LR=0.06*factor, CL=v=>Math.max(0.75,Math.min(1.30,v));
+        const kh=norm(g.hn), ka=norm(g.an);
+        AD_CACHE[kh]=AD_CACHE[kh]||{a:1,d:1}; AD_CACHE[ka]=AD_CACHE[ka]||{a:1,d:1};
+        const eh=Math.max(0.25,p.lh||1.3), ea=Math.max(0.25,p.la||1.1);
+        const rh1=(g.hs-eh)/eh, ra1=(g.as-ea)/ea;          // 相對誤差
+        AD_CACHE[kh].a=CL(AD_CACHE[kh].a*(1+LR*Math.max(-1,Math.min(1,rh1))));
+        AD_CACHE[ka].d=CL(AD_CACHE[ka].d*(1+LR*Math.max(-1,Math.min(1,rh1))));
+        AD_CACHE[ka].a=CL(AD_CACHE[ka].a*(1+LR*Math.max(-1,Math.min(1,ra1))));
+        AD_CACHE[kh].d=CL(AD_CACHE[kh].d*(1+LR*Math.max(-1,Math.min(1,ra1))));
+        adSet(AD_CACHE);
+      }catch(e){}
       const delta=Math.max(-2,Math.min(2, factor*1.6*Math.tanh(err/2)));
       if(Math.abs(delta)>0.05){
         const hn=norm(g.hn), an=norm(g.an);
@@ -1882,12 +1957,66 @@ async function gradeFinished(games){
   if(changed)scSet(sc);
   return sc;
 }
+/* ===== 校準診斷:模型說 X%,實際發生率是多少? ===== */
+function calibReport(){
+  const rows=Object.values(scGet()).filter(s=>s&&!s.void&&s.pp&&s.out);
+  if(rows.length<10) return null;
+  const buckets=[[0,20],[20,30],[30,40],[40,50],[50,60],[60,80],[80,100]];
+  const out=buckets.map(([lo,hi])=>({lo,hi,n:0,hitN:0}));
+  const idx={H:0,D:1,A:2};
+  rows.forEach(s=>{
+    ["H","D","A"].forEach(k=>{
+      const p=s.pp[idx[k]];
+      const b=out.find(x=>p>=x.lo&&p<x.hi); if(!b) return;
+      b.n++; if(s.out===k) b.hitN++;
+    });
+  });
+  const brier=rows.reduce((a,s)=>a+(s.brier||0),0)/rows.length;
+  const byConf={}, byDq={};
+  rows.forEach(s=>{
+    const top=Math.max(...s.pp), c= top>=55?"高":top>=44?"中":"低";
+    byConf[c]=byConf[c]||{n:0,hit:0}; byConf[c].n++; if(s.hit) byConf[c].hit++;
+    const d=(s.dq==null)?"未記錄":(s.dq>=0.6?"充分":s.dq>=0.3?"普通":"不足");
+    byDq[d]=byDq[d]||{n:0,hit:0,b:0}; byDq[d].n++; if(s.hit) byDq[d].hit++; byDq[d].b+=(s.brier||0);
+  });
+  return {n:rows.length, brier, buckets:out.filter(b=>b.n>=5), byConf, byDq};
+}
+function renderCalib(){
+  const r=calibReport();
+  if(!r) return "";
+  const BASE=0.646;
+  const verdict = r.brier<0.58?["模型明顯優於基準率,校準良好","var(--hit)"]
+                : r.brier<0.615?["模型略優於基準率,仍有調整空間","var(--gold)"]
+                : ["模型幾乎沒有勝過「直接套用基準率」,正在自動提高市場賠率權重","var(--miss)"];
+  const rowsHtml=r.buckets.map(b=>{
+    const act=b.hitN/b.n*100, mid=(b.lo+b.hi)/2, diff=act-mid;
+    const col=Math.abs(diff)<6?"var(--hit)":Math.abs(diff)<12?"var(--gold)":"var(--miss)";
+    return `<div class="cal-row">
+      <span class="cal-k">${b.lo}–${b.hi}%</span>
+      <span class="cal-bar"><i style="width:${Math.min(100,act)}%;background:${col}"></i></span>
+      <span class="cal-v">實際 ${act.toFixed(0)}%<span style="color:${col}"> (${diff>=0?"+":""}${diff.toFixed(0)})</span> · ${b.n} 次</span>
+    </div>`;
+  }).join("");
+  const confHtml=Object.entries(r.byConf).map(([k,v])=>`${k} ${(v.hit/v.n*100).toFixed(0)}%(${v.n})`).join(" · ");
+  const dqHtml=Object.entries(r.byDq).map(([k,v])=>`${k} 命中 ${(v.hit/v.n*100).toFixed(0)}%、Brier ${(v.b/v.n).toFixed(2)}(${v.n})`).join("<br>");
+  return `<div class="ins cal-card">
+    <div class="ins-h">🎯 校準診斷</div>
+    <div class="ins-b">
+      <div style="margin-bottom:9px">Brier <b>${r.brier.toFixed(3)}</b> · 基準率對照 <b>${BASE}</b>(越低越好)<br>
+        <span style="color:${verdict[1]}">${verdict[0]}</span></div>
+      <div style="font-size:12px;color:var(--muted);margin:11px 0 5px">模型說 X%,實際發生率:</div>
+      ${rowsHtml||'<div style="color:var(--muted)">樣本不足</div>'}
+      <div style="margin-top:11px;font-size:12.5px">依信心分級命中率:${confHtml}</div>
+      <div style="margin-top:6px;font-size:12.5px;line-height:1.7">依資料品質:<br>${dqHtml}</div>
+      <div style="margin-top:9px;font-size:11.5px;color:var(--muted)">目前市場賠率權重 ${(MKT_W*100).toFixed(0)}%(自動調整:模型表現差時提高)· 樣本 ${r.n} 場</div>
+    </div></div>`;
+}
 function renderInsights(){
   const box=document.getElementById("insights"), tag=document.getElementById("insTag");
   if(!box) return;
   const sc=scGet(); const ids=Object.keys(sc).filter(k=>sc[k].pred&&!sc[k].void);
   const n=ids.length;
-  if(!n){ box.innerHTML=`<div class="empty" style="text-align:left">完賽累積後,模型會在這裡整理檢討心得與評級調整。</div>`; tag.textContent=""; return; }
+  if(!n){ box.innerHTML=renderCalib()+`<div class="empty" style="text-align:left">完賽累積後,模型會在這裡整理檢討心得與評級調整。</div>`; tag.textContent=""; return; }
   tag.textContent=`已學習 ${n} 場`;
   const S=ids.map(k=>sc[k]);
   const lessons=[];
@@ -1929,7 +2058,7 @@ function renderInsights(){
   if(tune.length) html+=`<div class="pos-group" style="margin:12px 0 6px">自動調參</div><div style="font-family:var(--mono);font-size:12px;color:var(--ink2)">${tune.join(" · ")}</div>`;
   html+=`<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:12px">心得由模型依實際賽果自動生成 · 校準值存於此瀏覽器,持續累積會越來越準
     · <a href="#" id="resetSC" style="color:var(--miss)">重設所有計分紀錄</a></div></div>`;
-  box.innerHTML=html;
+  box.innerHTML=renderCalib()+html;
   const rst=document.getElementById("resetSC");
   if(rst) rst.onclick=(ev)=>{ev.preventDefault();
     if(!confirm("確定重設?將清除所有預測成績、檢討與評級校準,從乾淨狀態重新累積(建議:早期紀錄曾受顯示問題影響)。"))return;
@@ -2279,8 +2408,21 @@ async function showGame(g, fromPop){
   const p=predict(g.hn,g.an,g.odds);
   box.innerHTML=`<div class="empty">載入比賽數據中…</div>`;
   window.scrollTo(0,0);
+  if(window.__gvTimer){ clearInterval(window.__gvTimer); window.__gvTimer=null; }
+  if(g.state==="in"){
+    window.__gvTimer=setInterval(async()=>{
+      const gv=document.getElementById("gameView");
+      if(!gv||gv.classList.contains("hidden")||document.hidden) return;
+      try{
+        const sb=await jget(espnScore(g.league||curLeague, ymd(new Date(g.date))), true);
+        const fresh=parseEvents(sb).find(x=>x.id===g.id);
+        if(fresh){ GAMES_BY_ID[fresh.id]=fresh; fresh.league=g.league||curLeague;
+          if(fresh.state!=="in"||fresh.hs!==g.hs||fresh.as!==g.as) showGame(fresh,true); }
+      }catch(e){}
+    }, 30000);
+  }
   let sum=null;
-  try{ sum=await jget(espnSummary(g.league||curLeague, g.id)); }catch(e){}
+  try{ sum=await jget(espnSummary(g.league||curLeague, g.id), g.state==="in"); }catch(e){}
   // --- 進球/紅黃牌時間軸 ---
   let goals=[],cards=[],evs=[];
   try{
@@ -2452,6 +2594,7 @@ async function showGame(g, fromPop){
 function hideTeam(){
   document.getElementById("teamView").classList.add("hidden");
   document.getElementById("gameView").classList.add("hidden");
+  AD_CACHE=adGet(); MKT_W=mktWGet(); mktWTune();
   applyView();
 }
 
@@ -2470,7 +2613,7 @@ async function load(){
     const d0=new Date(curDate); d0.setDate(d0.getDate()-1);
     // 先抓積分榜:攻防形狀與戰績橫幅都靠它(失敗不影響賽事)
     try{ const sd0=await jget(espnStand(curLeague)); renderStandings(sd0); }catch(e){}
-    const data=await jget(espnScore(curLeague, ymd(d0)+"-"+dateStr));
+    const data=await jget(espnScore(curLeague, ymd(d0)+"-"+dateStr), true);
     const all=parseEvents(data);
     const games=all.filter(g=>g.localIso===isoDate(curDate));
     await gradeFinished(all.filter(g=>g.completed));   // 兩天內所有完賽都納入學習(含場面數據)
