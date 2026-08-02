@@ -176,6 +176,7 @@
     font-size:12.5px;color:var(--ink2);padding:6px 2px 0}
   .tp-pick{color:var(--gold);font-weight:700;white-space:nowrap}
   .tp-mk{font-family:var(--mono);font-size:11px;color:var(--teal)}
+  .tp-twsl{font-family:var(--mono);font-size:11px;color:#f0b73f;border:1px solid #f0b73f;border-radius:999px;padding:1px 9px}
   .an-btn{font-family:var(--cond);font-weight:600;font-size:11.5px;letter-spacing:.04em;color:var(--muted);
     background:none;border:1px solid var(--line);border-radius:999px;padding:3px 12px;cursor:pointer;transition:.15s}
   .an-btn:hover{color:var(--gold);border-color:var(--gold)}
@@ -573,7 +574,7 @@
 
     <div class="brand">
       <div class="wordmark">歐陸足球 <b>每日預測</b></div>
-      <div class="mast-sub">66 聯賽 · 台灣時間 · <span id="lgName">美國職業足球大聯盟 MLS</span> · 更新 <b id="upd">—</b></div>
+      <div class="mast-sub">運彩對應聯賽 · 台灣時間 · <span id="lgName">美國職業足球大聯盟 MLS</span> · 更新 <b id="upd">—</b></div>
     </div>
 
     <!-- 控制台:聯賽 + 日期 + 更新,全部集中 -->
@@ -677,73 +678,77 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e57";
+const BUILD = "e59";
 const LEAGUES = [
-  {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
-  {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
-  {id:"eng.1", zh:"英超",   full:"英格蘭超級聯賽", core:1},
-  {id:"esp.1", zh:"西甲",   full:"西班牙甲級聯賽", core:1},
-  {id:"ita.1", zh:"義甲",   full:"義大利甲級聯賽", core:1},
-  {id:"ger.1", zh:"德甲",   full:"德國甲級聯賽", core:1},
-  {id:"fra.1", zh:"法甲",   full:"法國甲級聯賽", core:1},
+  /* ===== 對齊台灣運彩足球開盤聯賽(不含中國、韓國)===== */
+  {id:"usa.1", zh:"美職聯", full:"美國職業足球大聯盟", core:1},
+  {id:"jpn.1", zh:"日職甲", full:"日本足球甲級聯賽 J1", core:1},
+  {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
+  {id:"esp.1", zh:"西甲",  full:"西班牙足球甲級聯賽", core:1},
+  {id:"ita.1", zh:"義甲",  full:"義大利足球甲級聯賽", core:1},
+  {id:"ger.1", zh:"德甲",  full:"德國足球甲級聯賽", core:1},
+  {id:"fra.1", zh:"法甲",  full:"法國足球甲級聯賽", core:1},
   {id:"uefa.champions", zh:"歐冠", full:"歐洲冠軍聯賽"},
-  {id:"uefa.europa",    zh:"歐霸", full:"歐足聯歐洲聯賽"},
-  {id:"ned.1", zh:"荷甲", full:"荷蘭甲級聯賽"},
-  {id:"por.1", zh:"葡超", full:"葡萄牙超級聯賽"},
-  {id:"sco.1", zh:"蘇超", full:"蘇格蘭超級聯賽"},
-  {id:"bel.1", zh:"比甲", full:"比利時甲級聯賽"},
-  {id:"tur.1", zh:"土超", full:"土耳其超級聯賽"},
-  {id:"uefa.europa.conf", zh:"歐會盃", full:"歐足聯歐洲協會聯賽", more:1},
-  {id:"eng.2", zh:"英冠", full:"英格蘭冠軍聯賽", more:1},
-  {id:"esp.2", zh:"西乙", full:"西班牙乙級聯賽", more:1},
-  {id:"ita.2", zh:"義乙", full:"義大利乙級聯賽", more:1},
-  {id:"ger.2", zh:"德乙", full:"德國乙級聯賽", more:1},
-  {id:"fra.2", zh:"法乙", full:"法國乙級聯賽", more:1},
-  {id:"gre.1", zh:"希超", full:"希臘超級聯賽", more:1},
-  {id:"sui.1", zh:"瑞士超", full:"瑞士超級聯賽", more:1},
-  {id:"aut.1", zh:"奧超", full:"奧地利甲級聯賽", more:1},
-  {id:"den.1", zh:"丹麥超", full:"丹麥超級聯賽", more:1},
-  {id:"nor.1", zh:"挪超", full:"挪威超級聯賽", more:1},
-  {id:"swe.1", zh:"瑞典超", full:"瑞典超級聯賽", more:1},
-  {id:"rus.1", zh:"俄超", full:"俄羅斯超級聯賽", more:1},
-  {id:"irl.1", zh:"愛超", full:"愛爾蘭超級聯賽", more:1},
-  {id:"cze.1", zh:"捷甲", full:"捷克甲級聯賽", more:1},
-  {id:"fin.1", zh:"芬超", full:"芬蘭超級聯賽", more:1},
-  {id:"swe.2", zh:"瑞典超甲", full:"瑞典超級甲級聯賽", more:1},
-  {id:"nor.2", zh:"挪甲", full:"挪威甲級聯賽", more:1},
-  {id:"den.2", zh:"丹甲", full:"丹麥甲級聯賽", more:1},
-  {id:"fin.2", zh:"芬甲", full:"芬蘭甲級聯賽", more:1},
-  {id:"isl.2", zh:"冰甲", full:"冰島甲級聯賽", more:1},
-  {id:"blr.1", zh:"白俄超", full:"白俄羅斯超級聯賽", more:1},
-  {id:"est.1", zh:"愛沙尼亞", full:"愛沙尼亞超級聯賽", more:1},
-  {id:"lva.1", zh:"拉脫維亞", full:"拉脫維亞超級聯賽", more:1},
-  {id:"ltu.1", zh:"立陶宛", full:"立陶宛甲級聯賽", more:1},
-  {id:"kaz.1", zh:"哈薩克", full:"哈薩克超級聯賽", more:1},
-  {id:"geo.1", zh:"喬治亞", full:"喬治亞超級聯賽", more:1},
-  {id:"arm.1", zh:"亞美尼亞", full:"亞美尼亞超級聯賽", more:1},
-  {id:"aze.1", zh:"亞塞拜然", full:"亞塞拜然超級聯賽", more:1},
-  {id:"slo.1", zh:"斯洛維尼亞", full:"斯洛維尼亞甲級聯賽", more:1},
-  {id:"svk.1", zh:"斯洛伐克", full:"斯洛伐克超級聯賽", more:1},
-  {id:"hun.1", zh:"匈甲", full:"匈牙利甲級聯賽", more:1},
-  {id:"bul.1", zh:"保甲", full:"保加利亞甲級聯賽", more:1},
-  {id:"mda.1", zh:"摩爾多瓦", full:"摩爾多瓦超級聯賽", more:1},
-  {id:"wal.1", zh:"威超", full:"威爾斯超級聯賽", more:1},
-  {id:"nir.1", zh:"北愛超", full:"北愛爾蘭超級聯賽", more:1},
-  {id:"far.1", zh:"法羅", full:"法羅群島超級聯賽", more:1},
-  {id:"mlt.1", zh:"馬爾他", full:"馬爾他超級聯賽", more:1},
-  {id:"pol.1", zh:"波甲", full:"波蘭甲級聯賽", more:1},
-  {id:"ukr.1", zh:"烏超", full:"烏克蘭超級聯賽", more:1},
-  {id:"rou.1", zh:"羅甲", full:"羅馬尼亞甲級聯賽", more:1},
-  {id:"cro.1", zh:"克甲", full:"克羅埃西亞甲級聯賽", more:1},
-  {id:"srb.1", zh:"塞超", full:"塞爾維亞超級聯賽", more:1},
-  {id:"isl.1", zh:"冰超", full:"冰島超級聯賽", more:1},
-  {id:"isr.1", zh:"以超", full:"以色列超級聯賽", more:1},
-  {id:"kor.1", zh:"K聯賽", full:"韓國K聯賽", more:1},
-  {id:"aus.1", zh:"澳職", full:"澳洲A聯賽", more:1},
-  {id:"ksa.1", zh:"沙職", full:"沙烏地職業聯賽", more:1},
-  {id:"bra.1", zh:"巴甲", full:"巴西甲級聯賽", more:1},
-  {id:"arg.1", zh:"阿甲", full:"阿根廷甲級聯賽", more:1},
-  {id:"mex.1", zh:"墨甲", full:"墨西哥甲級聯賽", more:1},
+  {id:"uefa.europa",    zh:"歐霸", full:"歐洲聯賽"},
+  {id:"ned.1", zh:"荷甲", full:"荷蘭足球甲級聯賽"},
+  {id:"por.1", zh:"葡超", full:"葡萄牙足球超級聯賽"},
+  {id:"sco.1", zh:"蘇超", full:"蘇格蘭足球超級聯賽"},
+  {id:"bel.1", zh:"比甲", full:"比利時足球甲級聯賽"},
+  {id:"tur.1", zh:"土超", full:"土耳其足球超級聯賽"},
+  /* 歐洲賽事 */
+  {id:"uefa.europa.conf", zh:"歐會盃", full:"歐洲協會聯賽", more:1},
+  {id:"uefa.champions_qual", zh:"歐冠資格", full:"歐洲冠軍聯賽資格賽", more:1},
+  {id:"uefa.europa_qual", zh:"歐霸資格", full:"歐洲聯賽資格賽", more:1},
+  {id:"uefa.europa.conf_qual", zh:"歐會資格", full:"歐洲協會聯賽資格賽", more:1},
+  /* 日本 */
+  {id:"jpn.2", zh:"日職乙", full:"日本足球乙級聯賽 J2", more:1},
+  /* 五大聯賽次級 */
+  {id:"eng.2", zh:"英冠", full:"英格蘭冠軍足球聯賽", more:1},
+  {id:"esp.2", zh:"西乙", full:"西班牙足球乙級聯賽", more:1},
+  {id:"ita.2", zh:"義乙", full:"義大利足球乙級聯賽", more:1},
+  {id:"ger.2", zh:"德乙", full:"德國足球乙級聯賽", more:1},
+  {id:"fra.2", zh:"法乙", full:"法國足球乙級聯賽", more:1},
+  /* 歐洲其他 */
+  {id:"gre.1", zh:"希超", full:"希臘足球超級聯賽", more:1},
+  {id:"sui.1", zh:"瑞士超", full:"瑞士足球超級聯賽", more:1},
+  {id:"aut.1", zh:"奧甲", full:"奧地利足球甲級聯賽", more:1},
+  {id:"den.1", zh:"丹超", full:"丹麥足球超級聯賽", more:1},
+  {id:"den.2", zh:"丹甲", full:"丹麥足球甲級聯賽", more:1},
+  {id:"nor.1", zh:"挪超", full:"挪威足球超級聯賽", more:1},
+  {id:"nor.2", zh:"挪甲", full:"挪威足球甲級聯賽", more:1},
+  {id:"swe.1", zh:"瑞典超", full:"瑞典足球超級聯賽", more:1},
+  {id:"swe.2", zh:"瑞典甲", full:"瑞典足球甲級聯賽", more:1},
+  {id:"fin.1", zh:"芬超", full:"芬蘭足球超級聯賽", more:1},
+  {id:"isl.1", zh:"冰超", full:"冰島足球超級聯賽", more:1},
+  {id:"irl.1", zh:"愛超", full:"愛爾蘭足球超級聯賽", more:1},
+  /* 東歐 */
+  {id:"rus.1", zh:"俄超", full:"俄羅斯足球超級聯賽", more:1},
+  {id:"ukr.1", zh:"烏超", full:"烏克蘭足球超級聯賽", more:1},
+  {id:"pol.1", zh:"波甲", full:"波蘭足球甲級聯賽", more:1},
+  {id:"cze.1", zh:"捷甲", full:"捷克足球甲級聯賽", more:1},
+  {id:"cze.2", zh:"捷乙", full:"捷克足球乙級聯賽", more:1},
+  {id:"rou.1", zh:"羅甲", full:"羅馬尼亞足球甲級聯賽", more:1},
+  {id:"cro.1", zh:"克甲", full:"克羅埃西亞足球甲級聯賽", more:1},
+  {id:"srb.1", zh:"塞超", full:"塞爾維亞足球超級聯賽", more:1},
+  {id:"blr.1", zh:"白俄超", full:"白俄羅斯足球超級聯賽", more:1},
+  {id:"hun.1", zh:"匈甲", full:"匈牙利足球甲級聯賽", more:1},
+  {id:"bul.1", zh:"保甲", full:"保加利亞足球甲級聯賽", more:1},
+  {id:"svk.1", zh:"斯超", full:"斯洛伐克足球超級聯賽", more:1},
+  {id:"slo.1", zh:"斯乙", full:"斯洛維尼亞足球甲級聯賽", more:1},
+  {id:"isr.1", zh:"以超", full:"以色列足球超級聯賽", more:1},
+  /* 美洲、大洋洲、中東 */
+  {id:"bra.1", zh:"巴甲", full:"巴西足球甲級聯賽", more:1},
+  {id:"arg.1", zh:"阿甲", full:"阿根廷足球甲級聯賽", more:1},
+  {id:"mex.1", zh:"墨甲", full:"墨西哥足球甲級聯賽", more:1},
+  {id:"aus.1", zh:"澳職", full:"澳洲足球甲級聯賽", more:1},
+  {id:"ksa.1", zh:"沙職", full:"沙烏地阿拉伯足球聯賽", more:1},
+  /* 盃賽 */
+  {id:"eng.fa", zh:"英足總盃", full:"英格蘭足總盃", more:1},
+  {id:"eng.league_cup", zh:"英聯賽盃", full:"英格蘭聯賽盃", more:1},
+  {id:"ger.dfb_pokal", zh:"德國盃", full:"德國足球協會盃", more:1},
+  {id:"esp.copa_del_rey", zh:"國王盃", full:"西班牙國王盃", more:1},
+  {id:"ita.coppa_italia", zh:"義大利盃", full:"義大利盃", more:1},
+  {id:"fra.coupe_de_france", zh:"法國盃", full:"法國盃", more:1},
 ];
 let curLeague = "usa.1";     // 預設美職聯(現在是賽季中;歐洲 8 月開賽後可自行切換)
 let curDate = new Date();
@@ -1194,6 +1199,7 @@ function wordHit(n,k){
 }
 function zhName(name){
   const n=norm(name);
+  if(TWSL_NAMES[n]) return TWSL_NAMES[n];      // 台灣運彩官方譯名優先
   if(ZHN[n]) return ZHN[n];
   let best=null;
   for(const k in ZHN){ if(wordHit(n,k) && (!best||k.length>best.length)) best=k; }   // 取最長(最具體)的匹配
@@ -1561,6 +1567,7 @@ async function checkTodayGames(targetIso, fast){
       if(act.length) L=act;                               // 快速模式:只重掃有賽事的聯賽
     }
     setSweepTag(fast?"· 更新中":"· 掃描中");
+    loadTWSL().catch(()=>{});                   // 背景嘗試,失敗不影響任何功能
     const CONC=8, next={};
     for(let i=0;i<L.length;i+=CONC){
       await Promise.all(L.slice(i,i+CONC).map(async lg=>{try{
@@ -1588,6 +1595,64 @@ async function checkTodayGames(targetIso, fast){
   }catch(e){ setSweepTag("· 更新失敗"); }
   finally{ SWEEP_BUSY=false; }
 }
+/* ===== 台灣運彩「場中投注」公開資料(試探性;被 CORS 擋就靜默略過) =====
+   用途:① 官方台灣譯名(中英對照,自動累積)② 場中比賽的運彩賠率對照
+   限制:運彩僅公開場中賽事,賽前賠率自 2022 年改為 PDF、2024 年後取消總覽頁 */
+let TWSL_NAMES={}, TWSL_LIVE={}, TWSL_STATE="未嘗試", TWSL_LGS={};
+function twslLgsGet(){try{return JSON.parse(localStorage.getItem("euroTWSLL")||"{}");}catch(e){return {};}}
+function twslLgsSet(o){try{localStorage.setItem("euroTWSLL",JSON.stringify(o));}catch(e){}}
+function twslNamesGet(){try{return JSON.parse(localStorage.getItem("euroTWSLN")||"{}");}catch(e){return {};}}
+function twslNamesSet(o){try{localStorage.setItem("euroTWSLN",JSON.stringify(o));}catch(e){}}
+async function loadTWSL(){
+  try{
+    const r=await fetch("https://blob.sportslottery.com.tw/apidata/Live/On.json?_="+Date.now(),{cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const arr=await r.json();
+    if(!Array.isArray(arr)){ TWSL_STATE="格式非預期"; return; }
+    let added=0; const live={};
+    arr.forEach(it=>{
+      try{
+        // 記錄運彩實際開盤的聯賽(僅足球),供比對本站清單缺口
+        if(Array.isArray(it.ln)&&it.ln[0]){
+          const s=String(it.ln[0])+" "+String(it.ln[1]||"");
+          const notFoot=/排球|籃球|棒球|冰球|網球|羽球|撞球|美式|V聯賽|V-League|Volleyball|Basketball|Baseball|Hockey|Tennis|Badminton|Snooker|NFL|NBA|MLB|KBO|NPB/i.test(s);
+          const isFoot=!notFoot && /足球|Football|Soccer|Liga|Serie|Ligue|Premier|Bundesliga|Eredivisie|聯賽|盃|杯|Cup|League/i.test(s);
+          if(isFoot){
+            const k=String(it.ln[0]);
+            if(!TWSL_LGS[k]) { TWSL_LGS[k]={en:it.ln[1]||"",n:0}; }
+            TWSL_LGS[k].n++; TWSL_LGS[k].t=Date.now();
+          }
+        }
+        const pick=a=>Array.isArray(a)?{zh:a[0],en:a[1]}:null;
+        const hn=pick(it.htn), an=pick(it.atn);
+        if(!hn||!an||!hn.en||!an.en) return;
+        // ① 累積官方台灣譯名
+        [hn,an].forEach(t=>{ const k=norm(t.en);
+          if(k.length>=3 && t.zh && TWSL_NAMES[k]!==t.zh){ TWSL_NAMES[k]=t.zh; added++; } });
+        // ② 場中賠率:找出含 1/X/2 三個結果的盤口
+        let od=null;
+        (it.ms||[]).forEach(m=>{ (m.cs||[]).forEach(cs=>{
+          if(od||!Array.isArray(cs)||cs.length<3) return;
+          const g=p=>{const c=cs.find(x=>x.p===p);return c?parseFloat(c.o):null;};
+          const h=g(1),d=g(2),a=g(3);
+          if(h>1&&d>1&&a>1) od={h,d,a};
+        });});
+        const key=norm(hn.en)+"|"+norm(an.en);
+        live[key]={zhH:hn.zh,zhA:an.zh,lg:(it.ln&&it.ln[0])||"",no:it.no,odds:od,kdt:it.kdt};
+      }catch(e){}
+    });
+    TWSL_LIVE=live;
+    if(added){ twslNamesSet(TWSL_NAMES); }
+    twslLgsSet(TWSL_LGS);
+    TWSL_STATE=`已連線 · 場中 ${arr.length} 場` + (added?` · 新增譯名 ${added}`:"");
+    return true;
+  }catch(e){
+    TWSL_STATE = /Failed to fetch|NetworkError|CORS/i.test(String(e&&e.message))
+      ? "無法連線(跨域限制,瀏覽器不允許直接讀取)" : ("無法連線:"+String(e&&e.message).slice(0,40));
+    return false;
+  }
+}
+function twslOf(g){ return TWSL_LIVE[norm(g.hn)+"|"+norm(g.an)]||null; }
 function decorateTabs(){
   const sel=document.getElementById("moreLg");
   if(sel){
@@ -1693,6 +1758,8 @@ function renderTodaySection(){
           <span class="tp-bar"><i class="a" style="width:${p.A}%"></i><i class="d" style="width:${p.D}%"></i><i class="h" style="width:${p.H}%"></i></span>
           <span class="tp-pct">客 ${Math.round(p.A)}% · 和 ${Math.round(p.D)}% · 主 ${Math.round(p.H)}%</span>
           ${p.mk?`<span class="tp-mk">含市場賠率</span>`:""}
+          ${(()=>{const t=twslOf(g); if(!t) return "";
+            return `<span class="tp-twsl" title="台灣運彩場中盤口${t.no?" · 場次 "+t.no:""}">運彩 ${t.odds?`${t.odds.a} / ${t.odds.d} / ${t.odds.h}`:"場中開盤"}</span>`;})()}
           <button class="an-btn" data-an="${g.id}">詳細分析 ▾</button>
         </div>
         ${(()=>{ if(!done) return "";
@@ -2033,6 +2100,30 @@ function calibReport(){
   });
   return {n:rows.length, brier, buckets:out.filter(b=>b.n>=5), byConf, byDq};
 }
+function renderTWSL(){
+  const seen=Object.keys(TWSL_LGS);
+  const nameN=Object.keys(TWSL_NAMES).length;
+  if(TWSL_STATE==="未嘗試"&&!seen.length&&!nameN) return "";
+  let gap="";
+  if(seen.length){
+    const have=LEAGUES.map(l=>l.full+l.zh).join("|");
+    const miss=seen.filter(k=>{
+      const core=String(k).replace(/足球|聯賽|超級|甲級|乙級|職業|大聯盟/g,"").slice(0,3);
+      return core && !have.includes(core);
+    });
+    gap = miss.length
+      ? `<div style="margin-top:6px;color:var(--gold)">⚠ 運彩有、本站可能缺少:${miss.slice(0,14).join("、")}<br><span style="color:var(--muted);font-size:11px">把這行截圖給我,我幫你加上去</span></div>`
+      : `<div style="margin-top:6px;color:var(--hit)">✓ 運彩開盤過的聯賽本站都有</div>`;
+  }
+  return `<div class="ins cal-card">
+    <div class="ins-h">🎫 台灣運彩對照</div>
+    <div class="ins-b" style="font-size:12.5px;line-height:1.75">
+      連線狀態:${TWSL_STATE}<br>
+      ${seen.length?`已記錄運彩開盤聯賽 <b>${seen.length}</b> 個:<span style="color:var(--muted)">${seen.slice(0,20).join("、")}</span><br>`:""}
+      ${nameN?`已累積官方台灣譯名 <b>${nameN}</b> 隊(自動優先採用)`:"尚未累積官方譯名"}
+      ${gap}
+    </div></div>`;
+}
 function renderCalib(){
   const r=calibReport();
   if(!r) return "";
@@ -2060,7 +2151,7 @@ function renderCalib(){
       ${rowsHtml||'<div style="color:var(--muted)">樣本不足</div>'}
       <div style="margin-top:11px;font-size:12.5px">依信心分級命中率:${confHtml}</div>
       <div style="margin-top:6px;font-size:12.5px;line-height:1.7">依資料品質:<br>${dqHtml}</div>
-      <div style="margin-top:9px;font-size:11.5px;color:var(--muted)">目前市場賠率權重 ${(MKT_W*100).toFixed(0)}%(自動調整:模型表現差時提高)· 樣本 ${r.n} 場</div>
+      <div style="margin-top:4px;font-size:11.5px;color:var(--muted)">目前市場賠率權重 ${(MKT_W*100).toFixed(0)}%(自動調整:模型表現差時提高)· 樣本 ${r.n} 場</div>
     </div></div>`;
 }
 function renderInsights(){
@@ -2068,7 +2159,7 @@ function renderInsights(){
   if(!box) return;
   const sc=scGet(); const ids=Object.keys(sc).filter(k=>sc[k].pred&&!sc[k].void);
   const n=ids.length;
-  if(!n){ box.innerHTML=renderCalib()+`<div class="empty" style="text-align:left">完賽累積後,模型會在這裡整理檢討心得與評級調整。</div>`; tag.textContent=""; return; }
+  if(!n){ box.innerHTML=renderTWSL()+renderCalib()+`<div class="empty" style="text-align:left">完賽累積後,模型會在這裡整理檢討心得與評級調整。</div>`; tag.textContent=""; return; }
   tag.textContent=`已學習 ${n} 場`;
   const S=ids.map(k=>sc[k]);
   const lessons=[];
@@ -2110,7 +2201,7 @@ function renderInsights(){
   if(tune.length) html+=`<div class="pos-group" style="margin:12px 0 6px">自動調參</div><div style="font-family:var(--mono);font-size:12px;color:var(--ink2)">${tune.join(" · ")}</div>`;
   html+=`<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:12px">心得由模型依實際賽果自動生成 · 校準值存於此瀏覽器,持續累積會越來越準
     · <a href="#" id="resetSC" style="color:var(--miss)">重設所有計分紀錄</a></div></div>`;
-  box.innerHTML=renderCalib()+html;
+  box.innerHTML=renderTWSL()+renderCalib()+html;
   const rst=document.getElementById("resetSC");
   if(rst) rst.onclick=(ev)=>{ev.preventDefault();
     if(!confirm("確定重設?將清除所有預測成績、檢討與評級校準,從乾淨狀態重新累積(建議:早期紀錄曾受顯示問題影響)。"))return;
@@ -2646,7 +2737,7 @@ async function showGame(g, fromPop){
 function hideTeam(){
   document.getElementById("teamView").classList.add("hidden");
   document.getElementById("gameView").classList.add("hidden");
-  AD_CACHE=adGet(); MKT_W=mktWGet(); mktWTune();
+  AD_CACHE=adGet(); MKT_W=mktWGet(); mktWTune(); TWSL_NAMES=twslNamesGet(); TWSL_LGS=twslLgsGet();
   applyView();
 }
 
