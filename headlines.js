@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/02 20:00 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/02 20:00";
+/* 由 news_engine.py 自動產生於 2026/08/02 23:43 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/02 23:43";
 const NEWS_DIAG = {real:6, note:"OK:site.api.espn.com/apis"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Andy Burnham: Gianni Infantino isn't the right man to lead FIFA - we can't 'move on and forget' World Cup plan", d:"2026-08-02", team:"", link:"https://www.espn.com/soccer/story/_/id/49513925/andy-burnham-gianni-infantino-right-man-fifa-move-forget-world-cup-plan"},
