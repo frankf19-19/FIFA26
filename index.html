@@ -591,6 +591,7 @@
         <button class="btn" id="loadBtn"><span class="ico">⟳</span> 更新</button>
       </div>
       <div id="todayLine"></div>
+      <div id="hiddenNote" style="text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted);padding:3px 2px 0;line-height:1.6"></div>
     </div>
 
     <div class="score-row">
@@ -680,77 +681,39 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e63";
+const BUILD = "e65";
 const LEAGUES = [
-  /* ===== 對齊台灣運彩足球開盤聯賽(不含中國、韓國)===== */
-  {id:"usa.1", zh:"美職聯", full:"美國職業足球大聯盟", core:1},
-  {id:"jpn.1", zh:"日職甲", full:"日本足球甲級聯賽 J1", core:1},
+  /* ===== 主流聯賽(ESPN 資料穩定、運彩固定開盤)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
   {id:"esp.1", zh:"西甲",  full:"西班牙足球甲級聯賽", core:1},
   {id:"ita.1", zh:"義甲",  full:"義大利足球甲級聯賽", core:1},
   {id:"ger.1", zh:"德甲",  full:"德國足球甲級聯賽", core:1},
   {id:"fra.1", zh:"法甲",  full:"法國足球甲級聯賽", core:1},
-  {id:"uefa.champions", zh:"歐冠", full:"歐洲冠軍聯賽"},
-  {id:"uefa.europa",    zh:"歐霸", full:"歐洲聯賽"},
-  {id:"ned.1", zh:"荷甲", full:"荷蘭足球甲級聯賽"},
-  {id:"por.1", zh:"葡超", full:"葡萄牙足球超級聯賽"},
+  {id:"uefa.champions", zh:"歐冠", full:"歐洲冠軍聯賽", core:1},
+  {id:"uefa.europa",    zh:"歐霸", full:"歐洲聯賽", core:1},
+  {id:"usa.1", zh:"美職聯", full:"美國職業足球大聯盟", core:1},
+  {id:"jpn.1", zh:"日職甲", full:"日本足球甲級聯賽 J1", core:1},
+  {id:"ned.1", zh:"荷甲", full:"荷蘭足球甲級聯賽", core:1},
+  {id:"por.1", zh:"葡超", full:"葡萄牙足球超級聯賽", core:1},
   {id:"sco.1", zh:"蘇超", full:"蘇格蘭足球超級聯賽"},
   {id:"bel.1", zh:"比甲", full:"比利時足球甲級聯賽"},
   {id:"tur.1", zh:"土超", full:"土耳其足球超級聯賽"},
-  /* 歐洲賽事 */
-  {id:"uefa.europa.conf", zh:"歐會盃", full:"歐洲協會聯賽", more:1},
-  {id:"uefa.champions_qual", zh:"歐冠資格", full:"歐洲冠軍聯賽資格賽", more:1},
-  {id:"uefa.europa_qual", zh:"歐霸資格", full:"歐洲聯賽資格賽", more:1},
-  {id:"uefa.europa.conf_qual", zh:"歐會資格", full:"歐洲協會聯賽資格賽", more:1},
-  /* 日本 */
-  {id:"jpn.2", zh:"日職乙", full:"日本足球乙級聯賽 J2", more:1},
-  /* 五大聯賽次級 */
+  /* 更多聯賽 */
   {id:"eng.2", zh:"英冠", full:"英格蘭冠軍足球聯賽", more:1},
   {id:"esp.2", zh:"西乙", full:"西班牙足球乙級聯賽", more:1},
   {id:"ita.2", zh:"義乙", full:"義大利足球乙級聯賽", more:1},
   {id:"ger.2", zh:"德乙", full:"德國足球乙級聯賽", more:1},
   {id:"fra.2", zh:"法乙", full:"法國足球乙級聯賽", more:1},
-  /* 歐洲其他 */
   {id:"gre.1", zh:"希超", full:"希臘足球超級聯賽", more:1},
   {id:"sui.1", zh:"瑞士超", full:"瑞士足球超級聯賽", more:1},
   {id:"aut.1", zh:"奧甲", full:"奧地利足球甲級聯賽", more:1},
   {id:"den.1", zh:"丹超", full:"丹麥足球超級聯賽", more:1},
-  {id:"den.2", zh:"丹甲", full:"丹麥足球甲級聯賽", more:1},
   {id:"nor.1", zh:"挪超", full:"挪威足球超級聯賽", more:1},
-  {id:"nor.2", zh:"挪甲", full:"挪威足球甲級聯賽", more:1},
   {id:"swe.1", zh:"瑞典超", full:"瑞典足球超級聯賽", more:1},
-  {id:"swe.2", zh:"瑞典甲", full:"瑞典足球甲級聯賽", more:1},
-  {id:"fin.1", zh:"芬超", full:"芬蘭足球超級聯賽", more:1},
-  {id:"isl.1", zh:"冰超", full:"冰島足球超級聯賽", more:1},
-  {id:"irl.1", zh:"愛超", full:"愛爾蘭足球超級聯賽", more:1},
-  /* 東歐 */
   {id:"rus.1", zh:"俄超", full:"俄羅斯足球超級聯賽", more:1},
-  {id:"ukr.1", zh:"烏超", full:"烏克蘭足球超級聯賽", more:1},
-  {id:"pol.1", zh:"波甲", full:"波蘭足球甲級聯賽", more:1},
-  {id:"cze.1", zh:"捷甲", full:"捷克足球甲級聯賽", more:1},
-  {id:"cze.2", zh:"捷乙", full:"捷克足球乙級聯賽", more:1},
-  {id:"rou.1", zh:"羅甲", full:"羅馬尼亞足球甲級聯賽", more:1},
-  {id:"cro.1", zh:"克甲", full:"克羅埃西亞足球甲級聯賽", more:1},
-  {id:"srb.1", zh:"塞超", full:"塞爾維亞足球超級聯賽", more:1},
-  {id:"blr.1", zh:"白俄超", full:"白俄羅斯足球超級聯賽", more:1},
-  {id:"hun.1", zh:"匈甲", full:"匈牙利足球甲級聯賽", more:1},
-  {id:"bul.1", zh:"保甲", full:"保加利亞足球甲級聯賽", more:1},
-  {id:"svk.1", zh:"斯超", full:"斯洛伐克足球超級聯賽", more:1},
-  {id:"slo.1", zh:"斯乙", full:"斯洛維尼亞足球甲級聯賽", more:1},
-  {id:"isr.1", zh:"以超", full:"以色列足球超級聯賽", more:1},
-  /* 美洲、大洋洲、中東 */
   {id:"bra.1", zh:"巴甲", full:"巴西足球甲級聯賽", more:1},
   {id:"arg.1", zh:"阿甲", full:"阿根廷足球甲級聯賽", more:1},
   {id:"mex.1", zh:"墨甲", full:"墨西哥足球甲級聯賽", more:1},
-  {id:"aus.1", zh:"澳職", full:"澳洲足球甲級聯賽", more:1},
-  {id:"ksa.1", zh:"沙職", full:"沙烏地阿拉伯足球聯賽", more:1},
-  /* 盃賽 */
-  {id:"eng.fa", zh:"英足總盃", full:"英格蘭足總盃", more:1},
-  {id:"eng.league_cup", zh:"英聯賽盃", full:"英格蘭聯賽盃", more:1},
-  {id:"ger.dfb_pokal", zh:"德國盃", full:"德國足球協會盃", more:1},
-  {id:"esp.copa_del_rey", zh:"國王盃", full:"西班牙國王盃", more:1},
-  {id:"ita.coppa_italia", zh:"義大利盃", full:"義大利盃", more:1},
-  {id:"fra.coupe_de_france", zh:"法國盃", full:"法國盃", more:1},
 ];
 let curLeague = "usa.1";     // 預設美職聯(現在是賽季中;歐洲 8 月開賽後可自行切換)
 let curDate = new Date();
@@ -1631,7 +1594,7 @@ async function checkTodayGames(targetIso, fast){
     loadTWSL().catch(()=>{});                   // 背景嘗試,失敗不影響任何功能
     const CONC=8, next={};
     for(let i=0;i<L.length;i+=CONC){
-      await Promise.all(L.slice(i,i+CONC).map(async lg=>{try{
+      await Promise.all(L.slice(i,i+CONC).map(async lg=>{ if(!lgVisible(lg)) return; try{
         const sb=await jget(espnScore(lg.id,range), true);
         const evs=parseEvents(sb).filter(g=>g.localIso===today);
         if(evs.length) next[lg.id]={n:evs.length,live:evs.some(g=>g.state==="in"),games:evs};
@@ -1721,6 +1684,56 @@ async function loadTWSL(){
   }
 }
 function twslOf(g){ return TWSL_LIVE[norm(g.hn)+"|"+norm(g.an)]||null; }
+/* ===== 聯賽資料稽核:抓不到球隊資料的聯賽自動移除(每 24 小時重驗) =====
+   雙重條件才判定「無資料」:積分榜為空 **且** 球隊清單也抓不到
+   → 避免把休賽期(積分榜暫空但球隊清單存在)的正常聯賽誤刪 */
+let LGDATA={}, AUDITED=false, SHOW_ALL_LG=false;
+function lgdGet(){try{return JSON.parse(localStorage.getItem("euroLGD")||"{}");}catch(e){return {};}}
+function lgdSet(o){try{localStorage.setItem("euroLGD",JSON.stringify(o));}catch(e){}}
+function lgVisible(l){
+  if(SHOW_ALL_LG) return true;
+  if(l.core) return true;                     // 五大聯賽等核心賽事永不隱藏(安全網)
+  const d=LGDATA[l.id];
+  return !d || d.ok!==false;                  // 未驗證前先顯示,驗證為無資料才隱藏
+}
+function standEntryCount(data){
+  let n=0; try{ (data.children||[data]).forEach(gr=>{ n+=(((gr.standings&&gr.standings.entries)||gr.entries)||[]).length; }); }catch(e){}
+  return n;
+}
+async function auditLeagues(force){
+  LGDATA=lgdGet();
+  const now=Date.now(), DAY=86400000;
+  const todo=LEAGUES.filter(l=>!l.core && (force||!LGDATA[l.id]||(now-(LGDATA[l.id].t||0))>DAY));
+  if(todo.length){
+    setSweepTag("· 檢查聯賽資料");
+    for(let i=0;i<todo.length;i+=6){
+      await Promise.all(todo.slice(i,i+6).map(async lg=>{
+        let stN=0, teamN=0;
+        try{ stN=standEntryCount(await jget(espnStand(lg.id))); }catch(e){}
+        if(!stN){ try{ const t=await getTeamList(lg.id); teamN=(t||[]).length; }catch(e){} }
+        LGDATA[lg.id]={ok:(stN>=4||teamN>=4), st:stN, tm:teamN, t:now};
+      }));
+    }
+    lgdSet(LGDATA);
+    setSweepTag("");
+  }
+  AUDITED=true;
+  if(typeof buildLeagueTabs==="function") buildLeagueTabs();
+  const cur=LEAGUES.find(l=>l.id===curLeague);
+  if(cur && !lgVisible(cur) && typeof switchLeague==="function") switchLeague("eng.1");
+  renderHiddenNote();
+}
+function renderHiddenNote(){
+  const el=document.getElementById("hiddenNote"); if(!el) return;
+  const hid=LEAGUES.filter(l=>!l.core && LGDATA[l.id] && LGDATA[l.id].ok===false);
+  if(!hid.length){ el.innerHTML = AUDITED?`✓ 目前顯示的聯賽都有實際數據`:""; return; }
+  el.innerHTML = SHOW_ALL_LG
+    ? `已顯示全部聯賽(含 ${hid.length} 個無資料)· <a href="#" id="toggleHidden" style="color:var(--teal)">只留有資料的</a>`
+    : `已自動移除 ${hid.length} 個無實際數據的聯賽:${hid.map(l=>l.zh).join("、")} · <a href="#" id="toggleHidden" style="color:var(--teal)">仍要顯示</a>`;
+  const a=document.getElementById("toggleHidden");
+  if(a) a.onclick=(ev)=>{ ev.preventDefault(); SHOW_ALL_LG=!SHOW_ALL_LG;
+    buildLeagueTabs(); renderHiddenNote(); checkTodayGames(isoDate(curDate),false); };
+}
 function decorateTabs(){
   const sel=document.getElementById("moreLg");
   if(sel){
@@ -2861,7 +2874,7 @@ async function load(){
     const all=parseEvents(data);
     const games=all.filter(g=>g.localIso===isoDate(curDate));
     await gradeFinished(all.filter(g=>g.completed));   // 兩天內所有完賽都納入學習(含場面數據)
-    if(TODAY_ISO!==isoDate(curDate)) checkTodayGames(isoDate(curDate));
+    if(AUDITED && TODAY_ISO!==isoDate(curDate)) checkTodayGames(isoDate(curDate));
     computeTuning();                              // 依累積賽果更新近況/和局/主場調參
     renderScorecard();
     renderInsights();
@@ -2890,9 +2903,9 @@ async function load(){
 function buildLeagueTabs(){
   const box=document.getElementById("leagueTabs");
   box.innerHTML=`<button class="lg on" id="todayTab">📅 今日比賽</button>`
-    +LEAGUES.filter(l=>!l.more).map(l=>`<button class="lg" data-lg="${l.id}">${l.zh}</button>`).join("")
-    +`<select id="moreLg" class="lg" style="cursor:pointer"><option value="">更多歐洲聯賽 ▾</option>`
-    +LEAGUES.filter(l=>l.more).map(l=>`<option value="${l.id}">${l.zh} ${l.full}</option>`).join("")+`</select>`;
+    +LEAGUES.filter(l=>!l.more&&lgVisible(l)).map(l=>`<button class="lg" data-lg="${l.id}">${l.zh}</button>`).join("")
+    +`<select id="moreLg" class="lg" style="cursor:pointer"><option value="">更多聯賽 ▾</option>`
+    +LEAGUES.filter(l=>l.more&&lgVisible(l)).map(l=>`<option value="${l.id}">${l.zh} ${l.full}</option>`).join("")+`</select>`;
   function switchLeague(id,fromPop){
     VIEW="league";
     if(!fromPop){ try{history.pushState({v:"league",lg:id},"");}catch(e){} }
@@ -2993,7 +3006,11 @@ function init(){
   setTimeout(loadInjuries, 2000);
   try{history.replaceState({v:"today"},"");}catch(e){}
   applyView();
-  setTimeout(checkTodayGames, 2500);
+  LGDATA=lgdGet();
+  setTimeout(async()=>{
+    try{ await auditLeagues(false); }catch(e){ AUDITED=true; }
+    checkTodayGames();
+  }, 1500);
   // 即時節奏:有進行中的比賽 → 45 秒更新;否則 3 分鐘;每 20 分鐘做一次全聯賽完整掃描
   setInterval(()=>{
     if(document.hidden) return;
