@@ -195,6 +195,8 @@
   .stx{display:inline-block;font-family:var(--cond);font-weight:700;font-size:13.5px;letter-spacing:.06em;
     padding:5px 14px;border-radius:999px;white-space:nowrap;line-height:1.3}
   .st-pre{color:var(--teal);border:2px solid var(--teal);background:rgba(100,220,210,.10)}
+  .st-soon{color:#f0b73f;border:2px solid #f0b73f;background:rgba(240,183,63,.12)}
+  .tg-row.soon{border-left-color:#f0b73f}
   .st-live{color:#fff;background:var(--miss);box-shadow:0 0 10px rgba(255,106,106,.45)}
   .st-live .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#fff;margin-right:6px;animation:blink 1.2s infinite;vertical-align:middle}
   .st-done{color:#eef0f6;background:#454f78;border:none}
@@ -670,7 +672,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e54";
+const BUILD = "e56";
 const LEAGUES = [
   {id:"usa.1", zh:"美職聯",  full:"美國職業足球大聯盟 MLS", core:1},
   {id:"jpn.1", zh:"日職聯",  full:"日本職業足球甲級聯賽 J1", core:1},
@@ -780,6 +782,22 @@ const RATINGS = {
 };
 /* ---- 中文隊名(主要球隊;其餘顯示英文) ---- */
 const ZH = {
+  /* 美職聯 MLS 全隊 */
+  "inter miami cf":"國際邁阿密","inter miami":"國際邁阿密","new york city fc":"紐約城","nycfc":"紐約城",
+  "new york red bulls":"紐約紅牛","ny red bulls":"紐約紅牛","toronto fc":"多倫多FC","cf montreal":"蒙特婁",
+  "cf montréal":"蒙特婁","montreal impact":"蒙特婁","new england revolution":"新英格蘭革命",
+  "philadelphia union":"費城聯合","columbus crew":"哥倫布機員","fc cincinnati":"辛辛那提",
+  "orlando city sc":"奧蘭多城","orlando city":"奧蘭多城","atlanta united fc":"亞特蘭大聯","atlanta united":"亞特蘭大聯",
+  "charlotte fc":"夏洛特FC","nashville sc":"納許維爾","chicago fire fc":"芝加哥火焰","chicago fire":"芝加哥火焰",
+  "dc united":"華盛頓聯","d c united":"華盛頓聯",
+  "los angeles fc":"洛杉磯FC","lafc":"洛杉磯FC","la galaxy":"洛杉磯銀河","los angeles galaxy":"洛杉磯銀河",
+  "seattle sounders fc":"西雅圖海灣人","seattle sounders":"西雅圖海灣人","portland timbers":"波特蘭伐木者",
+  "vancouver whitecaps fc":"溫哥華白帽","vancouver whitecaps":"溫哥華白帽",
+  "fc dallas":"達拉斯FC","houston dynamo fc":"休士頓迪納摩","houston dynamo":"休士頓迪納摩",
+  "austin fc":"奧斯汀FC","sporting kansas city":"堪薩斯城競技","sporting kc":"堪薩斯城競技",
+  "colorado rapids":"科羅拉多急流","real salt lake":"皇家鹽湖城","minnesota united fc":"明尼蘇達聯",
+  "minnesota united":"明尼蘇達聯","st louis city sc":"聖路易城","st. louis city sc":"聖路易城","stl city":"聖路易城",
+  "san jose earthquakes":"聖荷西地震","san diego fc":"聖地牙哥FC","new york city":"紐約城",
   /* 瑞典超甲 Superettan */
   "landskrona bois":"蘭斯克魯納","landskrona":"蘭斯克魯納","if brage":"布萊格","brage":"布萊格",
   "orebro":"厄勒布魯","orebro sk":"厄勒布魯","helsingborgs if":"赫爾辛堡","oster":"厄斯特","osters if":"厄斯特",
@@ -794,7 +812,7 @@ const ZH = {
   "aalesund":"阿勒松","sogndal":"松達爾","ranheim":"拉恩海姆","stabaek":"斯塔貝克","start":"斯塔特",
   "hodd":"霍德","asane":"奧薩訥","levanger":"萊萬格","egersund":"埃格松","mjondalen":"米約恩達倫",
   "hvidovre":"赫維多雷","kolding":"科靈","esbjerg":"埃斯比約","hobro":"霍布羅","hillerod":"希勒勒",
-  "roskilde":"羅斯基勒","b93":"B93","naestved":"奈斯特韋茲",
+  "roskilde":"羅斯基勒","boldklubben 1893":"B93哥本哈根","b 93":"B93哥本哈根","naestved":"奈斯特韋茲",
   /* 波羅的海/高加索/中歐 */
   "flora tallinn":"塔林弗洛拉","levadia tallinn":"塔林列瓦迪亞","paide":"派德","narva trans":"納爾瓦",
   "riga fc":"里加FC","rfs":"里加RFS","valmiera":"瓦爾米耶拉","liepaja":"利耶帕亞",
@@ -1131,12 +1149,13 @@ function formSeq(name){
   const f=FORM_CACHE[norm(name)];
   return f?f.seq:"";
 }
-const RATN={}; for(const k in RATINGS){ RATN[norm(k)]=RATINGS[k]; }
+const RATN={}; for(const k in RATINGS){ const nk=norm(k); if(nk.length>=3) RATN[nk]=RATINGS[k]; }
 function baseRating(name){
   const n=norm(name);
   if(RATN[n]!==undefined) return RATN[n];
-  for(const k in RATN){ if(k&&(n.includes(k)||k.includes(n))) return RATN[k]; }
-  return 68;
+  let best=null;
+  for(const k in RATN){ if(wordHit(n,k) && (!best||k.length>best.length)) best=k; }
+  return best?RATN[best]:68;
 }
 /* 攻防分離校準:各隊「進攻」「防守」乘數,依實際進失球獨立學習 */
 let AD_CACHE={};
@@ -1161,11 +1180,19 @@ function rating(name){
   const d=ADJ_CACHE[norm(name)]||0;
   return baseRating(name)+Math.max(-8,Math.min(8,d))+formBonus(name);   // 校準 ±8 + 近況 ±1.8
 }
-const ZHN={}; for(const k in ZH){ ZHN[norm(k)]=ZH[k]; }
+const ZHN={}; for(const k in ZH){ const nk=norm(k); if(nk.length>=3) ZHN[nk]=ZH[k]; }   // 過短的鍵(如 b93→"b")會誤配,一律不納入模糊比對
+/* 詞邊界比對:避免 "timbers" 因含 "b" 而被配到別隊 */
+function wordHit(n,k){
+  if(n===k) return true;
+  if(k.length<5) return false;                       // 短鍵只接受完全相同
+  return (" "+n+" ").includes(" "+k+" ") || n.startsWith(k+" ") || n.endsWith(" "+k);
+}
 function zhName(name){
   const n=norm(name);
   if(ZHN[n]) return ZHN[n];
-  for(const k in ZHN){ if(k&&(n.includes(k)||k.includes(n))) return ZHN[k]; }
+  let best=null;
+  for(const k in ZHN){ if(wordHit(n,k) && (!best||k.length>best.length)) best=k; }   // 取最長(最具體)的匹配
+  if(best) return ZHN[best];
   return name;
 }
 function starsFor(name){
@@ -1592,11 +1619,12 @@ function renderTodaySection(){
   if(tag) tag.textContent=`${TODAY_ISO} · ${has.length} 個聯賽 · ${total} 場${liveN?` · ${liveN} 場進行中`:""}${upd}`;
   // 各狀態場數
   const stOf=g=>g.state==="in"?"live":(g.completed?"done":"pre");
+  const soonN=has.reduce((s,l)=>s+(TODAY_GAMES[l.id].games||[]).filter(g=>g.state!=="in"&&!g.completed&&g.ts&&(Date.now()-g.ts)>3*60000).length,0);
   const cnt={all:0,live:0,pre:0,done:0};
   has.forEach(l=>(TODAY_GAMES[l.id].games||[]).forEach(g=>{cnt.all++;cnt[stOf(g)]++;}));
   document.querySelectorAll("#stFilter .sf").forEach(b=>{
     const k=b.dataset.sf, n=cnt[k]||0;
-    b.querySelector("b").textContent=n;
+    b.querySelector("b").textContent = (k==="pre"&&soonN) ? `${n}(${soonN} 應已開賽)` : n;
     b.classList.toggle("on", k===ST_FILTER);
     b.classList.toggle("zero", n===0 && k!=="all");
   });
@@ -1623,7 +1651,11 @@ function renderTodaySection(){
           else { st+=`<span class="stx r-miss">✗ 未中</span>`; rowCls="miss"; }
         } else rowCls="done";
       } else {
-        st=`<span class="stx st-pre">未開賽</span>`;
+        const late = g.ts && (Date.now()-g.ts)>3*60000;      // 已過開賽 3 分鐘
+        st = late
+          ? `<span class="stx st-soon" title="已過開賽時間,但 ESPN 尚未更新為進行中(資料來源延遲)">應已開賽</span>`
+          : `<span class="stx st-pre">未開賽</span>`;
+        if(late) rowCls="soon";
       }
       const pickZh=p.pick==="和局"?"和局":zhName(p.pick);
       const pickSide=p.pick==="和局"?"":(p.pick===g.hn?"主":"客");
@@ -1851,7 +1883,7 @@ function parseEvents(data){
     if(!home||!away)return;
     const st=(c.status||ev.status||{}).type||{};
     out.push({
-      id:ev.id, localIso: isoDate(new Date(ev.date)),
+      id:ev.id, localIso: isoDate(new Date(ev.date)), ts:new Date(ev.date).getTime(),
       hn:home.team.displayName, an:away.team.displayName,
       hid:home.team.id, aid:away.team.id,
       hlogo:home.team.logo||"", alogo:away.team.logo||"",
@@ -2753,9 +2785,12 @@ function init(){
   // 即時節奏:有進行中的比賽 → 45 秒更新;否則 3 分鐘;每 20 分鐘做一次全聯賽完整掃描
   setInterval(()=>{
     if(document.hidden) return;
+    const now=Date.now();
     const liveNow=Object.values(TODAY_GAMES).some(t=>t&&t.live);
-    const since=Date.now()-SWEEP_AT;
-    if(liveNow ? since>=45000 : since>=180000) checkTodayGames(isoDate(curDate), true);
+    // 有比賽即將開賽(25 分鐘內)或剛開賽(25 分鐘內)→ 同樣用快節奏
+    const nearKick=Object.values(TODAY_GAMES).some(t=>(t&&t.games||[]).some(g=>g.ts&&Math.abs(now-g.ts)<25*60000&&g.state!=="post"));
+    const since=now-SWEEP_AT;
+    if((liveNow||nearKick) ? since>=45000 : since>=180000) checkTodayGames(isoDate(curDate), true);
   }, 15000);
   setInterval(()=>{ if(!document.hidden) checkTodayGames(isoDate(curDate)); }, 1200000);
   document.addEventListener("visibilitychange",()=>{
