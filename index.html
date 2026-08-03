@@ -682,7 +682,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e68";
+const BUILD = "e70";
 const LEAGUES = [
   /* ===== 主流聯賽(ESPN 資料穩定、運彩固定開盤)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -712,9 +712,6 @@ const LEAGUES = [
   {id:"nor.1", zh:"挪超", full:"挪威足球超級聯賽", more:1},
   {id:"swe.1", zh:"瑞典超", full:"瑞典足球超級聯賽", more:1},
   {id:"rus.1", zh:"俄超", full:"俄羅斯足球超級聯賽", more:1},
-  {id:"bra.1", zh:"巴甲", full:"巴西足球甲級聯賽", more:1},
-  {id:"arg.1", zh:"阿甲", full:"阿根廷足球甲級聯賽", more:1},
-  {id:"mex.1", zh:"墨甲", full:"墨西哥足球甲級聯賽", more:1},
 ];
 let curLeague = "usa.1";     // 預設美職聯(現在是賽季中;歐洲 8 月開賽後可自行切換)
 let curDate = new Date();
@@ -1604,6 +1601,7 @@ async function checkTodayGames(targetIso, fast){
     }
     if(fast && L.length<LEAGUES.length) Object.assign(TODAY_GAMES,next);   // 快速模式:只覆蓋掃到的
     else TODAY_GAMES=next;
+    LEAGUES.forEach(l=>{ if(!lgVisible(l)) delete TODAY_GAMES[l.id]; });   // 不可見聯賽的殘留資料一律清除
     // 先補齊「今天有比賽」的聯賽積分榜,預測才有真實數據(原本只有目前聯賽有)
     try{
       const need=Object.keys(TODAY_GAMES).filter(k=>TODAY_GAMES[k].n>0);
@@ -1735,7 +1733,7 @@ async function auditLeagues(force){
   AUDITED=true;
   if(typeof buildLeagueTabs==="function") buildLeagueTabs();
   const cur=LEAGUES.find(l=>l.id===curLeague);
-  if(cur && !lgVisible(cur) && typeof switchLeague==="function") switchLeague("eng.1");
+  if(cur && !lgVisible(cur) && typeof switchLeague==="function") switchLeague("eng.1", true);
   renderHiddenNote();
 }
 function renderHiddenNote(){
@@ -1773,7 +1771,7 @@ function renderTodaySection(){
   setTimeout(_r,0);
   const sec=document.getElementById("todaySec"), box=document.getElementById("todayBox"), tag=document.getElementById("todayTag");
   if(!sec||!box) return;
-  const has=LEAGUES.filter(l=>TODAY_GAMES[l.id]&&TODAY_GAMES[l.id].n>0);
+  const has=LEAGUES.filter(l=>lgVisible(l)&&TODAY_GAMES[l.id]&&TODAY_GAMES[l.id].n>0);
   sec.dataset.has="0";
   if(!has.length){
     if(TODAY_ISO && TODAY_ISO!==isoDate(new Date())){
@@ -1912,7 +1910,7 @@ function renderTodaySection(){
 }
 function renderTodayLine(){
   const el=document.getElementById("todayLine"); if(!el) return;
-  const has=LEAGUES.filter(l=>TODAY_GAMES[l.id]&&TODAY_GAMES[l.id].n>0);
+  const has=LEAGUES.filter(l=>lgVisible(l)&&TODAY_GAMES[l.id]&&TODAY_GAMES[l.id].n>0);
   const lbl=(TODAY_ISO===isoDate(new Date()))?"今日":TODAY_ISO;
   if(!has.length){ el.innerHTML=`📅 ${lbl} 各聯賽皆無賽事`; return; }
   el.innerHTML=`📅 ${lbl}賽事:`+has.map(l=>{const t=TODAY_GAMES[l.id];
@@ -2920,6 +2918,33 @@ async function load(){
     renderScorecard();
     renderInsights();
     try{ await loadNews(); }catch(e){}
+    // 切聯盟後當日無賽事 → 自動跳到最近有比賽的日期(先找未來 21 天,再找過去 7 天)
+    if(!games.length && window.__autoJump){
+      window.__autoJump=false;
+      try{
+        const t0=new Date(curDate);
+        const fwdEnd=new Date(t0); fwdEnd.setDate(fwdEnd.getDate()+21);
+        let sb=await jget(espnScore(curLeague, ymd(t0)+"-"+ymd(fwdEnd)), true);
+        let evs=parseEvents(sb).filter(g=>g.localIso>=isoDate(t0));
+        let target=null;
+        if(evs.length){ target=evs.map(g=>g.localIso).sort()[0]; }
+        else{
+          const back=new Date(t0); back.setDate(back.getDate()-7);
+          sb=await jget(espnScore(curLeague, ymd(back)+"-"+ymd(t0)), true);
+          evs=parseEvents(sb);
+          if(evs.length) target=evs.map(g=>g.localIso).sort().slice(-1)[0];
+        }
+        if(target && target!==isoDate(curDate)){
+          curDate=new Date(target+"T12:00:00");
+          const dp=document.getElementById("datePick"); if(dp) dp.value=target;
+          st.textContent=`該日無賽事,已跳至最近比賽日 ${target}`;
+          LOADING=false; btn.classList.remove("spin"); btn.disabled=false;
+          load();
+          return;
+        }
+      }catch(e){}
+    }
+    window.__autoJump=false;
     renderGames(games);
     renderHeadlines(games);
     st.textContent=`已更新 · ${games.length} 場`;
@@ -2949,11 +2974,15 @@ function buildLeagueTabs(){
     +LEAGUES.filter(l=>l.more&&lgVisible(l)).map(l=>`<option value="${l.id}">${l.zh} ${l.full}</option>`).join("")+`</select>`;
   function switchLeague(id,fromPop){
     VIEW="league";
-    if(!fromPop){ try{history.pushState({v:"league",lg:id},"");}catch(e){} }
+    if(!fromPop){ try{
+      const s=history.state;
+      if(!(s&&s.v==="league"&&s.lg===id)) history.pushState({v:"league",lg:id},"");
+    }catch(e){} }
     curLeague=id;
     document.querySelectorAll(".lg").forEach(x=>x.classList.toggle("on",x.dataset.lg===curLeague));
     const lg=LEAGUES.find(l=>l.id===curLeague);
     document.getElementById("lgName").textContent=lg.full;
+    window.__autoJump=true;                           // 本次切換若當日無賽事 → 自動跳到最近比賽日
     STAND_CACHE={};                                   // 清掉上一聯賽的戰績快取
     document.getElementById("searchResults").innerHTML="";
     if(!allIndexLoaded && !allBuilding){              // 全聯賽索引尚未就緒 → 先建當前聯賽的
@@ -2972,7 +3001,7 @@ function buildLeagueTabs(){
   window.switchLeague=switchLeague;
   box.querySelectorAll(".lg[data-lg]").forEach(el=>el.onclick=()=>switchLeague(el.dataset.lg));
   const tb=document.getElementById("todayTab");
-  if(tb) tb.onclick=()=>{ VIEW="today"; try{history.pushState({v:"today"},"");}catch(e){} applyView(); const sel0=document.getElementById("moreLg"); if(sel0) sel0.value="";
+  if(tb) tb.onclick=()=>{ VIEW="today"; try{ const s=history.state; if(!(s&&s.v==="today")) history.pushState({v:"today"},""); }catch(e){} applyView(); const sel0=document.getElementById("moreLg"); if(sel0) sel0.value="";
     if(TODAY_ISO!==isoDate(curDate)) checkTodayGames(isoDate(curDate)); };
   const sel=document.getElementById("moreLg");
   if(sel) sel.onchange=()=>{ if(sel.value) switchLeague(sel.value); };
