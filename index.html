@@ -682,7 +682,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e67";
+const BUILD = "e68";
 const LEAGUES = [
   /* ===== 主流聯賽(ESPN 資料穩定、運彩固定開盤)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1689,10 +1689,14 @@ function twslOf(g){ return TWSL_LIVE[norm(g.hn)+"|"+norm(g.an)]||null; }
    雙重條件才判定「無資料」:積分榜為空 **且** 球隊清單也抓不到
    → 避免把休賽期(積分榜暫空但球隊清單存在)的正常聯賽誤刪 */
 let LGDATA={}, AUDITED=false, SHOW_ALL_LG=false;
+let DYN_HIDE={};   // 今日「全場資料不足」的聯賽 → 當天下架
+function dynGet(){try{const o=JSON.parse(localStorage.getItem("euroDYN")||"{}");return (o.d===isoDate(new Date()))?o.m:{};}catch(e){return {};}}
+function dynSet(){try{localStorage.setItem("euroDYN",JSON.stringify({d:isoDate(new Date()),m:DYN_HIDE}));}catch(e){}}
 function lgdGet(){try{return JSON.parse(localStorage.getItem("euroLGD")||"{}");}catch(e){return {};}}
 function lgdSet(o){try{localStorage.setItem("euroLGD",JSON.stringify(o));}catch(e){}}
 function lgVisible(l){
   if(SHOW_ALL_LG) return true;
+  if(!l.core && DYN_HIDE[l.id]) return false;      // 今日全場資料不足 → 當天下架
   if(l.core) return true;                     // 五大聯賽等核心賽事永不隱藏(安全網)
   const d=LGDATA[l.id];
   return !d || d.ok!==false;                  // 未驗證前先顯示,驗證為無資料才隱藏
@@ -1702,7 +1706,7 @@ function standEntryCount(data){
   return n;
 }
 async function auditLeagues(force){
-  LGDATA=lgdGet();
+  LGDATA=lgdGet(); DYN_HIDE=dynGet();
   const now=Date.now(), DAY=86400000;
   const todo=LEAGUES.filter(l=>!l.core && (force||!LGDATA[l.id]||(now-(LGDATA[l.id].t||0))>DAY));
   if(todo.length){
@@ -1736,7 +1740,7 @@ async function auditLeagues(force){
 }
 function renderHiddenNote(){
   const el=document.getElementById("hiddenNote"); if(!el) return;
-  const hid=LEAGUES.filter(l=>!l.core && LGDATA[l.id] && LGDATA[l.id].ok===false);
+  const hid=LEAGUES.filter(l=>!l.core && ((LGDATA[l.id]&&LGDATA[l.id].ok===false) || DYN_HIDE[l.id]));
   if(!hid.length){ el.innerHTML = AUDITED?`✓ 目前顯示的聯賽都有實際數據`:""; return; }
   el.innerHTML = SHOW_ALL_LG
     ? `已顯示全部聯賽(含 ${hid.length} 個無資料)· <a href="#" id="toggleHidden" style="color:var(--teal)">只留有資料的</a>`
@@ -1793,7 +1797,25 @@ function renderTodaySection(){
   const stOf=g=>g.state==="in"?"live":(g.completed?"done":"pre");
   const soonN=has.reduce((s,l)=>s+(TODAY_GAMES[l.id].games||[]).filter(g=>g.state!=="in"&&!g.completed&&g.ts&&(Date.now()-g.ts)>3*60000).length,0);
   const cnt={all:0,live:0,pre:0,done:0};
-  has.forEach(l=>(TODAY_GAMES[l.id].games||[]).forEach(g=>{cnt.all++;cnt[stOf(g)]++;}));
+  let dynChanged=false;
+  has.forEach(l=>{
+    const t=TODAY_GAMES[l.id];
+    (t.games||[]).forEach(g=>{ g.league=g.league||l.id; GAMES_BY_ID[g.id]=g; });
+    if(SHOW_ALL_LG){ t._usable=(t.games||[]).slice(); }
+    else{
+      let dropped=0;
+      t._usable=(t.games||[]).filter(g=>{
+        const snap0=scGet()[g.id];
+        if(snap0&&snap0.pred) return true;
+        const pp=predict(g.hn,g.an,g.odds,l.id);
+        if((pp.dq||0)<0.2){ dropped++; return false; }
+        return true;
+      });
+      if(!t._usable.length && dropped>0 && !l.core && !DYN_HIDE[l.id]){ DYN_HIDE[l.id]=Date.now(); dynChanged=true; }
+    }
+    t._usable.forEach(g=>{cnt.all++;cnt[stOf(g)]++;});
+  });
+  if(dynChanged){ dynSet(); if(typeof buildLeagueTabs==="function") buildLeagueTabs(); renderHiddenNote(); }
   document.querySelectorAll("#stFilter .sf").forEach(b=>{
     const k=b.dataset.sf, n=cnt[k]||0;
     b.querySelector("b").textContent = (k==="pre"&&soonN) ? `${n}(${soonN} 應已開賽)` : n;
@@ -1802,8 +1824,8 @@ function renderTodaySection(){
   });
   box.innerHTML=has.map(l=>{
     const t=TODAY_GAMES[l.id];
-    (t.games||[]).forEach(g=>{ g.league=g.league||l.id; GAMES_BY_ID[g.id]=g; });
-    const rows=(t.games||[]).filter(g=>ST_FILTER==="all"||stOf(g)===ST_FILTER)
+    if(!t._usable || !t._usable.length) return "";
+    const rows=(t._usable||t.games||[]).filter(g=>ST_FILTER==="all"||stOf(g)===ST_FILTER)
       .slice().sort((a,b)=>a.time.localeCompare(b.time)).map(g=>{
       const live=g.state==="in", done=g.completed;
       const sc = (live||done)?`<span class="tg-sc">${g.as} - ${g.hs}</span>`:`<span class="tg-vs">vs</span>`;
