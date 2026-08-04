@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/04 00:02 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/04 00:02";
+/* 由 news_engine.py 自動產生於 2026/08/04 03:34 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/04 03:34";
 const NEWS_DIAG = {real:6, note:"OK:site.api.espn.com/apis"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Burley: Infantino thinks he's untouchable as FIFA president", d:"2026-08-03", team:"", link:"https://www.espn.com/video/clip/_/id/49524620/infantino-thinks-untouchable-fifa-president"},
