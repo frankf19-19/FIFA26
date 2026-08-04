@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/04 17:22 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/04 17:22";
+/* 由 news_engine.py 自動產生於 2026/08/04 19:04 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/04 19:04";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"First USMNT fixtures after new Mauricio Pochettino deal revealed", d:"2026-08-04", team:"", link:"https://www.espn.com/soccer/story/_/id/49528558/first-usmnt-fixtures-new-mauricio-pochettino-deal-revealed"},
