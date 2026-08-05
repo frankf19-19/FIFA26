@@ -682,7 +682,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e70";
+const BUILD = "e72";
 const LEAGUES = [
   /* ===== 主流聯賽(ESPN 資料穩定、運彩固定開盤)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2007,12 +2007,37 @@ function playerIntroText(p,flat){
   }
   return parts.filter(Boolean).join(",")+"。資料來源:ESPN,介紹由數據自動生成。";
 }
+async function fetchPlayerBio(league, id){
+  if(!id) return null;
+  for(const u of [
+    `https://site.web.api.espn.com/apis/common/v3/sports/soccer/${league}/athletes/${id}`,
+    `https://site.web.api.espn.com/apis/common/v3/sports/soccer/all/athletes/${id}`,
+  ]){
+    try{
+      const d=await jget(u);
+      const a=d.athlete||d;
+      if(a&&(a.displayName||a.fullName)) return {
+        h:a.displayHeight||null, w:a.displayWeight||null, age:a.age||null,
+        birth:(a.dateOfBirth||"").slice(0,10)||null,
+        nat:(a.citizenship||(a.birthPlace&&(a.birthPlace.country||a.birthPlace.city))||null),
+        headshot:(a.headshot&&a.headshot.href)||null,
+        pos:(a.position&&(a.position.abbreviation||a.position.displayName))||null,
+        team:(a.team&&a.team.displayName)||null,
+      };
+    }catch(e){}
+  }
+  return null;
+}
 async function fetchPlayerStats(league, id){
   if(!id) return null;
+  const Y=new Date().getFullYear();
   const tryUrls = [
     `https://site.web.api.espn.com/apis/common/v3/sports/soccer/${league}/athletes/${id}/overview`,
     `https://site.web.api.espn.com/apis/common/v3/sports/soccer/all/athletes/${id}/overview`,
     `https://site.api.espn.com/apis/common/v3/sports/soccer/${league}/athletes/${id}/stats`,
+    `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${league}/seasons/${Y}/types/1/athletes/${id}/statistics`,
+    `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${league}/seasons/${Y-1}/types/1/athletes/${id}/statistics`,
+    `https://site.web.api.espn.com/apis/common/v3/sports/soccer/${league}/athletes/${id}/gamelog`,
   ];
   for(const u of tryUrls){
     try{
@@ -2045,10 +2070,10 @@ function showPlayer(p, fromPop){
     <div class="player" style="align-items:center">${av}
       <div><div class="p-top"><span class="pnm" style="font-size:20px">${p.name}</span><span class="badge star">⭐ ${posToZh(p.pos)}</span>${INJ_BY_PLAYER[norm(p.name)]?`<span class="badge" style="background:rgba(239,95,95,.15);color:var(--miss);border:1px solid rgba(239,95,95,.4)">🚑 ${INJ_BY_PLAYER[norm(p.name)]}</span>`:""}</div>
       <div class="p-note">${zhName(p.teamName)}${p.num?' · #'+p.num:''}</div></div></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:12px">
-      ${bio.map(([l,v])=>`<div style="border:1px solid var(--line);border-radius:9px;background:var(--panel);padding:9px 13px">
+    <div id="bioGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:12px">
+      ${bio.map(([l,v])=>`<div data-bio="${l}" style="border:1px solid var(--line);border-radius:9px;background:var(--panel);padding:9px 13px">
         <div style="font-family:var(--cond);letter-spacing:.1em;text-transform:uppercase;font-size:11px;color:var(--muted)">${l}</div>
-        <div style="font-size:15px;margin-top:2px">${v}</div></div>`).join("")}</div>
+        <div class="bv" style="font-size:15px;margin-top:2px">${v}</div></div>`).join("")}</div>
     ${p.league==="jpn.1"?`<div style="font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:10px">ℹ ESPN 對日職聯多數球員未提供照片檔(顯示姓名縮寫);數據視 ESPN 涵蓋而定。</div>`:""}
     ${p.id?`<div style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap"><a href="https://www.espn.com/soccer/player/_/id/${p.id}" target="_blank" rel="noopener" style="font-family:var(--cond);font-weight:600;font-size:13px;color:var(--teal);text-decoration:none">在 ESPN 查看完整球員頁 ›</a>${p.league==="jpn.1"?`<a href="https://www.google.com/search?q=${encodeURIComponent(p.name+" Jリーグ 選手")}" target="_blank" rel="noopener" style="font-family:var(--cond);font-weight:600;font-size:13px;color:var(--teal);text-decoration:none">🇯🇵 搜尋日文詳細資料 ›</a>`:""}</div>`:""}
     <div id="playerIntro" class="why" style="border-top:none;margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel)"><span class="k">介紹</span>${playerIntroText(p,null)}</div>
@@ -2058,6 +2083,24 @@ function showPlayer(p, fromPop){
       <div><div class="p-top"><span class="pnm">${zhName(p.teamName)} 完整陣容</span></div><div class="p-note">點我查看 ›</div></div></div>`;
   document.getElementById("roster").querySelectorAll("[data-team]").forEach(el=>el.onclick=()=>showTeam(el.dataset.team));
   window.scrollTo(0,0);
+  // 非同步補齊個人檔案(名單資料常缺年齡/身高;個人端點較完整)
+  fetchPlayerBio(p.league||curLeague, p.id).then(b=>{
+    if(!b) return;
+    const grid=document.getElementById("bioGrid"); if(!grid) return;
+    const setv=(label,val)=>{ if(val==null) return;
+      const cell=grid.querySelector(`[data-bio="${label}"] .bv`);
+      if(cell&&(cell.textContent.trim()==="—"||!cell.textContent.trim())) cell.textContent=val; };
+    setv("年齡",b.age); setv("國籍",b.nat);
+    // 身高/體重/生日:原本沒有這些格子就補上
+    const add=(label,val)=>{ if(val==null) return;
+      if(grid.querySelector(`[data-bio="${label}"]`)) { setv(label,val); return; }
+      const d=document.createElement("div"); d.setAttribute("data-bio",label);
+      d.setAttribute("style","border:1px solid var(--line);border-radius:9px;background:var(--panel);padding:9px 13px");
+      d.innerHTML=`<div style="font-family:var(--cond);letter-spacing:.1em;text-transform:uppercase;font-size:11px;color:var(--muted)">${label}</div><div class="bv" style="font-size:15px;margin-top:2px">${val}</div>`;
+      grid.appendChild(d); };
+    add("身高",b.h); add("體重",b.w); add("生日",b.birth);
+    if(b.headshot){ const img=document.querySelector("#roster .avatar[data-big]"); if(img&&img.tagName==="IMG"&&!img.complete){} else if(img&&img.tagName!=="IMG"){} }
+  }).catch(()=>{});
   // 非同步抓數據
   fetchPlayerStats(p.league||curLeague, p.id).then(flat=>{
     const load=document.getElementById("statLoad"), box=document.getElementById("playerStats");
@@ -2923,16 +2966,24 @@ async function load(){
       window.__autoJump=false;
       try{
         const t0=new Date(curDate);
-        const fwdEnd=new Date(t0); fwdEnd.setDate(fwdEnd.getDate()+21);
-        let sb=await jget(espnScore(curLeague, ymd(t0)+"-"+ymd(fwdEnd)), true);
-        let evs=parseEvents(sb).filter(g=>g.localIso>=isoDate(t0));
         let target=null;
-        if(evs.length){ target=evs.map(g=>g.localIso).sort()[0]; }
-        else{
+        // 往未來找:3 段各 7 天,找到就停(分段避免長區間查詢失敗)
+        for(let seg=0; seg<3 && !target; seg++){
+          const a=new Date(t0); a.setDate(a.getDate()+seg*7);
+          const b=new Date(t0); b.setDate(b.getDate()+(seg+1)*7);
+          try{
+            const sb=await jget(espnScore(curLeague, ymd(a)+"-"+ymd(b)), true);
+            const evs=parseEvents(sb).filter(g=>g.localIso>=isoDate(t0));
+            if(evs.length) target=evs.map(g=>g.localIso).sort()[0];
+          }catch(e){}
+        }
+        if(!target){   // 未來 21 天都沒有 → 往回找最近踢過的一天
           const back=new Date(t0); back.setDate(back.getDate()-7);
-          sb=await jget(espnScore(curLeague, ymd(back)+"-"+ymd(t0)), true);
-          evs=parseEvents(sb);
-          if(evs.length) target=evs.map(g=>g.localIso).sort().slice(-1)[0];
+          try{
+            const sb=await jget(espnScore(curLeague, ymd(back)+"-"+ymd(t0)), true);
+            const evs=parseEvents(sb);
+            if(evs.length) target=evs.map(g=>g.localIso).sort().slice(-1)[0];
+          }catch(e){}
         }
         if(target && target!==isoDate(curDate)){
           curDate=new Date(target+"T12:00:00");
@@ -2983,6 +3034,9 @@ function buildLeagueTabs(){
     const lg=LEAGUES.find(l=>l.id===curLeague);
     document.getElementById("lgName").textContent=lg.full;
     window.__autoJump=true;                           // 本次切換若當日無賽事 → 自動跳到最近比賽日
+    { const tod=new Date();                           // 每個聯盟都從「今天」出發找最近比賽日
+      if(isoDate(curDate)!==isoDate(tod)){ curDate=tod;
+        const dp0=document.getElementById("datePick"); if(dp0) dp0.value=isoDate(tod); } }
     STAND_CACHE={};                                   // 清掉上一聯賽的戰績快取
     document.getElementById("searchResults").innerHTML="";
     if(!allIndexLoaded && !allBuilding){              // 全聯賽索引尚未就緒 → 先建當前聯賽的
