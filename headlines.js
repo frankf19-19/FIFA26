@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/04 23:58 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/04 23:58";
+/* 由 news_engine.py 自動產生於 2026/08/05 02:46 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/05 02:46";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Cape Verde coach Bubista steps down after historic World Cup campaign", d:"2026-08-04", team:"", link:"https://www.espn.com/soccer/story/_/id/49529781/cape-verde-coach-bubista-steps-historic-world-cup-campaign"},
