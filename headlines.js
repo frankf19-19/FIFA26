@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/05 12:48 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/05 12:48";
+/* 由 news_engine.py 自動產生於 2026/08/05 15:10 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/05 15:10";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Loved the World Cup? Here's your guide to European soccer, 2026-27", d:"2026-08-05", team:"", link:"https://www.espn.com/soccer/story/_/id/49523086/world-cup-love-premier-league-bundesliga-laliga-season-preview-liverpool-man-city-barcelona-bayern"},
