@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/05 05:39 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/05 05:39";
+/* 由 news_engine.py 自動產生於 2026/08/05 08:07 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/05 08:07";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Does football need to vote against Infantino?", d:"2026-08-04", team:"", link:"https://www.espn.com/video/clip/_/id/49532221/does-football-need-vote-infantino"},
