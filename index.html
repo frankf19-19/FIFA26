@@ -682,7 +682,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e72";
+const BUILD = "e74";
 const LEAGUES = [
   /* ===== 主流聯賽(ESPN 資料穩定、運彩固定開盤)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1182,15 +1182,16 @@ function isoDate(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2
 function poisson(k,l){let e=Math.exp(-l),f=1;for(let i=2;i<=k;i++)f*=i;return e*Math.pow(l,k)/f;}
 /* 各聯賽獨立的積分榜快取(原本只存「目前聯賽」一份,導致總覽上其他聯賽全部無資料) */
 let STAND_BY_LG={}, LGAVG_BY_LG={};
-function standOf(name,lg){
+function standOf(name,lg,tid){
   const k=norm(name);
   const pools=[];
   if(lg && STAND_BY_LG[lg]) pools.push(STAND_BY_LG[lg]);
   pools.push(STAND_CACHE);
   if(!lg) Object.keys(STAND_BY_LG).forEach(x=>pools.push(STAND_BY_LG[x]));
   for(const P of pools){
+    if(tid!=null && P["#"+tid]) return P["#"+tid];   // 球隊 ID 優先:最可靠
     if(P[k]) return P[k];
-    for(const kk in P){ if(kk.length>=4&&wordHit(k,kk)) return P[kk]; }   // 詞邊界比對,避免跨隊誤配
+    for(const kk in P){ if(kk.charAt(0)!=="#"&&kk.length>=4&&wordHit(k,kk)) return P[kk]; }
   }
   return null;
 }
@@ -1212,6 +1213,7 @@ async function loadStandFor(lg){
         gd:+val(e,"pointDifferential")||0, pts:+val(e,"points")||0,
         logo:(t.logos&&t.logos[0]&&t.logos[0].href)||""};
       pool[norm(nm)]=o;
+      if(t.id!=null) pool["#"+t.id]=o;
       if(o.gp>=2){ gf+=o.gf; gp+=o.gp; }
     }));
     if(Object.keys(pool).length){
@@ -1222,12 +1224,12 @@ async function loadStandFor(lg){
   }catch(e){}
   return false;
 }
-function predict(homeName,awayName,mkt,lg){
+function predict(homeName,awayName,mkt,lg,hid,aid){
   const rh=rating(homeName), ra=rating(awayName), d=rh-ra;
   const COEF=0.030, BASE=1.32, HA=0.24+HA_TUNE; // 主場優勢:基準+依實際主勝率自動微調
   let lh=BASE*Math.exp(COEF*d/2 + HA/2), la=BASE*Math.exp(-COEF*d/2 - HA/2);
   // 本季攻防形狀(來自積分榜真實進失球;樣本越多權重越高)
-  const sh=standOf(homeName,lg), sa=standOf(awayName,lg);
+  const sh=standOf(homeName,lg,hid), sa=standOf(awayName,lg,aid);
   if(sh&&sa&&+sh.gp>=2&&+sa.gp>=2){
     const LG=(lg&&LGAVG_BY_LG[lg])||LG_AVG, gpH=+sh.gp, gpA=+sa.gp;
     const lh2=LG*((+sh.gf/gpH)/LG)*((+sa.ga/gpA)/LG)*Math.exp(HA/2);
@@ -1289,11 +1291,11 @@ function predict(homeName,awayName,mkt,lg){
           lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2)};
 }
 /* 詳細分析:逐項列出模型依據(無資料的項目自動略過,不編造) */
-function analysisRows(hn,an,p,lg){
+function analysisRows(hn,an,p,lg,hid,aid){
   const rows=[], hz=zhName(hn), az=zhName(an);
   const rh=rating(hn), ra=rating(an), d=rh-ra;
   // ── 資料來源盤點:誠實揭露這場預測「有什麼、缺什麼」 ──
-  const sh0=standOf(hn,lg), sa0=standOf(an,lg);
+  const sh0=standOf(hn,lg,hid), sa0=standOf(an,lg,aid);
   const src=[
     ["積分榜攻防", !!(sh0&&sa0&&+sh0.gp>=2&&+sa0.gp>=2)],
     ["近況戰績",   !!(formSeq(hn)||formSeq(an))],
@@ -1313,7 +1315,7 @@ function analysisRows(hn,an,p,lg){
   const bothDefault=(baseRating(hn)===68&&baseRating(an)===68);
   rows.push(["實力評級", `${hz} ${rh.toFixed(1)} · ${az} ${ra.toFixed(1)}(差 ${d>=0?"+":""}${d.toFixed(1)},${Math.abs(d)<3?"接近":Math.abs(d)<8?"略有差距":"差距明顯"})`
     + (bothDefault?`<br><span style="color:var(--miss);font-size:11px">兩隊皆無評級資料,68 為系統預設值,非實際實力</span>`:"")]);
-  const sh=standOf(hn,lg), sa=standOf(an,lg);
+  const sh=standOf(hn,lg,hid), sa=standOf(an,lg,aid);
   if(sh&&sa&&+sh.gp>=2&&+sa.gp>=2)
     rows.push(["本季攻防", `${hz} 場均進 ${(+sh.gf/+sh.gp).toFixed(2)}、失 ${(+sh.ga/+sh.gp).toFixed(2)}(${+sh.gp} 場) · ${az} 場均進 ${(+sa.gf/+sa.gp).toFixed(2)}、失 ${(+sa.ga/+sa.gp).toFixed(2)}(${+sa.gp} 場)`]);
   const fh=formSeq(hn), fa=formSeq(an);
@@ -1805,7 +1807,7 @@ function renderTodaySection(){
       t._usable=(t.games||[]).filter(g=>{
         const snap0=scGet()[g.id];
         if(snap0&&snap0.pred) return true;
-        const pp=predict(g.hn,g.an,g.odds,l.id);
+        const pp=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
         if((pp.dq||0)<0.2){ dropped++; return false; }
         return true;
       });
@@ -1827,7 +1829,7 @@ function renderTodaySection(){
       .slice().sort((a,b)=>a.time.localeCompare(b.time)).map(g=>{
       const live=g.state==="in", done=g.completed;
       const sc = (live||done)?`<span class="tg-sc">${g.as} - ${g.hs}</span>`:`<span class="tg-vs">vs</span>`;
-      const p=predict(g.hn,g.an,g.odds,l.id);
+      const p=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
       const snap=scGet()[g.id];
       let st, rowCls="pre";
       if(live){
@@ -1852,7 +1854,7 @@ function renderTodaySection(){
       const pickZh=p.pick==="和局"?"和局":zhName(p.pick);
       const pickSide=p.pick==="和局"?"":(p.pick===g.hn?"主":"客");
       const conf=p.conf==="高"?"var(--hit)":p.conf==="中"?"var(--gold)":"var(--muted)";
-      const ana=analysisRows(g.hn,g.an,p,l.id).map(r=>`<div class="an-row"><span class="an-k">${r[0]}</span><span class="an-v">${r[1]}</span></div>`).join("");
+      const ana=analysisRows(g.hn,g.an,p,l.id,g.hid,g.aid).map(r=>`<div class="an-row"><span class="an-k">${r[0]}</span><span class="an-v">${r[1]}</span></div>`).join("");
       return `<div class="tg-row ${rowCls}" data-gid="${g.id}" data-golg="${l.id}">
         <span class="tg-time">${g.time}</span>
         <span class="tg-team">${zhName(g.an)} <span class="ha aw">客</span></span>
@@ -2028,6 +2030,24 @@ async function fetchPlayerBio(league, id){
   }
   return null;
 }
+async function fetchPlayerHistory(league, id){
+  if(!id) return [];
+  const Y=new Date().getFullYear(), rows=[];
+  await Promise.all([Y,Y-1,Y-2,Y-3].map(async yr=>{
+    try{
+      const d=await jget(`https://sports.core.api.espn.com/v2/sports/soccer/leagues/${league}/seasons/${yr}/types/1/athletes/${id}/statistics`);
+      const flat={};
+      (function walk(o){ if(!o||typeof o!=="object")return;
+        if(Array.isArray(o)){o.forEach(walk);return;}
+        const key=o.name||o.abbreviation, dv=o.displayValue!=null?o.displayValue:(o.value!=null?o.value:null);
+        if(key&&dv!=null&&(typeof dv==="string"||typeof dv==="number")){ if(flat[key]==null) flat[key]=dv; }
+        for(const k in o) walk(o[k]); })(d);
+      const app=flat.appearances??flat.gamesPlayed, gl=flat.goals??flat.totalGoals, as=flat.assists??flat.goalAssists, mi=flat.minutes;
+      if(app!=null||gl!=null) rows.push({yr, app:app??"—", gl:gl??"—", as:as??"—", mi:mi??"—"});
+    }catch(e){}
+  }));
+  return rows.sort((a,b)=>b.yr-a.yr);
+}
 async function fetchPlayerStats(league, id){
   if(!id) return null;
   const Y=new Date().getFullYear();
@@ -2077,12 +2097,25 @@ function showPlayer(p, fromPop){
     ${p.league==="jpn.1"?`<div style="font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:10px">ℹ ESPN 對日職聯多數球員未提供照片檔(顯示姓名縮寫);數據視 ESPN 涵蓋而定。</div>`:""}
     ${p.id?`<div style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap"><a href="https://www.espn.com/soccer/player/_/id/${p.id}" target="_blank" rel="noopener" style="font-family:var(--cond);font-weight:600;font-size:13px;color:var(--teal);text-decoration:none">在 ESPN 查看完整球員頁 ›</a>${p.league==="jpn.1"?`<a href="https://www.google.com/search?q=${encodeURIComponent(p.name+" Jリーグ 選手")}" target="_blank" rel="noopener" style="font-family:var(--cond);font-weight:600;font-size:13px;color:var(--teal);text-decoration:none">🇯🇵 搜尋日文詳細資料 ›</a>`:""}</div>`:""}
     <div id="playerIntro" class="why" style="border-top:none;margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel)"><span class="k">介紹</span>${playerIntroText(p,null)}</div>
+    <div class="pos-group" style="margin-top:18px">歷年數據 <span id="histLoad" style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0">載入中…</span></div>
+    <div id="playerHist"></div>
     <div class="pos-group" style="margin-top:18px">本季數據 <span id="statLoad" style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0">載入中…</span></div>
     <div id="playerStats"></div>
     <div class="player" data-team="${p.teamName}" style="cursor:pointer;margin-top:14px"><div class="avatar">${zhName(p.teamName).charAt(0)}</div>
       <div><div class="p-top"><span class="pnm">${zhName(p.teamName)} 完整陣容</span></div><div class="p-note">點我查看 ›</div></div></div>`;
   document.getElementById("roster").querySelectorAll("[data-team]").forEach(el=>el.onclick=()=>showTeam(el.dataset.team));
   window.scrollTo(0,0);
+  // 歷年數據(逐季)
+  fetchPlayerHistory(p.league||curLeague, p.id).then(hist=>{
+    const load=document.getElementById("histLoad"), box=document.getElementById("playerHist");
+    if(!load||!box) return;
+    if(!hist.length){ load.textContent="ESPN 未提供歷年逐季數據"; box.innerHTML=""; return; }
+    load.textContent="來源:ESPN(近 "+hist.length+" 季)";
+    box.innerHTML=`<div class="table-wrap"><table style="width:100%"><thead><tr>
+      <th>賽季</th><th>出場</th><th>進球</th><th>助攻</th><th>上場分鐘</th></tr></thead><tbody>`+
+      hist.map(r=>`<tr><td style="font-family:var(--mono)">${r.yr}</td><td>${r.app}</td><td style="color:var(--amber);font-weight:600">${r.gl}</td><td>${r.as}</td><td>${r.mi}</td></tr>`).join("")+
+      `</tbody></table></div>`;
+  }).catch(()=>{});
   // 非同步補齊個人檔案(名單資料常缺年齡/身高;個人端點較完整)
   fetchPlayerBio(p.league||curLeague, p.id).then(b=>{
     if(!b) return;
@@ -2180,7 +2213,7 @@ async function gradeFinished(games){
     const ex=sc[g.id];
     if(ex&&ex.pred)return;                      // 新格式已完整 → 跳過
     // ex 存在但無快照 = e12 前的舊記錄 → 升級:補快照與檢討所需欄位(保留原本的命中/Brier,誠實不竄改)
-    const p=predict(g.hn,g.an,g.odds,g.league||curLeague);
+    const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
     if((p.dq||0)<0.2){ return; }               // 資料不足:不評分,不讓猜測污染命中率
     const realOut = g.hs>g.as?"H":g.hs<g.as?"A":"D";
     const predOut = p.H>=p.D&&p.H>=p.A?"H":p.A>=p.D&&p.A>=p.H?"A":"D";
@@ -2266,7 +2299,7 @@ function renderCoverage(){
   LEAGUES.forEach(l=>{
     const t=TODAY_GAMES[l.id]; if(!t||!t.n) return;
     let full=0,none=0;
-    (t.games||[]).forEach(g=>{ const p=predict(g.hn,g.an,g.odds,l.id);
+    (t.games||[]).forEach(g=>{ const p=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
       if(p.dq>=0.5) full++; else if(p.dq<0.2) none++; });
     rows.push({zh:l.zh,n:t.n,full,none});
   });
@@ -2458,7 +2491,7 @@ function makeReview(g){
   return {text:parts.join(";")+"。", good:s.hit};
 }
 function gameCard(g){
-  const p=predict(g.hn,g.an,g.odds,g.league||curLeague);
+  const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
   const done=g.completed, live=g.state==="in";
   let pill;
   if(live) pill=`<span class="pill live"><span class="dot"></span>${g.detail||'進行中'}</span>`;
@@ -2483,8 +2516,8 @@ function gameCard(g){
 
   const hWin=done&&g.hs>g.as, aWin=done&&g.as>g.hs;
   const rows=`<div class="teams">
-    ${teamRow(g.an,g.alogo,(done||live)?g.as:null,aWin,(done||live)?null:p.sj,"客")}
-    ${teamRow(g.hn,g.hlogo,(done||live)?g.hs:null,hWin,(done||live)?null:p.si,"主")}</div>`;
+    ${teamRow(g.an,g.alogo,(done||live)?g.as:null,aWin,(done||live||(p.dq!=null&&p.dq<0.2))?null:p.sj,"客")}
+    ${teamRow(g.hn,g.hlogo,(done||live)?g.hs:null,hWin,(done||live||(p.dq!=null&&p.dq<0.2))?null:p.si,"主")}</div>`;
 
   let body="";
   if(done){
@@ -2525,6 +2558,7 @@ function computeLgAvg(){
 }
 function renderStandings(data){
   setTimeout(computeLgAvg,0);
+  setTimeout(()=>{ try{ if(window.__lastGames&&VIEW==="league") renderGames(window.__lastGames); }catch(e){} },50);
   const box=document.getElementById("standings"), tag=document.getElementById("standTag");
   const val=(e,name)=>{const s=(e.stats||[]).find(x=>x.name===name||x.type===name);return s?(s.displayValue??s.value):"";};
   const groups=[];
@@ -2545,7 +2579,9 @@ function renderStandings(data){
       const rank=val(e,"rank")||i+1;
       const gp=val(e,"gamesPlayed"), w=val(e,"wins"), d=val(e,"ties")||val(e,"draws"), l=val(e,"losses");
       const gf=val(e,"pointsFor"), ga=val(e,"pointsAgainst"), gd=val(e,"pointDifferential"), pts=val(e,"points");
-      STAND_CACHE[norm(nm)]={rank,gp,w,d,l,gf,ga,gd,pts,logo:(t.logos&&t.logos[0]&&t.logos[0].href)||""};
+      const _so={rank,gp,w,d,l,gf,ga,gd,pts,logo:(t.logos&&t.logos[0]&&t.logos[0].href)||""};
+      STAND_CACHE[norm(nm)]=_so;
+      if(t.id!=null) STAND_CACHE["#"+t.id]=_so;      // ID 鍵:名稱寫法不一致時的可靠後盾
       const cls = i<4?"ucl":(groups.length===1&&i>=g.entries.length-3?"rel":"");
       const logo=t.logos&&t.logos[0]?`<img src="${t.logos[0].href}" onerror="this.style.display='none'">`:"";
       return `<tr class="${cls}"><td>${rank}</td><td data-team="${nm}">${logo}${zhName(nm)}</td>
@@ -2572,7 +2608,7 @@ function renderHeadlines(games){
   if(!done.length&&!REAL_NEWS.length){ box.innerHTML=`<div class="empty" style="text-align:left">尚無頭條。有賽果或 ESPN 新聞後自動顯示。</div>`; return; }
   if(!done.length){ box.innerHTML=realHTML; box.querySelectorAll("[data-link]").forEach(el=>el.onclick=()=>window.open(el.dataset.link,"_blank","noopener")); return; }
   const items=done.slice(0, Math.max(2, 6-REAL_NEWS.length)).map(g=>{
-    const p=predict(g.hn,g.an,g.odds,g.league||curLeague);
+    const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
     const winner=g.hs>g.as?zhName(g.hn):g.hs<g.as?zhName(g.an):null;
     const margin=Math.abs(g.hs-g.as);
     const upset=winner && ((winner===zhName(g.hn)&&p.H<30)||(winner===zhName(g.an)&&p.A<30));
@@ -2671,12 +2707,39 @@ async function showTeam(name, fromPop){
     }
   })();
 }
+/* ===== 對戰往績:抓主隊近兩季賽程,找出對上客隊的比賽 ===== */
+let H2H_CACHE={};
+async function loadH2H(lg, hid, aid){
+  if(!hid||!aid) return null;
+  const key=lg+"|"+hid+"|"+aid;
+  if(H2H_CACHE[key]) return H2H_CACHE[key];
+  const Y=new Date().getFullYear();
+  const out=[];
+  for(const yr of [Y, Y-1]){
+    try{
+      const d=await jget(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/teams/${hid}/schedule?season=${yr}`);
+      (d.events||[]).forEach(ev=>{try{
+        const c=(ev.competitions||[])[0]; if(!c)return;
+        const st=(c.status||ev.status||{}).type||{}; if(!st.completed)return;
+        const me=(c.competitors||[]).find(x=>String((x.team||{}).id)===String(hid));
+        const op=(c.competitors||[]).find(x=>String((x.team||{}).id)===String(aid));
+        if(!me||!op)return;
+        const sv=x=>{const s=x.score; if(s==null)return null; return typeof s==="object"?+(s.value??s.displayValue):+s;};
+        const a=sv(me), b=sv(op); if(a==null||b==null||isNaN(a)||isNaN(b))return;
+        out.push({d:new Date(ev.date), my:a, op:b, home:(me.homeAway==="home")});
+      }catch(e){}});
+    }catch(e){}
+  }
+  out.sort((x,y)=>y.d-x.d);
+  H2H_CACHE[key]=out.slice(0,6);
+  return H2H_CACHE[key];
+}
 /* ================= 比賽詳情頁(像 MLB 版的逐場解說) ================= */
 const GSTAT_ZH={possessionPct:"控球率 %",wonCorners:"角球",totalCrosses:"傳中",effectiveCrosses:"成功傳中",
   foulsCommitted:"犯規",offsides:"越位",saves:"撲救",yellowCards:"黃牌",redCards:"紅牌",
   totalPasses:"傳球",accuratePasses:"準確傳球",assists:"助攻",totalTackles:"搶斷",interceptions:"攔截"};
 function gameNarrative(g,goals,statPairs){
-  const hz=zhName(g.hn),az=zhName(g.an),p=predict(g.hn,g.an,g.odds,g.league||curLeague);
+  const hz=zhName(g.hn),az=zhName(g.an),p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
   const parts=[];
   if(g.completed){
     const w=g.hs>g.as?hz:g.hs<g.as?az:null;
@@ -2738,8 +2801,28 @@ async function showGame(g, fromPop){
   const hz=zhName(g.hn),az=zhName(g.an);
   document.getElementById("gameTitle").textContent=`${hz} ${g.completed||g.state==="in"?g.hs+" - "+g.as:"vs"} ${az}`;
   const box=document.getElementById("gameDetail");
-  const p=predict(g.hn,g.an,g.odds,g.league||curLeague);
+  const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
   box.innerHTML=`<div class="empty">載入比賽數據中…</div>`;
+  // 對戰往績(背景載入)
+  loadH2H(g.league||curLeague, g.hid, g.aid).then(list=>{
+    const box=document.getElementById("h2hBox"); if(!box) return;
+    if(!list||!list.length){ box.innerHTML=""; return; }
+    const hz=zhName(g.hn), az=zhName(g.an);
+    let hw=0,dw=0,aw=0;
+    const rows=list.map(m=>{
+      const res=m.my>m.op?"W":m.my<m.op?"L":"D";
+      if(res==="W")hw++; else if(res==="D")dw++; else aw++;
+      const col=res==="W"?"var(--hit)":res==="L"?"var(--miss)":"var(--gold)";
+      const dstr=m.d.toLocaleDateString("zh-TW",{year:"numeric",month:"2-digit",day:"2-digit"});
+      return `<div style="display:grid;grid-template-columns:96px 1fr auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">${dstr}</span>
+        <span>${m.home?`${hz}(主)`:`${hz}(客)`} vs ${az}</span>
+        <span style="font-family:var(--mono);font-weight:700;color:${col}">${m.my} - ${m.op}</span></div>`;
+    }).join("");
+    box.innerHTML=`<div class="why" style="border-top:none;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:13px 15px;margin-bottom:14px">
+      <span class="k">對戰往績</span>近 ${list.length} 次交手:${hz} ${hw} 勝 ${dw} 和 ${aw} 負
+      <div style="margin-top:8px">${rows}</div></div>`;
+  }).catch(()=>{});
   window.scrollTo(0,0);
   if(window.__gvTimer){ clearInterval(window.__gvTimer); window.__gvTimer=null; }
   if(g.state==="in"){
@@ -2848,7 +2931,8 @@ async function showGame(g, fromPop){
   let narrative=gameNarrative(g,goals,statPairs);
   const rv0=makeReview(g);
   if(rv0) narrative+=` 檢討:${rv0.text}`;
-  let html=venueLine+`<div class="why" style="border-top:none;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:13px 15px;margin-bottom:14px"><span class="k">解說</span>${narrative}</div>`;
+  let html=venueLine+`<div class="why" style="border-top:none;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:13px 15px;margin-bottom:14px"><span class="k">解說</span>${narrative}</div>
+  <div id="h2hBox"></div>`;
   if(!g.completed&&g.state!=="in"){
     html+=probBar(p)+`<div class="predline" style="margin-bottom:14px"><span class="k">預測</span>看好 <span class="pick">${zhName(p.pick)}</span> · 比分 <b><span class="ha hm">主</span> ${p.si} - ${p.sj} <span class="ha aw">客</span></b> · 信心 ${p.conf}</div>
       <div class="why"><span class="k">理由</span>${reasonText(g.hn,g.an,p)}</div>`;
