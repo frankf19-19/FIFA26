@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/06 12:16 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/06 12:16";
+/* 由 news_engine.py 自動產生於 2026/08/06 14:43 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/06 14:43";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Argentina announces commemorative day to celebrate World Cup win over England", d:"2026-08-06", team:"", link:"https://www.espn.com/soccer/story/_/id/49543519/argentina-announce-commemorative-day-celebrate-world-cup-win-england"},
