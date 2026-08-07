@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/07 05:10 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/07 05:10";
+/* 由 news_engine.py 自動產生於 2026/08/07 06:18 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/07 06:18";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Burley: FIFA as an organisation has 'gone down the toilet'", d:"2026-08-06", team:"", link:"https://www.espn.com/video/clip/_/id/49547919/fifa-organisation-gone-toilet"},
