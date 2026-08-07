@@ -1,8 +1,8 @@
-/* 由 news_engine.py 自動產生於 2026/08/07 18:29 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/07 18:29";
+/* 由 news_engine.py 自動產生於 2026/08/07 19:31 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/07 19:31";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
-  {tag:"news", t:"Gianni Infantino backed by Argentina and Mexico FAs", d:"2026-08-07", team:"", link:"https://www.espn.com/soccer/story/_/id/49551450/gianni-infantino-backed-argentina-fa-praised-owning-mistakes"},
+  {tag:"news", t:"Norway calls on Infantino to quit amid backing from Mexico, Argentina", d:"2026-08-07", team:"", link:"https://www.espn.com/soccer/story/_/id/49551450/gianni-infantino-backed-argentina-fa-praised-owning-mistakes"},
   {tag:"news", t:"USMNT hasn't really improved under Poch: Will new contract change that?", d:"2026-08-07", team:"", link:"https://www.espn.com/soccer/story/_/id/49546977/usmnt-not-improved-pochettino-new-contract-coach-extension-2026"},
   {tag:"news", t:"CAF agree to support Gianni Infantino amid FIFA governance crisis", d:"2026-08-07", team:"", link:"https://www.espn.com/espn/story/_/id/49551026/caf-agree-support-gianni-infantino-amid-fifa-governance-crisis"},
   {tag:"news", t:"Which big clubs are struggling with World Cup burnout?", d:"2026-08-07", team:"", link:"https://www.espn.com/soccer/story/_/id/49536934/world-cup-burnout-premier-league-laliga-liverpool-arsenal-barcelona-bayern-munich-man-united"},
