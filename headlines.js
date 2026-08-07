@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/07 13:48 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/07 13:48";
+/* 由 news_engine.py 自動產生於 2026/08/07 14:47 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/07 14:47";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Gianni Infantino backed by Argentina and Mexico FAs", d:"2026-08-07", team:"", link:"https://www.espn.com/soccer/story/_/id/49551450/gianni-infantino-backed-argentina-fa-praised-owning-mistakes"},
