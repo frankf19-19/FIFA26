@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/07 07:50 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/07 07:50";
+/* 由 news_engine.py 自動產生於 2026/08/07 08:50 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/07 08:50";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"USMNT hasn't really improved under Poch: Will new contract change that?", d:"2026-08-07", team:"", link:"https://www.espn.com/soccer/story/_/id/49546977/usmnt-not-improved-pochettino-new-contract-coach-extension-2026"},
