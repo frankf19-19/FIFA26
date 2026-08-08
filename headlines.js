@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/08 06:40 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/08 06:40";
+/* 由 news_engine.py 自動產生於 2026/08/08 07:34 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/08 07:34";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Norway calls on Infantino to quit amid backing from Mexico, Argentina", d:"2026-08-07", team:"", link:"https://www.espn.com/soccer/story/_/id/49551450/gianni-infantino-backed-argentina-fa-praised-owning-mistakes"},
