@@ -692,7 +692,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e81";
+const BUILD = "e83";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1260,6 +1260,12 @@ async function loadStandFor(lg){
   }catch(e){}
   return false;
 }
+/* 核心聯賽一律提供預測;僅非核心且 dq<0.2 才拒絕(目前清單全為核心) */
+function noPredGate(p,lg){
+  const L0=LEAGUES.find(x=>x.id===lg);
+  if(L0&&(L0.core||L0.cup)) return false;
+  return p&&p.dq!=null&&p.dq<0.2;
+}
 function predict(homeName,awayName,mkt,lg,hid,aid){
   if(lg){ const L0=LEAGUES.find(x=>x.id===lg); if(L0&&L0.stand) lg=L0.stand; }   // 盃賽借用母聯賽的積分榜與進球環境
   const rh=rating(homeName), ra=rating(awayName), d=rh-ra;
@@ -1309,8 +1315,10 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   let dq=0;                                     // 0=毫無資料,1=資料充分
   if(mkt) dq+=0.55;                             // 有市場賠率 = 最強訊號
   if(sh&&sa&&+sh.gp>=2&&+sa.gp>=2) dq+=0.30*(0.5+0.5*Math.min(1,Math.min(+sh.gp,+sa.gp)/10))*(_prior?0.6:1);
-  if(schedOf(homeName)&&schedOf(awayName)) dq+=0.10;
-  if(baseRating(homeName)!==68||baseRating(awayName)!==68) dq+=0.05;
+  if(schedOf(homeName)&&schedOf(awayName)) dq+=0.15;   // 真實近5場戰績(跨季有效,實戰數據)
+  const _kn=(baseRating(homeName)!==68?1:0)+(baseRating(awayName)!==68?1:0);
+  if(_kn>=1) dq+=0.05;
+  if(_kn===2) dq+=0.15;                                 // 兩隊皆為已知強度(曼聯、兵工廠等名門)
   dq=Math.max(0,Math.min(1,dq));
   const shrink=0.30*(1-dq);                     // 資料全無時,把 30% 權重讓給基準率
   if(shrink>0.001){
@@ -1868,7 +1876,7 @@ function renderTodaySection(){
         const snap0=scGet()[g.id];
         if(snap0&&snap0.pred) return true;
         const pp=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
-        if((pp.dq||0)<0.2){ dropped++; return false; }
+        if(noPredGate(pp,l.id)){ dropped++; return false; }
         return true;
       });
       if(!t._usable.length && dropped>0 && !l.core && !l.cup && !DYN_HIDE[l.id]){ DYN_HIDE[l.id]=Date.now(); dynChanged=true; }
@@ -1922,7 +1930,7 @@ function renderTodaySection(){
         ${sc}
         <span class="tg-team th"><span class="ha hm">主</span> ${zhName(g.hn)}</span>
         <span class="tg-st">${st}</span>
-        ${(p.dq!=null&&p.dq<0.2)?`
+        ${noPredGate(p,l.id)?`
         <div class="tg-pred"><span class="tp-nopred">⚠ 資料不足(開季初期或無數據),不提供預測</span></div>
         </div>`:`
         <!-- 預測列:欄位與上方一一對齊(左客右主),不會錯位 -->
@@ -1936,7 +1944,7 @@ function renderTodaySection(){
           <span class="tp-bar"><i class="a" style="width:${p.A}%"></i><i class="d" style="width:${p.D}%"></i><i class="h" style="width:${p.H}%"></i></span>
           <span class="tp-pct">客 ${Math.round(p.A)}% · 和 ${Math.round(p.D)}% · 主 ${Math.round(p.H)}%</span>
           ${p.mk?`<span class="tp-mk">含市場賠率</span>`:""}
-          ${(p.dq!=null&&p.dq<0.2)?`<span class="tp-nodata" title="ESPN 未提供這兩隊的實際數據,此預測由預設值推算,不具參考價值">⚠ 資料不足</span>`:""}
+          ${(p.dq!=null&&p.dq<0.2)?`<span class="tp-nodata" title="可用資料較少,預測已向基準率收縮,信心較低">⚠ 資料有限</span>`:""}
           ${(()=>{const t=twslOf(g); if(!t) return "";
             return `<span class="tp-twsl" title="台灣運彩場中盤口${t.no?" · 場次 "+t.no:""}">運彩 ${t.odds?`${t.odds.a} / ${t.odds.d} / ${t.odds.h}`:"場中開盤"}</span>`;})()}
           <button class="an-btn" data-an="${g.id}">詳細分析 ▾</button>
@@ -2335,7 +2343,7 @@ async function gradeFinished(games){
     if(ex&&ex.pred)return;                      // 新格式已完整 → 跳過
     // ex 存在但無快照 = e12 前的舊記錄 → 升級:補快照與檢討所需欄位(保留原本的命中/Brier,誠實不竄改)
     const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
-    if((p.dq||0)<0.2){ return; }               // 資料不足:不評分,不讓猜測污染命中率
+    if(noPredGate(p,g.league||curLeague)){ return; }   // 僅非核心聯賽的低資料場次不評分
     const realOut = g.hs>g.as?"H":g.hs<g.as?"A":"D";
     const predOut = p.H>=p.D&&p.H>=p.A?"H":p.A>=p.D&&p.A>=p.H?"A":"D";
     const y={H:0,D:0,A:0}; y[realOut]=1;
@@ -2423,7 +2431,8 @@ function renderCoverage(){
     (t.games||[]).forEach(g=>{ const p=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
       if(p.dq>=0.5) full++; else if(p.dq<0.2) none++; });
     const stN=Object.keys(STAND_BY_LG[l.stand||l.id]||{}).filter(k=>k.charAt(0)!=="#").length;
-    rows.push({zh:l.zh,n:t.n,full,none,stN});
+    const pvN=Object.keys(PREV_BY_LG[l.stand||l.id]||{}).filter(k=>k.charAt(0)!=="#").length;
+    rows.push({zh:l.zh,n:t.n,full,none,stN,pvN});
   });
   if(!rows.length) return "";
   rows.sort((a,b)=>(b.full/b.n)-(a.full/a.n));
@@ -2432,7 +2441,7 @@ function renderCoverage(){
     const col=pct>=60?"var(--hit)":pct>=25?"var(--gold)":"var(--miss)";
     return `<div class="cal-row"><span class="cal-k">${r.zh}</span>
       <span class="cal-bar"><i style="width:${pct}%;background:${col}"></i></span>
-      <span class="cal-v">${r.n} 場 · 資料足 ${r.full}${r.none?` · <span style="color:var(--miss)">不足 ${r.none}</span>`:""} · 榜${r.stN}隊</span></div>`;
+      <span class="cal-v">${r.n} 場 · 資料足 ${r.full}${r.none?` · <span style="color:var(--miss)">不足 ${r.none}</span>`:""} · 榜${r.stN}隊 · 先驗${r.pvN}</span></div>`;
   };
   return `<div class="ins cal-card">
     <div class="ins-h">📋 各聯賽資料涵蓋率(今日)</div>
@@ -2638,21 +2647,21 @@ function gameCard(g){
 
   const hWin=done&&g.hs>g.as, aWin=done&&g.as>g.hs;
   const rows=`<div class="teams">
-    ${teamRow(g.an,g.alogo,(done||live)?g.as:null,aWin,(done||live||(p.dq!=null&&p.dq<0.2))?null:p.sj,"客")}
-    ${teamRow(g.hn,g.hlogo,(done||live)?g.hs:null,hWin,(done||live||(p.dq!=null&&p.dq<0.2))?null:p.si,"主")}</div>`;
+    ${teamRow(g.an,g.alogo,(done||live)?g.as:null,aWin,(done||live||noPredGate(p,g.league||curLeague))?null:p.sj,"客")}
+    ${teamRow(g.hn,g.hlogo,(done||live)?g.hs:null,hWin,(done||live||noPredGate(p,g.league||curLeague))?null:p.si,"主")}</div>`;
 
   let body="";
   if(done){
     const snap=scGet()[g.id];
     const sp=(snap&&snap.pred)?snap.pred:p;    // 用當初的預測快照,不因校準漂移
     const rv=makeReview(g);
-    body=(!snap||!snap.pred)&&(p.dq!=null&&p.dq<0.2)
+    body=(!snap||!snap.pred)&&noPredGate(p,g.league||curLeague)
       ? `<div class="predline"><span class="k">賽前預測</span><span class="tp-nopred">資料不足,本場未提供預測、不列入計分</span></div>`
       : `<div class="predline"><span class="k">賽前預測</span> 看好 <span class="pick">${zhName(sp.pick)}</span> · 比分 <b>${sp.si!=null?`<span class="ha hm">主</span> ${sp.si} - ${sp.sj} <span class="ha aw">客</span>`:"—"}</b> · 信心 ${sp.conf||p.conf}</div>
       <div class="why"><span class="k">結果</span>${g.hs}-${g.as},實際 ${g.hs>g.as?zhName(g.hn):g.hs<g.as?zhName(g.an):'雙方戰平'}${g.hs===g.as?'':'勝出'}。</div>`+
       (rv?`<div class="review ${rv.good?'good':'bad'}"><span class="k">檢討</span>${rv.text}</div>`:"");
   }else{
-    body=(p.dq!=null&&p.dq<0.2)
+    body=noPredGate(p,g.league||curLeague)
       ? `<div class="predline"><span class="k">預測</span><span class="tp-nopred">⚠ 資料不足(開季初期或無數據),不提供預測</span></div>`
       : probBar(p)+`<div class="predline"><span class="k">預測</span>看好 <span class="pick">${zhName(p.pick)}</span> · 比分 <b><span class="ha hm">主</span> ${p.si} - ${p.sj} <span class="ha aw">客</span></b> · 信心 ${p.conf}${p.mk?' · <span class="k" style="color:var(--teal)">含市場賠率</span>':''}</div>
       <div class="why"><span class="k">理由</span>${reasonText(g.hn,g.an,p)}</div>`;
