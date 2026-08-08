@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/08 22:20 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/08 22:20";
+/* 由 news_engine.py 自動產生於 2026/08/08 22:55 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/08 22:55";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Gianni Infantino denies UEFA made payment to alleged lover", d:"2026-08-08", team:"", link:"https://www.espn.com/soccer/story/_/id/49560207/gianni-infantino-denies-uefa-made-departure-payment-alleged-lover"},
