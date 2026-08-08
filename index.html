@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e95";
+const BUILD = "e96";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -3290,6 +3290,29 @@ function hideTeam(){
   document.getElementById("teamView").classList.add("hidden");
   document.getElementById("gameView").classList.add("hidden");
   AD_CACHE=adGet(); MKT_W=mktWGet(); mktWTune(); TWSL_NAMES=twslNamesGet(); TWSL_LGS=twslLgsGet();
+  // 穿透式點擊網(capture):就算有透明元素蓋住名單,也往下找到球員/球隊列照樣導頁
+  document.addEventListener("click",ev=>{
+    try{
+      if(!document.elementsFromPoint) return;
+      const stack=document.elementsFromPoint(ev.clientX,ev.clientY)||[];
+      for(const el of stack){
+        if(!el.closest) continue;
+        const pl=el.closest(".player[data-player]");
+        if(pl){
+          if(pl.contains(ev.target)) return;              // 點擊有正常到達 → 交給原本機制
+          ev.preventDefault(); ev.stopPropagation();
+          try{ showPlayer(JSON.parse(decodeURIComponent(pl.dataset.player))); }catch(e){}
+          return;
+        }
+        const tm=el.closest("#standings td[data-team], .nm[data-team]");
+        if(tm&&tm.dataset&&tm.dataset.team){
+          if(tm.contains(ev.target)) return;
+          ev.preventDefault(); ev.stopPropagation();
+          showTeam(tm.dataset.team); return;
+        }
+      }
+    }catch(e){}
+  }, true);
   // 全域事件委派:球員/球隊列不論被重繪幾次,點擊永遠有效(只接手沒有直接綁定的節點)
   document.addEventListener("click",ev=>{
     const pl=ev.target.closest(".player[data-player]");
