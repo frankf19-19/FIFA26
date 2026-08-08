@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e110";
+const BUILD = "e111";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1308,11 +1308,31 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   const rh=rating(homeName), ra=rating(awayName);
   // 先查真實戰績(本季或上季先驗):有數據 → 評級只當輔助(影響力 ×0.4),數據主導
   const _eh=standEff(homeName,lg,hid), _ea=standEff(awayName,lg,aid);
-  const sh=_eh.s, sa=_ea.s, _prior=(_eh.prior||_ea.prior);
+  let sh=_eh.s, sa=_ea.s; const _prior=(_eh.prior||_ea.prior);
   const _hasData=!!(sh&&sa&&+sh.gp>=2&&+sa.gp>=2);
   const d=(rh-ra)*(_hasData?0.4:1.0);
   const COEF=0.030, BASE=1.32, HA=(cl&&cl.ha!=null)?cl.ha:(0.24+HA_TUNE); // 主場優勢:雲端校準優先,否則本機自調
   let lh=BASE*Math.exp(COEF*d/2 + HA/2), la=BASE*Math.exp(-COEF*d/2 - HA/2);
+  // 主客分拆 + 休息日(雲端 v8;主隊採主場戰績、客隊採客場戰績)
+  let _rest=null;
+  try{
+    const CT=(window.CLOUD&&window.CLOUD.leagues)||null;
+    const pickT=(tid)=>{ if(!CT||tid==null) return null; let t=null;
+      const s=P=>{ if(P&&P.teams&&P.teams["#"+tid]) t=P.teams["#"+tid]; };
+      s(CT[lg]); if(!t){ for(const x in CT){ s(CT[x]); if(t) break; } } return t; };
+    const th=pickT(hid), ta=pickT(aid);
+    if(th&&+th.hgp>=6) sh={gp:th.hgp,gf:th.hgf,ga:th.hga};
+    if(ta&&+ta.agp>=6) sa={gp:ta.agp,gf:ta.agf,ga:ta.aga};
+    if(th&&ta&&th.lp&&ta.lp){
+      const now=Date.now();
+      const dh=Math.round((now-new Date(th.lp))/86400000), da=Math.round((now-new Date(ta.lp))/86400000);
+      if(dh>=0&&da>=0&&dh<=30&&da<=30){
+        _rest={h:dh,a:da};
+        const diff=Math.max(-1,Math.min(1,(dh-da)/3));
+        lh*=1+0.03*diff; la*=1-0.03*diff;
+      }
+    }
+  }catch(e){}
   // 陣容火力微調:雲端球員數據,兩隊皆足才啟用,上限 ±6%(輔助訊號)
   let _sq=null;
   { const qh=cloudSquad(lg,hid), qa=cloudSquad(lg,aid);
@@ -1384,7 +1404,7 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
   const pick = predOut==="H" ? homeName : predOut==="A" ? awayName : "和局";
   return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,conf,pick,mk:!!mkt,
-          lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq};
+          lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest};
 }
 /* 詳細分析:逐項列出模型依據(無資料的項目自動略過,不編造) */
 function analysisRows(hn,an,p,lg,hid,aid){
@@ -1432,6 +1452,7 @@ function analysisRows(hn,an,p,lg,hid,aid){
     : `<span style="color:var(--muted);font-size:11px">(全站通用基準值,尚未依此聯賽校準)</span>`)]);
   if(p.mk) rows.push(["市場賠率", `已融合 ESPN 賠率(模型 ${Math.round((1-MKT_W)*100)}% + 市場 ${Math.round(MKT_W*100)}%,權重依實測表現自動調整)`]);
   else if(DRAW_NUDGE>0) rows.push(["和局補正", `+${DRAW_NUDGE.toFixed(1)}%(歷史顯示模型低估和局)`]);
+  if(p.rest) rows.push(["休息日",`${hz} ${p.rest.h} 天 · ${az} ${p.rest.a} 天(密集賽程 ±3% 內微調)`]);
   if(p.sq&&p.sq.gk) rows.push(["守門對比",`零封率 ${hz} ${(p.sq.gk.h*100).toFixed(0)}% · ${az} ${(p.sq.gk.a*100).toFixed(0)}%(門將數據,微調上限 ±4%)`]);
   if(p.sq) rows.push(["陣容火力",`${hz} ${p.sq.h} · ${az} ${p.sq.a}(前5人每場進攻參與,球員數據,微調上限 ±6%)`]);
   rows.push(["預期進球", `${hz} ${p.lh} · ${az} ${p.la} → 最可能比分 ${hz} ${p.si} - ${p.sj} ${az}`]);
@@ -1957,7 +1978,7 @@ function renderTodaySection(){
         // 賽前拍照存證:預測一顯示就鎖定,完賽後不得再變(誠信保證)
         if(g.state!=="in"&&!g.completed&&(pp.dq||0)>=0.2){
           try{ const sc0=scGet();
-            if(!sc0[g.id]){ sc0[g.id]={pred:{H:pp.H,D:pp.D,A:pp.A,si:pp.si,sj:pp.sj,conf:pp.conf,pick:pp.pick},
+            if(!sc0[g.id]){ sc0[g.id]={pred:{H:pp.H,D:pp.D,A:pp.A,si:pp.si,sj:pp.sj,conf:pp.conf,pick:pp.pick}, odds:(g.odds||null),
               dq:pp.dq, t:Date.now(), v:2, locked:1}; scSet(sc0); } }catch(e){}
         }
         return true;
