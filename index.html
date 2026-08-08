@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e112";
+const BUILD = "e113";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2869,7 +2869,12 @@ function renderStandings(data){
   const groups=[];
   try{
     (data.children||[data]).forEach(gr=>{
-      const entries=(gr.standings?.entries||gr.entries||[]);
+      const entries=(gr.standings?.entries||gr.entries||[]).slice()
+        .sort((a,b)=>{                                    // 依名次排序(ESPN 原始順序不保證)
+          const rv=e=>{ try{ const s=(e.stats||[]).find(x=>x.name==="rank");
+            return s?+(s.displayValue??s.value):999; }catch(_){ return 999; } };
+          return rv(a)-rv(b);
+        });
       if(entries.length) groups.push({name:gr.name||gr.abbreviation||"", entries});
     });
   }catch(e){}
