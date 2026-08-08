@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e96";
+const BUILD = "e97";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2272,7 +2272,9 @@ async function fetchPlayerStats(league, id){
   }
   return null;
 }
+let VIEW_SEQ=0;
 function showPlayer(p, fromPop){
+  VIEW_SEQ++;                                  // 開球員頁 → 使所有進行中的球隊頁晚到渲染作廢
   if(!fromPop){ try{history.pushState({v:"player",p:p},"");}catch(e){} }
   document.getElementById("teamView").classList.remove("hidden");
   ["fixturesSec","insightSec","standSec","hlSec","gameView","todaySec"].forEach(id=>{const el=document.getElementById(id); if(el) el.classList.add("hidden");});
@@ -2869,6 +2871,7 @@ function renderHeadlines(games){
 }
 
 async function showTeam(name, fromPop){
+  const __seq=++VIEW_SEQ;                      // 本次渲染的序號
   if(!fromPop){ try{history.pushState({v:"team",name:name},"");}catch(e){} }
   document.getElementById("teamView").classList.remove("hidden");
   ["fixturesSec","insightSec","standSec","hlSec","gameView","todaySec"].forEach(id=>{const el=document.getElementById(id); if(el) el.classList.add("hidden");});
@@ -2917,6 +2920,7 @@ async function showTeam(name, fromPop){
           ${p.nat?`<div class="p-note">${p.nat}</div>`:""}</div></div>`;
       }).join("");
     });
+    if(__seq!==VIEW_SEQ) return;             // 使用者已切到別頁 → 這批晚到的內容作廢
     box.innerHTML=(box.dataset.banner||"")+html;
     box.querySelectorAll(".player[data-player]").forEach(el=>el.onclick=()=>showPlayer(JSON.parse(decodeURIComponent(el.dataset.player))));
     return;
@@ -2940,13 +2944,14 @@ async function showTeam(name, fromPop){
       if(!flat.length) throw new Error("名冊無資料");
       const players=flat.map(a=>athleteToIdx(a,found.displayName,foundLg));
       players.forEach(p=>{ if(!PLAYER_INDEX.some(x=>x.id===p.id&&x.teamName===p.teamName)) PLAYER_INDEX.push(p); });
-      showTeam(name, true);   // 重進:此時索引已有,走完整名冊路徑(不重複寫入歷史)
+      if(__seq===VIEW_SEQ) showTeam(name, true);   // 重進(僅當使用者仍停在本頁;已點去球員頁則取消,不蓋掉)
     }catch(e){
       const stars=starsFor(name);
       let fb = stars? `<div class="pos-group">代表球星</div>`+stars.map(([n,pos,note])=>
         `<div class="player"><div class="avatar">${n.charAt(0)}</div><div>
           <div class="p-top"><span class="pnm">${n}</span><span class="badge star">⭐ ${pos}</span></div>
           <div class="p-note">${note}</div></div></div>`).join("") : "";
+      if(__seq!==VIEW_SEQ) return;
       box.innerHTML = (box.dataset.banner||"") + fb +
         `<div class="empty">${zhName(name)} 名冊載入失敗(${e.message})。<br>可能是 ESPN 端點暫時無回應,稍後點「更新」重試。</div>`;
     }
@@ -3550,7 +3555,9 @@ function init(){
     if(!document.hidden && Date.now()-SWEEP_AT>30000) checkTodayGames(isoDate(curDate), true);
   });            // 開站 2 秒後抓傷兵
   setInterval(()=>{ if(!document.hidden) loadInjuries(); }, 600000);   // 每 10 分鐘更新傷兵
-  setInterval(()=>{ if(!document.hidden) load(); }, 90000);  // 每 90 秒自動更新
+  setInterval(()=>{ const tv=document.getElementById("teamView");
+    if(!document.hidden && (!tv||tv.classList.contains("hidden"))) load();   // 看球隊/球員頁時不自動刷新(不打斷閱讀)
+  }, 90000);
 }
 init();
 </script>
