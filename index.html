@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e87";
+const BUILD = "e88";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1619,7 +1619,7 @@ async function mergeLeagueIndex(league){
         const flat=await fetchTeamRoster(league,t.id);
         flat.forEach(a=>{const p=athleteToIdx(a,t.displayName,league);
           if(!PLAYER_INDEX.some(x=>String(x.id)===String(p.id)&&x.teamName===p.teamName)){PLAYER_INDEX.push(p);added++;}});
-      }catch(e){}}));
+      }catch(e){ (window.__sweepFails=window.__sweepFails||[]).push(lg.zh); }}));
     }
     if(si&&added) si.textContent=`可搜尋全部 ${PLAYER_INDEX.length} 名球員(已併入${(LEAGUES.find(l=>l.id===league)||{}).zh||league})`;
   }catch(e){}
@@ -1646,7 +1646,7 @@ function setSweepTag(t){ const el=document.getElementById("todaySync"); if(el) e
 /* fast=true:只重掃「今天有賽事」的聯賽(即時比分用,快很多) */
 async function checkTodayGames(targetIso, fast){
   if(SWEEP_BUSY) return;                                  // 防重入:上一輪未完就不再疊
-  SWEEP_BUSY=true;
+  SWEEP_BUSY=true; window.__sweepFails=[];
   const t0=Date.now();
   try{
     const today=targetIso||isoDate(curDate||new Date());
@@ -1695,9 +1695,14 @@ async function checkTodayGames(targetIso, fast){
       if(fresh.length){ await gradeFinished(fresh); if(typeof renderScorecard==="function") renderScorecard(); if(typeof renderInsights==="function") renderInsights(); }
     }catch(e){}
     SWEEP_AT=Date.now();
-    decorateTabs(); renderTodayLine(); renderTodaySection();
-    setSweepTag("");
-  }catch(e){ setSweepTag("· 更新失敗"); }
+    try{ decorateTabs(); }catch(e){}
+    try{ renderTodayLine(); }catch(e){}
+    try{ renderTodaySection(); }catch(e){}
+    const _f=window.__sweepFails||[]; window.__sweepFails=[];
+    if(_f.length && _f.length>=L.length) setSweepTag("· 更新失敗(全部聯賽),3 分鐘後自動重試");
+    else if(_f.length) setSweepTag(`· ${_f.join("、")} 暫時抓不到,稍後自動重試`);
+    else setSweepTag("");
+  }catch(e){ setSweepTag("· 更新失敗("+String((e&&e.message)||e).slice(0,48)+")"); }
   finally{ SWEEP_BUSY=false; }
 }
 /* ===== 台灣運彩「場中投注」公開資料(試探性;被 CORS 擋就靜默略過) =====
