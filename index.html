@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e99";
+const BUILD = "e102";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1946,6 +1946,12 @@ function renderTodaySection(){
         if(snap0&&snap0.pred) return true;
         const pp=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
         if(noPredGate(pp,l.id)){ dropped++; return false; }
+        // 賽前拍照存證:預測一顯示就鎖定,完賽後不得再變(誠信保證)
+        if(g.state!=="in"&&!g.completed&&(pp.dq||0)>=0.2){
+          try{ const sc0=scGet();
+            if(!sc0[g.id]){ sc0[g.id]={pred:{H:pp.H,D:pp.D,A:pp.A,si:pp.si,sj:pp.sj,conf:pp.conf,pick:pp.pick},
+              dq:pp.dq, t:Date.now(), v:2, locked:1}; scSet(sc0); } }catch(e){}
+        }
         return true;
       });
       if(!t._usable.length && dropped>0 && !l.core && !l.cup && !DYN_HIDE[l.id]){ DYN_HIDE[l.id]=Date.now(); dynChanged=true; }
@@ -2475,21 +2481,23 @@ async function gradeFinished(games){
     // ex 存在但無快照 = e12 前的舊記錄 → 升級:補快照與檢討所需欄位(保留原本的命中/Brier,誠實不竄改)
     const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
     if(noPredGate(p,g.league||curLeague)){ return; }   // 僅非核心聯賽的低資料場次不評分
+    const sp0=(ex&&ex.pred)?ex.pred:{H:p.H,D:p.D,A:p.A,si:p.si,sj:p.sj,conf:p.conf,pick:p.pick};   // 賽前存證優先
     const realOut = g.hs>g.as?"H":g.hs<g.as?"A":"D";
-    const predOut = p.H>=p.D&&p.H>=p.A?"H":p.A>=p.D&&p.A>=p.H?"A":"D";
+    const predOut = sp0.H>=sp0.D&&sp0.H>=sp0.A?"H":sp0.A>=sp0.D&&sp0.A>=sp0.H?"A":"D";
     const y={H:0,D:0,A:0}; y[realOut]=1;
-    const brier=(p.H/100-y.H)**2+(p.D/100-y.D)**2+(p.A/100-y.A)**2;
-    sc[g.id]={hit:ex?ex.hit:(predOut===realOut),
-      brier:ex?ex.brier:+brier.toFixed(3),
-      score:ex?ex.score:(predOut===realOut&&p.si===g.hs&&p.sj===g.as),
+    const brier=(sp0.H/100-y.H)**2+(sp0.D/100-y.D)**2+(sp0.A/100-y.A)**2;
+    sc[g.id]={hit:(ex&&ex.hit!=null)?ex.hit:(predOut===realOut),
+      brier:(ex&&ex.brier!=null)?ex.brier:+brier.toFixed(3),
+      score:(ex&&ex.score!=null)?ex.score:(predOut===realOut&&sp0.si===g.hs&&sp0.sj===g.as),
       hs:g.hs, as:g.as, hz:zhName(g.hn), az:zhName(g.an),
       hnk:norm(g.hn), ank:norm(g.an), t:(ex&&ex.t)||Date.now(), v:ex?(ex.v||1):2,
-      homePick:p.pick===g.hn, draw:g.hs===g.as, cal:!!(ex&&ex.cal),
-      pp:[+p.H.toFixed(1),+p.D.toFixed(1),+p.A.toFixed(1)], dq:p.dq, out:realOut,
-      pred:{H:p.H,D:p.D,A:p.A,si:p.si,sj:p.sj,conf:p.conf,pick:p.pick}};
+      homePick:sp0.pick===g.hn, draw:g.hs===g.as, cal:!!(ex&&ex.cal),
+      pp:[+sp0.H.toFixed(1),+sp0.D.toFixed(1),+sp0.A.toFixed(1)], dq:(ex&&ex.dq!=null)?ex.dq:p.dq, out:realOut,
+      locked:(ex&&ex.locked)||0,
+      pred:sp0};
     // --- 評級自我校準:淨勝球誤差 → 微調兩隊評級(此消彼長,單場上限 ±2;每場只做一次) ---
     if(!sc[g.id].cal){
-      const err=(g.hs-g.as)-(p.si-p.sj);
+      const err=(g.hs-g.as)-(sp0.si-sp0.sj);
       // 表現感知:結果與場面背離(勝方射正被壓 ≥3)→ 校準減半,避免被幸運結果騙
       let factor=1, luck=null;
       const pf=perfMap[g.id];
