@@ -601,6 +601,7 @@
         <button class="btn" id="loadBtn"><span class="ico">⟳</span> 更新</button>
       </div>
       <div id="todayLine"></div>
+      <div id="cloudTag" style="text-align:center;font-family:var(--mono);font-size:11px;color:var(--teal);padding:2px 0 0"></div>
       <div id="hiddenNote" style="text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted);padding:3px 2px 0;line-height:1.6"></div>
     </div>
 
@@ -692,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e84";
+const BUILD = "e85";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1268,16 +1269,17 @@ function noPredGate(p,lg){
 }
 function predict(homeName,awayName,mkt,lg,hid,aid){
   if(lg){ const L0=LEAGUES.find(x=>x.id===lg); if(L0&&L0.stand) lg=L0.stand; }   // 盃賽借用母聯賽的積分榜與進球環境
+  const cl=(window.CLOUD&&window.CLOUD.leagues&&window.CLOUD.leagues[lg])||null;
   const rh=rating(homeName), ra=rating(awayName);
   // 先查真實戰績(本季或上季先驗):有數據 → 評級只當輔助(影響力 ×0.4),數據主導
   const _eh=standEff(homeName,lg,hid), _ea=standEff(awayName,lg,aid);
   const sh=_eh.s, sa=_ea.s, _prior=(_eh.prior||_ea.prior);
   const _hasData=!!(sh&&sa&&+sh.gp>=2&&+sa.gp>=2);
   const d=(rh-ra)*(_hasData?0.4:1.0);
-  const COEF=0.030, BASE=1.32, HA=0.24+HA_TUNE; // 主場優勢:基準+依實際主勝率自動微調
+  const COEF=0.030, BASE=1.32, HA=(cl&&cl.ha!=null)?cl.ha:(0.24+HA_TUNE); // 主場優勢:雲端校準優先,否則本機自調
   let lh=BASE*Math.exp(COEF*d/2 + HA/2), la=BASE*Math.exp(-COEF*d/2 - HA/2);
   if(sh&&sa&&+sh.gp>=2&&+sa.gp>=2){
-    const LG=(lg&&LGAVG_BY_LG[lg])||LG_AVG, gpH=+sh.gp, gpA=+sa.gp;
+    const LG=(cl&&cl.lgAvg)||(lg&&LGAVG_BY_LG[lg])||LG_AVG, gpH=+sh.gp, gpA=+sa.gp;
     const lh2=LG*((+sh.gf/gpH)/LG)*((+sa.ga/gpA)/LG)*Math.exp(HA/2);
     const la2=LG*((+sa.gf/gpA)/LG)*((+sh.ga/gpH)/LG)*Math.exp(-HA/2);
     const wS=Math.min(0.6, 0.3+0.03*Math.min(gpH,gpA));
@@ -3151,6 +3153,13 @@ function hideTeam(){
   document.getElementById("teamView").classList.add("hidden");
   document.getElementById("gameView").classList.add("hidden");
   AD_CACHE=adGet(); MKT_W=mktWGet(); mktWTune(); TWSL_NAMES=twslNamesGet(); TWSL_LGS=twslLgsGet();
+  window.CLOUD=null;
+  fetch("calib.json?_="+Date.now(),{cache:"no-store"}).then(r=>r.ok?r.json():null).then(j=>{
+    if(j&&j.leagues){ window.CLOUD=j;
+      const el=document.getElementById("cloudTag");
+      if(el) el.textContent="☁ 雲端校準 · 更新 "+String(j.updated||"").replace("T"," ").slice(5,16)+" · 樣本 "+(j.n||0)+" 場";
+    }
+  }).catch(()=>{});
   applyView();
 }
 
