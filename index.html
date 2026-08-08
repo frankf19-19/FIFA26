@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e102";
+const BUILD = "e103";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1453,10 +1453,17 @@ function reasonText(hn,an,p){
 /* ================= ESPN 資料 ================= */
 async function jget(url,live){
   // live=true:破除瀏覽器/CDN 快取,確保拿到最新比分
+  // 全域 12 秒逾時:請求懸住直接砍斷(拋錯讓呼叫端走備援),頁面不再卡死
   const u = live ? url+(url.includes("?")?"&":"?")+"_="+Date.now() : url;
-  const r = await fetch(u, live?{cache:"no-store"}:undefined);
-  if(!r.ok) throw new Error("HTTP "+r.status);
-  return r.json();
+  const ctl = (typeof AbortController!=="undefined") ? new AbortController() : null;
+  const tm = ctl ? setTimeout(()=>{ try{ctl.abort();}catch(e){} }, 12000) : null;
+  try{
+    const opt = live ? {cache:"no-store"} : {};
+    if(ctl) opt.signal = ctl.signal;
+    const r = await fetch(u, opt);
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    return await r.json();
+  } finally { if(tm) clearTimeout(tm); }
 }
 function espnScore(league,date){return `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/scoreboard?dates=${date}`;}
 function espnInjuries(league){return `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/injuries`;}
@@ -3097,6 +3104,18 @@ async function showGame(g, fromPop){
       <span class="k">對戰往績</span>近 ${list.length} 次交手:${hz} ${hw} 勝 ${dw} 和 ${aw} 負
       <div style="margin-top:8px">${rows}</div></div>`;
   }).catch(()=>{});
+  // 看門狗:9 秒後若畫面仍是「載入比賽數據中」→ 給出重試,不留死頁
+  { const __g=g;
+    setTimeout(()=>{ try{
+      const bx=document.getElementById("gameView");
+      if(bx && !bx.classList.contains("hidden") && /載入比賽數據中/.test(bx.textContent||"")){
+        const eb=bx.querySelector(".empty");
+        if(eb){ eb.innerHTML=`資料載入逾時(ESPN 回應緩慢)。<a href="#" id="gvRetry" style="color:var(--teal)">點此重試</a>`;
+          const a=document.getElementById("gvRetry");
+          if(a) a.onclick=(ev)=>{ ev.preventDefault(); showGame(__g, true); };
+        }
+      }
+    }catch(e){} }, 9000); }
   window.scrollTo(0,0);
   if(window.__gvTimer){ clearInterval(window.__gvTimer); window.__gvTimer=null; }
   if(g.state==="in"){
