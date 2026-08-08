@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e108";
+const BUILD = "e110";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1286,9 +1286,9 @@ function cloudSquad(lg, tid){
       const sv=s0[5]||"", cs=s0[6]||"", gc=s0[7]||"", tk=+s0[8]||0, icp=+s0[9]||0;
       if(app<5) continue;
       const pos=String(a[2]||"").toUpperCase();
-      if(pos==="G"||pos==="GK"){ if(!gk||app>gk.app) gk={n:a[1],app,sv,cs,gc,csr:(cs!==""?+(+cs/app).toFixed(2):null)}; continue; }
-      ps.push({n:a[1], pos:a[2]||"", app, g, as, c:+((g+as)/app).toFixed(2)});
-      if(tk+icp>0) dfs.push({n:a[1], pos:a[2]||"", app, tk, icp, d:+((tk+icp)/app).toFixed(1)});
+      if(pos==="G"||pos==="GK"){ if(!gk||app>gk.app) gk={id:a[0],n:a[1],app,sv,cs,gc,csr:(cs!==""?+(+cs/app).toFixed(2):null)}; continue; }
+      ps.push({id:a[0], n:a[1], pos:a[2]||"", app, g, as, c:+((g+as)/app).toFixed(2)});
+      if(tk+icp>0) dfs.push({id:a[0], n:a[1], pos:a[2]||"", app, tk, icp, d:+((tk+icp)/app).toFixed(1)});
     }
     if(ps.length<3) return null;
     ps.sort((x,y)=>y.c-x.c); dfs.sort((x,y)=>y.d-x.d);
@@ -1926,6 +1926,7 @@ function renderTodaySection(){
       const h2b=document.querySelector("#todaySec h2"); if(h2b) h2b.textContent="當日賽事";
       if(tag) tag.textContent=TODAY_ISO;
       box.innerHTML=`<div class="empty">${TODAY_ISO} 全 66 聯賽皆無賽事</div>`;
+      try{ document.querySelectorAll("#todaySec .seg [data-cnt], #todaySec .seg b").forEach(el=>el.textContent="0"); }catch(e){}
     } else sec.classList.add("hidden");
     return;
   }
@@ -3006,10 +3007,12 @@ async function loadH2H(lg, hid, aid){
         if(!me||!op)return;
         const sv=x=>{const s=x.score; if(s==null)return null; return typeof s==="object"?+(s.value??s.displayValue):+s;};
         const a=sv(me), b=sv(op); if(a==null||b==null||isNaN(a)||isNaN(b))return;
-        out.push({d:new Date(ev.date), my:a, op:b, home:(me.homeAway==="home")});
+        out.push({d:new Date(ev.date), my:a, op:b, home:(me.homeAway==="home"), id:ev.id, dt:ev.date});
       }catch(e){}});
     }catch(e){}
   }
+  const seen={}; const ded=out.filter(m=>{ const k=m.id||(+m.d+"_"+m.my+"_"+m.op); if(seen[k])return false; seen[k]=1; return true; });
+  out.length=0; out.push(...ded);
   out.sort((x,y)=>y.d-x.d);
   H2H_CACHE[key]=out.slice(0,6);
   return H2H_CACHE[key];
@@ -3086,24 +3089,43 @@ async function showGame(g, fromPop){
   box.innerHTML=`<div class="empty">載入比賽數據中…</div>`;
   document.querySelectorAll("#gameView .gv-team").forEach(el=>el.onclick=()=>showTeam(el.dataset.team));
   // 對戰往績(背景載入)
-  loadH2H(g.league||curLeague, g.hid, g.aid).then(list=>{
+  const __renderH2H=(list)=>{
     const box=document.getElementById("h2hBox"); if(!box) return;
     if(!list||!list.length){ box.innerHTML=""; return; }
     const hz=zhName(g.hn), az=zhName(g.an);
     let hw=0,dw=0,aw=0;
-    const rows=list.map(m=>{
+    const rows=list.map((m,i)=>{
       const res=m.my>m.op?"W":m.my<m.op?"L":"D";
       if(res==="W")hw++; else if(res==="D")dw++; else aw++;
       const col=res==="W"?"var(--hit)":res==="L"?"var(--miss)":"var(--gold)";
       const dstr=m.d.toLocaleDateString("zh-TW",{year:"numeric",month:"2-digit",day:"2-digit"});
-      return `<div style="display:grid;grid-template-columns:96px 1fr auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px">
+      return `<div class="h2h-row" data-i="${i}" style="display:grid;grid-template-columns:96px 1fr auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px${m.id?';cursor:pointer':''}" title="${m.id?'點擊查看該場比賽詳情':''}">
         <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">${dstr}</span>
-        <span>${m.home?`${hz}(主)`:`${hz}(客)`} vs ${az}</span>
+        <span>${m.home?`${hz}(主)`:`${hz}(客)`} vs ${az} ${m.id?'<span style="color:var(--teal);font-size:11px">›</span>':''}</span>
         <span style="font-family:var(--mono);font-weight:700;color:${col}">${m.my} - ${m.op}</span></div>`;
     }).join("");
     box.innerHTML=`<div class="why" style="border-top:none;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:13px 15px;margin-bottom:14px">
       <span class="k">對戰往績</span>近 ${list.length} 次交手:${hz} ${hw} 勝 ${dw} 和 ${aw} 負
       <div style="margin-top:8px">${rows}</div></div>`;
+    box.querySelectorAll(".h2h-row[data-i]").forEach(el=>{
+      const m=list[+el.dataset.i];
+      if(!m||!m.id) return;
+      el.onclick=()=>{
+        const g2 = m.home
+          ? {id:m.id, hn:g.hn, an:g.an, hid:g.hid, aid:g.aid, hs:m.my, as:m.op}
+          : {id:m.id, hn:g.an, an:g.hn, hid:g.aid, aid:g.hid, hs:m.op, as:m.my};
+        g2.league=g.league||curLeague; g2.state="post"; g2.completed=true;
+        g2.date=m.dt||(m.d&&m.d.toISOString&&m.d.toISOString())||""; g2.time="";
+        showGame(g2);
+      };
+    });
+  };
+  loadH2H(g.league||curLeague, g.hid, g.aid).then(list=>{
+    __renderH2H(list);
+    setTimeout(()=>{ try{
+      const nb=document.getElementById("h2hBox");
+      if(nb && !nb.childElementCount && window.__gvId===g.id) __renderH2H(list);
+    }catch(e){} }, 1200);                                   // 注入把先到的內容洗掉 → 補畫一次
   }).catch(()=>{});
   // 看門狗:9 秒後若畫面仍是「載入比賽數據中」→ 給出重試,不留死頁
   { const __g=g;
@@ -3239,13 +3261,13 @@ async function showGame(g, fromPop){
     if(qh||qa){
       const col=(qq,nm)=>`<div style="flex:1;min-width:230px"><div style="font-family:var(--cond);font-weight:700;letter-spacing:.06em;font-size:13px;color:var(--gold);margin-bottom:6px">${zhName(nm)}</div>`+
         (qq?(
-          qq.top.map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px">
+          qq.top.map(x=>`<div class="player" data-player='${encodeURIComponent(JSON.stringify({id:x.id,name:x.n,pos:x.pos,teamName:nm,league:g.league||curLeague})).replace(/'/g,"%27")}' style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px;cursor:pointer">
           <span>⚔ ${x.n} <span style="color:var(--muted);font-size:11px">${x.pos}</span></span>
           <span style="font-family:var(--mono)"><b style="color:var(--amber)">${x.g}</b> 球 ${x.as} 助 · ${x.app} 場</span></div>`).join("")
-          +(qq.defTop&&qq.defTop.length?qq.defTop.map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px">
+          +(qq.defTop&&qq.defTop.length?qq.defTop.map(x=>`<div class="player" data-player='${encodeURIComponent(JSON.stringify({id:x.id,name:x.n,pos:x.pos,teamName:nm,league:g.league||curLeague})).replace(/'/g,"%27")}' style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px;cursor:pointer">
           <span>🛡 ${x.n} <span style="color:var(--muted);font-size:11px">${x.pos}</span></span>
           <span style="font-family:var(--mono)">${x.tk} 抄截 ${x.icp} 攔截 · ${x.app} 場</span></div>`).join(""):"")
-          +(qq.gk?`<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;font-size:13px">
+          +(qq.gk?`<div class="player" data-player='${encodeURIComponent(JSON.stringify({id:qq.gk.id,name:qq.gk.n,pos:"G",teamName:nm,league:g.league||curLeague})).replace(/'/g,"%27")}' style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;font-size:13px;cursor:pointer">
           <span>🧤 ${qq.gk.n} <span style="color:var(--muted);font-size:11px">GK</span></span>
           <span style="font-family:var(--mono)">${qq.gk.sv||"—"} 撲救 · ${qq.gk.cs||"—"} 零封 · ${qq.gk.app} 場</span></div>`:"")
         ):`<div style="color:var(--muted);font-size:12px">暫無球員數據</div>`)+`</div>`;
