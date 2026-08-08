@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e106";
+const BUILD = "e107";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -3387,7 +3387,9 @@ function hideTeam(){
   });
   window.addEventListener("unhandledrejection",ev=>{
     try{ const m=String((ev.reason&&ev.reason.message)||ev.reason||"").slice(0,60);
-      if(m&&!/Abort|Failed to fetch|HTTP /.test(m)) __toast("⚠ 非同步錯誤:"+m, 1); }catch(e){}
+      const st=String((ev.reason&&ev.reason.stack)||"");
+      const ln=(st.match(/:(\d+):\d+/)||[])[1]||"?";
+      if(m&&!/Abort|Failed to fetch|HTTP /.test(m)) __toast("⚠ 非同步錯誤:"+m+" @行"+ln, 1); }catch(e){}
   });
   try{
     const __SG=showGame;
