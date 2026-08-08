@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e86";
+const BUILD = "e87";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1499,6 +1499,16 @@ async function fetchTeamRoster(league,teamId){
     try{ const rd=await jget(u); const flat=parseRosterPayload(rd); if(flat.length) return flat; }
     catch(e){ lastErr=e; }
   }
+  // 雲端名單備援(Actions 每日抓好;客戶端抓不到時仍有完整球員清單)
+  try{
+    const C=(window.CLOUD&&window.CLOUD.leagues)||null;
+    if(C){
+      const scan=P=>{const t=P&&P.teams&&P.teams["#"+teamId]; return (t&&t.r)||null;};
+      let r=scan(C[league]);
+      if(!r){ for(const x in C){ r=scan(C[x]); if(r) break; } }
+      if(r&&r.length) return r.map(a=>({id:a[0],fullName:a[1],position:{abbreviation:a[2]||""},jersey:a[3]||""}));
+    }
+  }catch(e){}
   if(lastErr) throw lastErr;
   return [];
 }
