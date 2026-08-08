@@ -1,0 +1,22 @@
+name: euro-calib
+on:
+  schedule:
+    - cron: "40 9 * * *"        # 每日 UTC 09:40 = 台灣 17:40
+  workflow_dispatch:            # 也可手動觸發
+permissions:
+  contents: write
+jobs:
+  calib:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: node scripts/calib-euro.js
+      - name: commit calib.json
+        run: |
+          git config user.name  "calib-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add calib.json
+          git diff --cached --quiet || git commit -m "daily euro calibration"
+          git push
