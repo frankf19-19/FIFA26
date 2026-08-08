@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e107";
+const BUILD = "e108";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2484,7 +2484,7 @@ async function gradeFinished(games){
   games.forEach(g=>{
     if(!g.completed||g.hs==null||g.as==null)return;
     const ex=sc[g.id];
-    if(ex&&ex.pred)return;                      // 新格式已完整 → 跳過
+    if(ex&&ex.pred&&ex.hs!=null)return;         // 已完整評分才跳過;賽前鎖定待評的要照常評
     // ex 存在但無快照 = e12 前的舊記錄 → 升級:補快照與檢討所需欄位(保留原本的命中/Brier,誠實不竄改)
     const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
     if(noPredGate(p,g.league||curLeague)){ return; }   // 僅非核心聯賽的低資料場次不評分
@@ -2764,7 +2764,7 @@ function makeReview(g){
     const up=s.adj>0?hz:az, dn=s.adj>0?az:hz;
     parts.push(`已自動校準:${up} 評級 +${Math.abs(s.adj)}、${dn} -${Math.abs(s.adj)},之後預測將反映`);
   }
-  parts.push(`本場 Brier ${s.brier.toFixed(2)}`);
+  if(typeof s.brier==="number") parts.push(`本場 Brier ${s.brier.toFixed(2)}`);
   return {text:parts.join(";")+"。", good:s.hit};
 }
 function gameCard(g){
