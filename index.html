@@ -682,9 +682,9 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e76";
+const BUILD = "e79";
 const LEAGUES = [
-  /* ===== 主流聯賽(ESPN 資料穩定、運彩固定開盤)===== */
+  /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
   {id:"esp.1", zh:"西甲",  full:"西班牙足球甲級聯賽", core:1},
   {id:"ita.1", zh:"義甲",  full:"義大利足球甲級聯賽", core:1},
@@ -694,29 +694,7 @@ const LEAGUES = [
   {id:"uefa.europa",    zh:"歐霸", full:"歐洲聯賽", core:1},
   {id:"usa.1", zh:"美職聯", full:"美國職業足球大聯盟", core:1},
   {id:"jpn.1", zh:"日職甲", full:"日本足球甲級聯賽 J1", core:1},
-  {id:"ned.1", zh:"荷甲", full:"荷蘭足球甲級聯賽", core:1},
-  {id:"por.1", zh:"葡超", full:"葡萄牙足球超級聯賽", core:1},
-  {id:"sco.1", zh:"蘇超", full:"蘇格蘭足球超級聯賽"},
-  {id:"bel.1", zh:"比甲", full:"比利時足球甲級聯賽"},
-  {id:"tur.1", zh:"土超", full:"土耳其足球超級聯賽"},
-  /* 更多聯賽 */
-  {id:"eng.2", zh:"英冠", full:"英格蘭冠軍足球聯賽", more:1},
-  {id:"esp.2", zh:"西乙", full:"西班牙足球乙級聯賽", more:1},
-  {id:"ita.2", zh:"義乙", full:"義大利足球乙級聯賽", more:1},
-  {id:"ger.2", zh:"德乙", full:"德國足球乙級聯賽", more:1},
-  {id:"fra.2", zh:"法乙", full:"法國足球乙級聯賽", more:1},
-  {id:"gre.1", zh:"希超", full:"希臘足球超級聯賽", more:1},
-  {id:"sui.1", zh:"瑞士超", full:"瑞士足球超級聯賽", more:1},
-  {id:"aut.1", zh:"奧甲", full:"奧地利足球甲級聯賽", more:1},
-  {id:"den.1", zh:"丹超", full:"丹麥足球超級聯賽", more:1},
-  {id:"rus.1", zh:"俄超", full:"俄羅斯足球超級聯賽", more:1},
-  {id:"eng.league_cup", zh:"英聯賽盃", full:"英格蘭聯賽盃", more:1, cup:1, stand:"eng.1"},
-  {id:"eng.fa", zh:"英足總盃", full:"英格蘭足總盃", more:1, cup:1, stand:"eng.1"},
-  {id:"ger.dfb_pokal", zh:"德國盃", full:"德國足球協會盃", more:1, cup:1, stand:"ger.1"},
-  {id:"esp.copa_del_rey", zh:"國王盃", full:"西班牙國王盃", more:1, cup:1, stand:"esp.1"},
-  {id:"ita.coppa_italia", zh:"義大利盃", full:"義大利盃", more:1, cup:1, stand:"ita.1"},
-  {id:"fra.coupe_de_france", zh:"法國盃", full:"法國盃", more:1, cup:1, stand:"fra.1"},
-  {id:"uefa.europa.conf", zh:"歐會盃", full:"歐洲協會聯賽", more:1, cup:1},
+  {id:"eng.2", zh:"英冠", full:"英格蘭冠軍足球聯賽", core:1},
 ];
 let curLeague = "usa.1";     // 預設美職聯(現在是賽季中;歐洲 8 月開賽後可自行切換)
 let curDate = new Date();
@@ -1197,6 +1175,14 @@ function standOf(name,lg,tid){
     if(tid!=null && P["#"+tid]) return P["#"+tid];   // 球隊 ID 優先:最可靠
     if(P[k]) return P[k];
     for(const kk in P){ if(kk.charAt(0)!=="#"&&kk.length>=4&&wordHit(k,kk)) return P[kk]; }
+  }
+  // 跨池備援:指定聯賽的池沒中 → 其他聯賽池以 ID / 全名精確再找(不模糊)
+  if(lg){
+    for(const x in STAND_BY_LG){
+      const P=STAND_BY_LG[x];
+      if(tid!=null && P["#"+tid]) return P["#"+tid];
+      if(P[k]) return P[k];
+    }
   }
   return null;
 }
@@ -2038,6 +2024,19 @@ async function fetchPlayerBio(league, id){
       };
     }catch(e){}
   }
+  // 備援:TheSportsDB(免金鑰、開放跨域、社群維護)——ESPN 沒有的冷門聯賽球員常有
+  try{
+    const d=await jget(`https://www.thesportsdb.com/api/v1/json/3/searchplayers.php?p=${encodeURIComponent(arguments[2]||"")}`);
+    const pl=(d.player||[])[0];
+    if(pl){
+      let age=null;
+      if(pl.dateBorn){ const b=new Date(pl.dateBorn); age=Math.floor((Date.now()-b.getTime())/31557600000); }
+      return { h:pl.strHeight||null, w:pl.strWeight||null, age,
+        birth:pl.dateBorn||null, nat:pl.strNationality||null,
+        headshot:pl.strCutout||pl.strThumb||null, pos:pl.strPosition||null,
+        team:pl.strTeam||null, src:"TheSportsDB(社群維護)" };
+    }
+  }catch(e){}
   return null;
 }
 async function fetchStatLogRefs(id){
@@ -2173,7 +2172,7 @@ function showPlayer(p, fromPop){
       `</tbody></table></div>`;
   }).catch(()=>{});
   // 非同步補齊個人檔案(名單資料常缺年齡/身高;個人端點較完整)
-  fetchPlayerBio(p.league||curLeague, p.id).then(b=>{
+  fetchPlayerBio(p.league||curLeague, p.id, p.name).then(b=>{
     if(!b) return;
     const grid=document.getElementById("bioGrid"); if(!grid) return;
     const setv=(label,val)=>{ if(val==null) return;
@@ -2188,6 +2187,7 @@ function showPlayer(p, fromPop){
       d.innerHTML=`<div style="font-family:var(--cond);letter-spacing:.1em;text-transform:uppercase;font-size:11px;color:var(--muted)">${label}</div><div class="bv" style="font-size:15px;margin-top:2px">${val}</div>`;
       grid.appendChild(d); };
     add("身高",b.h); add("體重",b.w); add("生日",b.birth);
+    if(b.src) add("資料來源",b.src);
     if(b.headshot){ const img=document.querySelector("#roster .avatar[data-big]"); if(img&&img.tagName==="IMG"&&!img.complete){} else if(img&&img.tagName!=="IMG"){} }
   }).catch(()=>{});
   // 非同步抓數據
@@ -2357,7 +2357,8 @@ function renderCoverage(){
     let full=0,none=0;
     (t.games||[]).forEach(g=>{ const p=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
       if(p.dq>=0.5) full++; else if(p.dq<0.2) none++; });
-    rows.push({zh:l.zh,n:t.n,full,none});
+    const stN=Object.keys(STAND_BY_LG[l.stand||l.id]||{}).filter(k=>k.charAt(0)!=="#").length;
+    rows.push({zh:l.zh,n:t.n,full,none,stN});
   });
   if(!rows.length) return "";
   rows.sort((a,b)=>(b.full/b.n)-(a.full/a.n));
@@ -2366,7 +2367,7 @@ function renderCoverage(){
     const col=pct>=60?"var(--hit)":pct>=25?"var(--gold)":"var(--miss)";
     return `<div class="cal-row"><span class="cal-k">${r.zh}</span>
       <span class="cal-bar"><i style="width:${pct}%;background:${col}"></i></span>
-      <span class="cal-v">${r.n} 場 · 資料足 ${r.full}${r.none?` · <span style="color:var(--miss)">不足 ${r.none}</span>`:""}</span></div>`;
+      <span class="cal-v">${r.n} 場 · 資料足 ${r.full}${r.none?` · <span style="color:var(--miss)">不足 ${r.none}</span>`:""} · 榜${r.stN}隊</span></div>`;
   };
   return `<div class="ins cal-card">
     <div class="ins-h">📋 各聯賽資料涵蓋率(今日)</div>
