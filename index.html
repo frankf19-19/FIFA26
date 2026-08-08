@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e85";
+const BUILD = "e86";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1181,6 +1181,15 @@ function standEff(name,lg,tid){
   const s=standOf(name,lg,tid);
   if(s&&+s.gp>=2) return {s,prior:false};
   const k=norm(name);
+  // 雲端球隊攻防(近 182 天實戰紀錄,跨裝置一致、比上季榜更新鮮)
+  const C=(window.CLOUD&&window.CLOUD.leagues)||null;
+  if(C){
+    const scan=P=>{ if(!P||!P.teams) return null; const T=P.teams;
+      return (tid!=null&&T["#"+tid])||T[String(name).toLowerCase()]||null; };
+    let ct=scan(C[lg]);
+    if(!ct){ for(const x in C){ if(x===lg) continue; ct=scan(C[x]); if(ct) break; } }
+    if(ct&&+ct.gp>=6) return {s:ct,prior:true};
+  }
   if(lg&&PREV_BY_LG[lg]){
     const P=PREV_BY_LG[lg];
     const p2=(tid!=null&&P["#"+tid])||P[k]||null;
@@ -1318,7 +1327,7 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   // ===== 資料品質收縮:資料越少,越往基準率靠(不假裝有把握) =====
   let dq=0;                                     // 0=毫無資料,1=資料充分
   if(mkt) dq+=0.55;                             // 有市場賠率 = 最強訊號
-  if(sh&&sa&&+sh.gp>=2&&+sa.gp>=2) dq+=0.30*(0.5+0.5*Math.min(1,Math.min(+sh.gp,+sa.gp)/10))*(_prior?0.6:1);
+  if(sh&&sa&&+sh.gp>=2&&+sa.gp>=2) dq+=0.30*(0.5+0.5*Math.min(1,Math.min(+sh.gp,+sa.gp)/10))*(_prior?(Math.min(+sh.gp,+sa.gp)>=15?0.8:0.6):1);
   if(schedOf(homeName)&&schedOf(awayName)) dq+=0.15;   // 真實近5場戰績(跨季有效,實戰數據)
   // 已知評級不再計入資料充分度:名氣不是數據(信心只反映真實資料量)
   dq=Math.max(0,Math.min(1,dq));
@@ -3157,7 +3166,7 @@ function hideTeam(){
   fetch("calib.json?_="+Date.now(),{cache:"no-store"}).then(r=>r.ok?r.json():null).then(j=>{
     if(j&&j.leagues){ window.CLOUD=j;
       const el=document.getElementById("cloudTag");
-      if(el) el.textContent="☁ 雲端校準 · 更新 "+String(j.updated||"").replace("T"," ").slice(5,16)+" · 樣本 "+(j.n||0)+" 場";
+      if(el) el.textContent="☁ 雲端校準("+(j.days||28)+"天)· 更新 "+String(j.updated||"").replace("T"," ").slice(5,16)+" · 樣本 "+(j.n||0)+" 場";
     }
   }).catch(()=>{});
   applyView();
