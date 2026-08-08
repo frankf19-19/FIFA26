@@ -682,7 +682,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e74";
+const BUILD = "e76";
 const LEAGUES = [
   /* ===== 主流聯賽(ESPN 資料穩定、運彩固定開盤)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -709,9 +709,14 @@ const LEAGUES = [
   {id:"sui.1", zh:"瑞士超", full:"瑞士足球超級聯賽", more:1},
   {id:"aut.1", zh:"奧甲", full:"奧地利足球甲級聯賽", more:1},
   {id:"den.1", zh:"丹超", full:"丹麥足球超級聯賽", more:1},
-  {id:"nor.1", zh:"挪超", full:"挪威足球超級聯賽", more:1},
-  {id:"swe.1", zh:"瑞典超", full:"瑞典足球超級聯賽", more:1},
   {id:"rus.1", zh:"俄超", full:"俄羅斯足球超級聯賽", more:1},
+  {id:"eng.league_cup", zh:"英聯賽盃", full:"英格蘭聯賽盃", more:1, cup:1, stand:"eng.1"},
+  {id:"eng.fa", zh:"英足總盃", full:"英格蘭足總盃", more:1, cup:1, stand:"eng.1"},
+  {id:"ger.dfb_pokal", zh:"德國盃", full:"德國足球協會盃", more:1, cup:1, stand:"ger.1"},
+  {id:"esp.copa_del_rey", zh:"國王盃", full:"西班牙國王盃", more:1, cup:1, stand:"esp.1"},
+  {id:"ita.coppa_italia", zh:"義大利盃", full:"義大利盃", more:1, cup:1, stand:"ita.1"},
+  {id:"fra.coupe_de_france", zh:"法國盃", full:"法國盃", more:1, cup:1, stand:"fra.1"},
+  {id:"uefa.europa.conf", zh:"歐會盃", full:"歐洲協會聯賽", more:1, cup:1},
 ];
 let curLeague = "usa.1";     // 預設美職聯(現在是賽季中;歐洲 8 月開賽後可自行切換)
 let curDate = new Date();
@@ -1225,6 +1230,7 @@ async function loadStandFor(lg){
   return false;
 }
 function predict(homeName,awayName,mkt,lg,hid,aid){
+  if(lg){ const L0=LEAGUES.find(x=>x.id===lg); if(L0&&L0.stand) lg=L0.stand; }   // 盃賽借用母聯賽的積分榜與進球環境
   const rh=rating(homeName), ra=rating(awayName), d=rh-ra;
   const COEF=0.030, BASE=1.32, HA=0.24+HA_TUNE; // 主場優勢:基準+依實際主勝率自動微調
   let lh=BASE*Math.exp(COEF*d/2 + HA/2), la=BASE*Math.exp(-COEF*d/2 - HA/2);
@@ -1292,6 +1298,7 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
 }
 /* 詳細分析:逐項列出模型依據(無資料的項目自動略過,不編造) */
 function analysisRows(hn,an,p,lg,hid,aid){
+  if(lg){ const L0=LEAGUES.find(x=>x.id===lg); if(L0&&L0.stand) lg=L0.stand; }
   const rows=[], hz=zhName(hn), az=zhName(an);
   const rh=rating(hn), ra=rating(an), d=rh-ra;
   // ── 資料來源盤點:誠實揭露這場預測「有什麼、缺什麼」 ──
@@ -1606,7 +1613,9 @@ async function checkTodayGames(targetIso, fast){
     LEAGUES.forEach(l=>{ if(!lgVisible(l)) delete TODAY_GAMES[l.id]; });   // 不可見聯賽的殘留資料一律清除
     // 先補齊「今天有比賽」的聯賽積分榜,預測才有真實數據(原本只有目前聯賽有)
     try{
-      const need=Object.keys(TODAY_GAMES).filter(k=>TODAY_GAMES[k].n>0);
+      const need0=Object.keys(TODAY_GAMES).filter(k=>TODAY_GAMES[k].n>0);
+      const extra=need0.map(k=>(LEAGUES.find(x=>x.id===k)||{}).stand).filter(Boolean);
+      const need=[...new Set([...need0,...extra])];
       for(let i=0;i<need.length;i+=6){
         await Promise.all(need.slice(i,i+6).map(lg=>loadStandFor(lg).catch(()=>false)));
       }
@@ -1696,6 +1705,7 @@ function lgdGet(){try{return JSON.parse(localStorage.getItem("euroLGD")||"{}");}
 function lgdSet(o){try{localStorage.setItem("euroLGD",JSON.stringify(o));}catch(e){}}
 function lgVisible(l){
   if(SHOW_ALL_LG) return true;
+  if(l.cup) return true;                           // 盃賽:資料掛在母聯賽,不做聯賽級稽核
   if(!l.core && DYN_HIDE[l.id]) return false;      // 今日全場資料不足 → 當天下架
   if(l.core) return true;                     // 五大聯賽等核心賽事永不隱藏(安全網)
   const d=LGDATA[l.id];
@@ -1708,7 +1718,7 @@ function standEntryCount(data){
 async function auditLeagues(force){
   LGDATA=lgdGet(); DYN_HIDE=dynGet();
   const now=Date.now(), DAY=86400000;
-  const todo=LEAGUES.filter(l=>!l.core && (force||!LGDATA[l.id]||(now-(LGDATA[l.id].t||0))>DAY));
+  const todo=LEAGUES.filter(l=>!l.core && !l.cup && (force||!LGDATA[l.id]||(now-(LGDATA[l.id].t||0))>DAY));
   if(todo.length){
     setSweepTag("· 檢查聯賽資料");
     for(let i=0;i<todo.length;i+=6){
@@ -1811,7 +1821,7 @@ function renderTodaySection(){
         if((pp.dq||0)<0.2){ dropped++; return false; }
         return true;
       });
-      if(!t._usable.length && dropped>0 && !l.core && !DYN_HIDE[l.id]){ DYN_HIDE[l.id]=Date.now(); dynChanged=true; }
+      if(!t._usable.length && dropped>0 && !l.core && !l.cup && !DYN_HIDE[l.id]){ DYN_HIDE[l.id]=Date.now(); dynChanged=true; }
     }
     t._usable.forEach(g=>{cnt.all++;cnt[stOf(g)]++;});
   });
@@ -2030,9 +2040,47 @@ async function fetchPlayerBio(league, id){
   }
   return null;
 }
+async function fetchStatLogRefs(id){
+  if(!id) return [];
+  try{
+    const d=await jget(`https://sports.core.api.espn.com/v2/sports/soccer/athletes/${id}/statisticslog`);
+    const refs=[];
+    (d.entries||[]).forEach(en=>{
+      (en.statistics||[]).forEach(s=>{
+        const r=s.statistics&&s.statistics.$ref; if(!r) return;
+        const yr=(String(r).match(/seasons\/(\d{4})/)||[])[1];
+        refs.push({yr:yr?+yr:null, ref:String(r).replace(/^http:/,"https:")});
+      });
+    });
+    // 每季取一筆、由新到舊、最多 5 季
+    const seen={}, out=[];
+    refs.sort((a,b)=>(b.yr||0)-(a.yr||0)).forEach(x=>{ const k=x.yr||x.ref; if(!seen[k]){seen[k]=1; out.push(x);} });
+    return out.slice(0,5);
+  }catch(e){ return []; }
+}
+function flatWalk(d){
+  const flat={};
+  (function walk(o){ if(!o||typeof o!=="object")return;
+    if(Array.isArray(o)){o.forEach(walk);return;}
+    const key=o.name||o.abbreviation, dv=o.displayValue!=null?o.displayValue:(o.value!=null?o.value:null);
+    if(key&&dv!=null&&(typeof dv==="string"||typeof dv==="number")){ if(flat[key]==null) flat[key]=dv; }
+    for(const k in o) walk(o[k]); })(d);
+  return flat;
+}
 async function fetchPlayerHistory(league, id){
   if(!id) return [];
   const Y=new Date().getFullYear(), rows=[];
+  // 路徑一:statisticslog(球員實際存在哪些季的數據,直接列出)
+  const refs=await fetchStatLogRefs(id);
+  if(refs.length){
+    await Promise.all(refs.map(async x=>{try{
+      const flat=flatWalk(await jget(x.ref));
+      const app=flat.appearances??flat.gamesPlayed, gl=flat.goals??flat.totalGoals, as=flat.assists??flat.goalAssists, mi=flat.minutes;
+      if(app!=null||gl!=null) rows.push({yr:x.yr||"—", app:app??"—", gl:gl??"—", as:as??"—", mi:mi??"—"});
+    }catch(e){}}));
+    if(rows.length) return rows.sort((a,b)=>(b.yr||0)-(a.yr||0));
+  }
+  // 路徑二:逐年猜(舊法)
   await Promise.all([Y,Y-1,Y-2,Y-3].map(async yr=>{
     try{
       const d=await jget(`https://sports.core.api.espn.com/v2/sports/soccer/leagues/${league}/seasons/${yr}/types/1/athletes/${id}/statistics`);
@@ -2059,6 +2107,14 @@ async function fetchPlayerStats(league, id){
     `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${league}/seasons/${Y-1}/types/1/athletes/${id}/statistics`,
     `https://site.web.api.espn.com/apis/common/v3/sports/soccer/${league}/athletes/${id}/gamelog`,
   ];
+  // 先試 statisticslog 的最新一季(最可靠)
+  try{
+    const refs=await fetchStatLogRefs(id);
+    if(refs.length){
+      const flat=flatWalk(await jget(refs[0].ref));
+      if(Object.keys(flat).length>3) return flat;
+    }
+  }catch(e){}
   for(const u of tryUrls){
     try{
       const d = await jget(u);
