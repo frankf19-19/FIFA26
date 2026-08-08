@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e103";
+const BUILD = "e105";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2653,7 +2653,7 @@ function renderCalib(){
 function renderInsights(){
   const box=document.getElementById("insights"), tag=document.getElementById("insTag");
   if(!box) return;
-  const sc=scGet(); const ids=Object.keys(sc).filter(k=>sc[k].pred&&!sc[k].void);
+  const sc=scGet(); const ids=Object.keys(sc).filter(k=>sc[k].pred&&!sc[k].void&&sc[k].out!=null);
   const n=ids.length;
   if(!n){ box.innerHTML=renderCoverage()+renderTWSL()+renderCalib()+`<div class="empty" style="text-align:left">完賽累積後,模型會在這裡整理檢討心得與評級調整。</div>`; tag.textContent=""; return; }
   tag.textContent=`已學習 ${n} 場`;
@@ -2707,7 +2707,7 @@ function renderInsights(){
   };
 }
 function renderScorecard(){
-  const sc=scGet(); const ids=Object.keys(sc).filter(k=>!sc[k].void);
+  const sc=scGet(); const ids=Object.keys(sc).filter(k=>!sc[k].void&&sc[k].out!=null);
   const n=ids.length, hit=ids.filter(k=>sc[k].hit).length;
   const brier=n?ids.reduce((s,k)=>s+sc[k].brier,0)/n:0;
   document.getElementById("scPct").textContent=n?Math.round(hit/n*100)+"%":"—";
@@ -3082,6 +3082,7 @@ async function showGame(g, fromPop){
   document.getElementById("gameTitle").textContent=`${hz} ${g.completed||g.state==="in"?g.hs+" - "+g.as:"vs"} ${az}`;
   const box=document.getElementById("gameDetail");
   const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
+  window.__gvId=g.id;
   box.innerHTML=`<div class="empty">載入比賽數據中…</div>`;
   document.querySelectorAll("#gameView .gv-team").forEach(el=>el.onclick=()=>showTeam(el.dataset.team));
   // 對戰往績(背景載入)
@@ -3131,7 +3132,15 @@ async function showGame(g, fromPop){
     }, 30000);
   }
   let sum=null;
-  try{ sum=await jget(espnSummary(g.league||curLeague, g.id), g.state==="in"); }catch(e){}
+  if(window.__gvSum && window.__gvSum.id===g.id){ sum=window.__gvSum.s; window.__gvSum=null; }   // 背景已取回 → 直接用
+  else{
+    const __sumP=jget(espnSummary(g.league||curLeague, g.id), g.state==="in").catch(()=>null);
+    sum=await Promise.race([__sumP, new Promise(r=>setTimeout(()=>r(null),1500))]);   // 最多等 1.5 秒
+    if(sum==null){
+      // 先用本地資料(預測/關鍵球員/對戰往績)渲染;ESPN 回應到了再自動補上比賽數據
+      __sumP.then(s=>{ if(s && window.__gvId===g.id){ window.__gvSum={id:g.id, s}; try{ showGame(g, true); }catch(e){} } });
+    }
+  }
   // --- 進球/紅黃牌時間軸 ---
   let goals=[],cards=[],evs=[];
   try{
