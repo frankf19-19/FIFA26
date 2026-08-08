@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e89";
+const BUILD = "e90";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2962,6 +2962,7 @@ async function showGame(g, fromPop){
   const box=document.getElementById("gameDetail");
   const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
   box.innerHTML=`<div class="empty">載入比賽數據中…</div>`;
+  document.querySelectorAll("#gameView .gv-team").forEach(el=>el.onclick=()=>showTeam(el.dataset.team));
   // 對戰往績(背景載入)
   loadH2H(g.league||curLeague, g.hid, g.aid).then(list=>{
     const box=document.getElementById("h2hBox"); if(!box) return;
@@ -3091,6 +3092,10 @@ async function showGame(g, fromPop){
   const rv0=makeReview(g);
   if(rv0) narrative+=` 檢討:${rv0.text}`;
   let html=venueLine+`<div class="why" style="border-top:none;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:13px 15px;margin-bottom:14px"><span class="k">解說</span>${narrative}</div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin:0 0 14px">
+    <button class="gv-team" data-team="${String(g.hn).replace(/"/g,"&quot;")}" style="cursor:pointer;font-size:13px;color:var(--chalk);background:rgba(122,162,247,.10);border:1.5px solid var(--teal);border-radius:999px;padding:7px 15px">👥 ${zhName(g.hn)} 球員名單與數據 ›</button>
+    <button class="gv-team" data-team="${String(g.an).replace(/"/g,"&quot;")}" style="cursor:pointer;font-size:13px;color:var(--chalk);background:rgba(122,162,247,.10);border:1.5px solid var(--teal);border-radius:999px;padding:7px 15px">👥 ${zhName(g.an)} 球員名單與數據 ›</button>
+  </div>
   <div id="h2hBox"></div>`;
   if(!g.completed&&g.state!=="in"){
     html+=probBar(p)+`<div class="predline" style="margin-bottom:14px"><span class="k">預測</span>看好 <span class="pick">${zhName(p.pick)}</span> · 比分 <b><span class="ha hm">主</span> ${p.si} - ${p.sj} <span class="ha aw">客</span></b> · 信心 ${p.conf}</div>
