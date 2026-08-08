@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e97";
+const BUILD = "e98";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2105,13 +2105,13 @@ function searchPlayers(q){
     html += pl.map(p=>{
       const av = p.headshot?`<img class="sr-ava" src="${p.headshot}" onerror="this.style.visibility='hidden'">`:`<span class="sr-ava" style="display:inline-flex;align-items:center;justify-content:center;font-family:var(--cond);font-weight:700">${p.name.charAt(0)}</span>`;
       const lgz = crossLeague&&p.league?` · ${(LEAGUES.find(l=>l.id===p.league)||{}).zh||''}`:'';
-      return `<div class="sr-item" data-player='${encodeURIComponent(JSON.stringify(p))}'>${av}<span>${p.name}</span><span class="pos">${posToZh(p.pos)}${p.num?' · #'+p.num:''}</span><span class="tm">${zhName(p.teamName)}${lgz}</span></div>`;
+      return `<div class="sr-item" data-player='${encodeURIComponent(JSON.stringify(p)).replace(/'/g,"%27")}'>${av}<span>${p.name}</span><span class="pos">${posToZh(p.pos)}${p.num?' · #'+p.num:''}</span><span class="tm">${zhName(p.teamName)}${lgz}</span></div>`;
     }).join("");
   }
   if(!html) html = `<div class="empty" style="text-align:left">找不到「${q}」。${PLAYER_INDEX.length?"":"(球員名冊仍在載入,稍候再試)"}</div>`;
   box.innerHTML = html;
   box.querySelectorAll(".sr-item[data-team]").forEach(el=>el.onclick=()=>{ closeSearch(); showTeam(el.dataset.team); });
-  box.querySelectorAll(".sr-item[data-player]").forEach(el=>el.onclick=()=>{ closeSearch(); showPlayer(JSON.parse(decodeURIComponent(el.dataset.player))); });
+  box.querySelectorAll(".sr-item[data-player]").forEach(el=>el.onclick=()=>{ closeSearch(); openPlayerEl(el); });
 }
 function closeSearch(){ document.getElementById("searchBox").value=""; document.getElementById("searchResults").innerHTML=""; }
 
@@ -2271,6 +2271,20 @@ async function fetchPlayerStats(league, id){
     }catch(e){}
   }
   return null;
+}
+function __toast(msg,err){
+  let t=document.getElementById("tapToast");
+  if(!t){ t=document.createElement("div"); t.id="tapToast";
+    t.setAttribute("style","position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:99999;font-family:var(--mono);font-size:13px;padding:8px 18px;border-radius:999px;pointer-events:none;transition:opacity .3s;max-width:88vw;opacity:0");
+    document.body.appendChild(t); }
+  t.style.background=err?"rgba(160,40,40,.95)":"rgba(30,40,70,.95)";
+  t.style.color="#fff"; t.style.border=err?"1px solid #ff8080":"1px solid #7aa2f7";
+  t.textContent=msg; t.style.opacity="1";
+  clearTimeout(t.__h); t.__h=setTimeout(()=>{t.style.opacity="0";}, err?6000:1400);
+}
+function openPlayerEl(el){
+  try{ showPlayer(JSON.parse(decodeURIComponent(el.dataset.player))); }
+  catch(e){ __toast("⚠ 球員資料解析失敗:"+String((e&&e.message)||e).slice(0,60), 1); }
 }
 let VIEW_SEQ=0;
 function showPlayer(p, fromPop){
@@ -2915,14 +2929,14 @@ async function showTeam(name, fromPop){
       html+=byPos[grp].map(p=>{
         const av=p.headshot?`<img class="avatar" style="object-fit:cover" src="${p.headshot}" data-init="${(p.name||'?').charAt(0)}" onerror="avFallback(this)">`:`<div class="avatar">${(p.name||'?').charAt(0)}</div>`;
         const star=starsFor(name)&&starsFor(name).some(s=>p.name.includes(s[0].split(" ").pop()))?`<span class="badge star">⭐</span>`:"";
-        return `<div class="player" data-player='${encodeURIComponent(JSON.stringify(p))}' style="cursor:pointer">${av}
+        return `<div class="player" data-player='${encodeURIComponent(JSON.stringify(p)).replace(/'/g,"%27")}' style="cursor:pointer">${av}
           <div><div class="p-top"><span class="pnm">${p.name}</span>${star}<span class="pmeta">${p.pos}${p.num?' · #'+p.num:''}</span></div>
           ${p.nat?`<div class="p-note">${p.nat}</div>`:""}</div></div>`;
       }).join("");
     });
     if(__seq!==VIEW_SEQ) return;             // 使用者已切到別頁 → 這批晚到的內容作廢
     box.innerHTML=(box.dataset.banner||"")+html;
-    box.querySelectorAll(".player[data-player]").forEach(el=>el.onclick=()=>showPlayer(JSON.parse(decodeURIComponent(el.dataset.player))));
+    box.querySelectorAll(".player[data-player]").forEach(el=>el.onclick=()=>openPlayerEl(el));
     return;
   }
 
@@ -3306,7 +3320,7 @@ function hideTeam(){
         if(pl){
           if(pl.contains(ev.target)) return;              // 點擊有正常到達 → 交給原本機制
           ev.preventDefault(); ev.stopPropagation();
-          try{ showPlayer(JSON.parse(decodeURIComponent(pl.dataset.player))); }catch(e){}
+          openPlayerEl(pl);
           return;
         }
         const tm=el.closest("#standings td[data-team], .nm[data-team]");
@@ -3321,7 +3335,7 @@ function hideTeam(){
   // 全域事件委派:球員/球隊列不論被重繪幾次,點擊永遠有效(只接手沒有直接綁定的節點)
   document.addEventListener("click",ev=>{
     const pl=ev.target.closest(".player[data-player]");
-    if(pl && !pl.onclick){ try{ showPlayer(JSON.parse(decodeURIComponent(pl.dataset.player))); }catch(e){} return; }
+    if(pl && !pl.onclick){ openPlayerEl(pl); return; }
     const lp=ev.target.closest("[data-pid]");
     if(lp && !lp.onclick && lp.dataset.pid){
       showPlayer({id:lp.dataset.pid, name:lp.dataset.pname||"", pos:lp.dataset.ppos||"",
@@ -3331,6 +3345,14 @@ function hideTeam(){
     const tm=ev.target.closest("[data-team]");
     if(tm && !tm.onclick && tm.dataset.team){ showTeam(tm.dataset.team); }
   });
+  try{
+    const __SP=showPlayer;
+    showPlayer=function(p,fromPop){
+      try{ __toast("開啟 "+((p&&p.name)||"球員")+" …"); }catch(e){}
+      try{ return __SP(p,fromPop); }
+      catch(e){ __toast("⚠ 開啟球員頁失敗:"+String((e&&e.message)||e).slice(0,70), 1); }
+    };
+  }catch(e){}
   window.CLOUD=null;
   fetch("calib.json?_="+Date.now(),{cache:"no-store"}).then(r=>r.ok?r.json():null).then(j=>{
     if(j&&j.leagues){ window.CLOUD=j;
