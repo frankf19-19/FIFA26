@@ -46,6 +46,33 @@ const sb = (lg,a,b) => `https://site.api.espn.com/apis/site/v2/sports/soccer/${l
       out.n += n;
     }
   }
+  // 第三層:每隊球員名單(id/姓名/位置/背號)——客戶端抓不到時的雲端備援
+  for (const lg of Object.keys(out.leagues)) {
+    try {
+      const tr = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/teams`);
+      if (!tr.ok) continue;
+      const tj = await tr.json();
+      let teams=[]; try{teams=tj.sports[0].leagues[0].teams.map(t=>t.team);}catch(e){teams=(tj.teams||[]).map(t=>t.team||t);}
+      for (const t of teams.filter(t=>t&&t.id)) {
+        try {
+          const rr = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/teams/${t.id}/roster`);
+          if (!rr.ok) continue;
+          const rj = await rr.json();
+          const grp = rj.athletes||rj.roster||[];
+          const flat=[];
+          const push=a=>{ if(a&&(a.fullName||a.displayName)) flat.push([a.id, a.fullName||a.displayName,
+            (a.position&&(a.position.abbreviation||a.position.name))||"", a.jersey||""]); };
+          grp.forEach(g=>{ if(g&&g.items) g.items.forEach(push); else push(g&&g.athlete?g.athlete:g); });
+          if (flat.length) {
+            const key="#"+t.id;
+            out.leagues[lg].teams[key]=out.leagues[lg].teams[key]||{gp:0,gf:0,ga:0};
+            out.leagues[lg].teams[key].r=flat;
+          }
+        } catch(e) {}
+        await new Promise(r=>setTimeout(r,150));
+      }
+    } catch(e) {}
+  }
   require("fs").writeFileSync("calib.json", JSON.stringify(out));
   console.log("calib.json:", out.n, "場 /", WEEKS*7, "天,", Object.keys(out.leagues).length, "個聯賽");
 })();
