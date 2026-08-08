@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e114";
+const BUILD = "e115";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -3117,7 +3117,7 @@ async function showGame(g, fromPop){
   document.getElementById("gameTitle").textContent=`${hz} ${g.completed||g.state==="in"?g.hs+" - "+g.as:"vs"} ${az}`;
   const box=document.getElementById("gameDetail");
   const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
-  window.__gvId=g.id;
+  window.__gvId=g.id; window.__gvLg=g.league||curLeague;
   box.innerHTML=`<div class="empty">載入比賽數據中…</div>`;
   document.querySelectorAll("#gameView .gv-team").forEach(el=>el.onclick=()=>showTeam(el.dataset.team));
   // 對戰往績(背景載入)
@@ -3608,6 +3608,16 @@ function init(){
   applyTheme(th);
   document.querySelectorAll(".th").forEach(el=>el.onclick=()=>applyTheme(el.dataset.th));
   document.querySelectorAll(".nav-p").forEach(el=>el.onclick=()=>{
+    // 若正在看比賽:積分榜/賽事預測切到「該場比賽的聯賽」,不再跳去別的聯盟
+    const gv0=document.getElementById("gameView");
+    const ctxLg=(gv0&&!gv0.classList.contains("hidden")&&window.__gvLg)?window.__gvLg:null;
+    if(ctxLg && ctxLg!==curLeague && window.switchLeague &&
+       (el.dataset.sec==="standSec"||el.dataset.sec==="fixturesSec")){
+      window.switchLeague(ctxLg);                      // 會自動載入該聯賽積分榜與賽程
+      setTimeout(()=>{ const s2=document.getElementById(el.dataset.sec);
+        if(s2){ s2.classList.remove("hidden"); try{s2.scrollIntoView({behavior:"smooth"});}catch(e){s2.scrollIntoView();} } }, 350);
+      return;
+    }
     // 先退出比賽詳情/球隊頁,恢復主頁面各區塊
     const gv=document.getElementById("gameView");
     if(gv&&!gv.classList.contains("hidden")){
