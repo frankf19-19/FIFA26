@@ -692,7 +692,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e83";
+const BUILD = "e84";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1268,12 +1268,14 @@ function noPredGate(p,lg){
 }
 function predict(homeName,awayName,mkt,lg,hid,aid){
   if(lg){ const L0=LEAGUES.find(x=>x.id===lg); if(L0&&L0.stand) lg=L0.stand; }   // 盃賽借用母聯賽的積分榜與進球環境
-  const rh=rating(homeName), ra=rating(awayName), d=rh-ra;
-  const COEF=0.030, BASE=1.32, HA=0.24+HA_TUNE; // 主場優勢:基準+依實際主勝率自動微調
-  let lh=BASE*Math.exp(COEF*d/2 + HA/2), la=BASE*Math.exp(-COEF*d/2 - HA/2);
-  // 本季攻防形狀(來自積分榜真實進失球;樣本越多權重越高)
+  const rh=rating(homeName), ra=rating(awayName);
+  // 先查真實戰績(本季或上季先驗):有數據 → 評級只當輔助(影響力 ×0.4),數據主導
   const _eh=standEff(homeName,lg,hid), _ea=standEff(awayName,lg,aid);
   const sh=_eh.s, sa=_ea.s, _prior=(_eh.prior||_ea.prior);
+  const _hasData=!!(sh&&sa&&+sh.gp>=2&&+sa.gp>=2);
+  const d=(rh-ra)*(_hasData?0.4:1.0);
+  const COEF=0.030, BASE=1.32, HA=0.24+HA_TUNE; // 主場優勢:基準+依實際主勝率自動微調
+  let lh=BASE*Math.exp(COEF*d/2 + HA/2), la=BASE*Math.exp(-COEF*d/2 - HA/2);
   if(sh&&sa&&+sh.gp>=2&&+sa.gp>=2){
     const LG=(lg&&LGAVG_BY_LG[lg])||LG_AVG, gpH=+sh.gp, gpA=+sa.gp;
     const lh2=LG*((+sh.gf/gpH)/LG)*((+sa.ga/gpA)/LG)*Math.exp(HA/2);
@@ -1316,9 +1318,7 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   if(mkt) dq+=0.55;                             // 有市場賠率 = 最強訊號
   if(sh&&sa&&+sh.gp>=2&&+sa.gp>=2) dq+=0.30*(0.5+0.5*Math.min(1,Math.min(+sh.gp,+sa.gp)/10))*(_prior?0.6:1);
   if(schedOf(homeName)&&schedOf(awayName)) dq+=0.15;   // 真實近5場戰績(跨季有效,實戰數據)
-  const _kn=(baseRating(homeName)!==68?1:0)+(baseRating(awayName)!==68?1:0);
-  if(_kn>=1) dq+=0.05;
-  if(_kn===2) dq+=0.15;                                 // 兩隊皆為已知強度(曼聯、兵工廠等名門)
+  // 已知評級不再計入資料充分度:名氣不是數據(信心只反映真實資料量)
   dq=Math.max(0,Math.min(1,dq));
   const shrink=0.30*(1-dq);                     // 資料全無時,把 30% 權重讓給基準率
   if(shrink>0.001){
@@ -1359,9 +1359,11 @@ function analysisRows(hn,an,p,lg,hid,aid){
   }else if(okN<=2){
     rows.push(["⚠ 注意", `<span style="color:var(--gold)">可用資料偏少,預測已自動向基準率收縮,參考性有限。</span>`]);
   }
+  const _hd=(sh&&sa&&+sh.gp>=2&&+sa.gp>=2);
   const bothDefault=(baseRating(hn)===68&&baseRating(an)===68);
   rows.push(["實力評級", `${hz} ${rh.toFixed(1)} · ${az} ${ra.toFixed(1)}(差 ${d>=0?"+":""}${d.toFixed(1)},${Math.abs(d)<3?"接近":Math.abs(d)<8?"略有差距":"差距明顯"})`
-    + (bothDefault?`<br><span style="color:var(--miss);font-size:11px">兩隊皆無評級資料,68 為系統預設值,非實際實力</span>`:"")]);
+    + (bothDefault?`<br><span style="color:var(--miss);font-size:11px">兩隊皆無評級資料,68 為系統預設值,非實際實力</span>`
+       :(_hd?`<br><span style="color:var(--muted);font-size:11px">已有真實戰績,評級僅作輔助(權重 40%),以數據為主</span>`:""))]);
   const _e1=standEff(hn,lg,hid), _e2=standEff(an,lg,aid);
   const sh=_e1.s, sa=_e2.s, _pr=(_e1.prior||_e2.prior);
   if(sh&&sa&&+sh.gp>=2&&+sa.gp>=2)
