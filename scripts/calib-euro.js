@@ -1,101 +1,119 @@
-/* 歐陸足球雲端校準 v2:抓近 182 天(26 週)完賽紀錄。
-   輸出:各聯賽 主場係數/進球環境/和局率 + 各球隊攻防紀錄(gp/gf/ga)。 */
+/* 歐陸足球雲端校準 v7:可中斷續跑(checkpoint)。
+   每完成一個聯賽 → 立刻寫入 calib.json 並 commit+push;
+   中斷重跑時,跳過「當天已完成」的聯賽,從斷點接續。 */
+const { execSync } = require("child_process");
+const fs = require("fs");
 const LEAGUES = ["eng.1","esp.1","ita.1","ger.1","fra.1","uefa.champions","uefa.europa","usa.1","jpn.1","eng.2"];
 const WEEKS = 26;
 const ymd = d => d.toISOString().slice(0,10).replace(/-/g,"");
 const sb = (lg,a,b) => `https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard?dates=${a}-${b}`;
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+const flatWalk = d => { const f={}; (function w(o){ if(!o||typeof o!=="object")return;
+  if(Array.isArray(o)){o.forEach(w);return;}
+  const k=o.name||o.abbreviation, v=o.displayValue!=null?o.displayValue:(o.value!=null?o.value:null);
+  if(k&&v!=null&&(typeof v==="string"||typeof v==="number")&&f[k]==null)f[k]=v;
+  for(const q in o)w(o[q]); })(d); return f; };
+
+function save(out, lg){
+  out.updated = new Date().toISOString();
+  fs.writeFileSync("calib.json", JSON.stringify(out));
+  if (process.env.GIT_PUSH === "1") {
+    try {
+      execSync(`git add calib.json && (git diff --cached --quiet || git commit -m "calib checkpoint: ${lg}")`, {stdio:"inherit"});
+      execSync(`git pull --rebase origin main || (git rebase --abort; git pull --no-rebase -X ours origin main)`, {stdio:"inherit", shell:"/bin/bash"});
+      execSync(`git push`, {stdio:"inherit"});
+    } catch(e) { console.log("push 暫時失敗(資料已寫入,下個 checkpoint 再試):", String(e).slice(0,80)); }
+  }
+}
 
 (async () => {
-  const now = new Date();
-  const out = { updated: now.toISOString(), days: WEEKS*7, n: 0, leagues: {} };
+  const today = new Date().toISOString().slice(0,10);
+  let out = { updated:"", d:today, days:WEEKS*7, n:0, leagues:{} };
+  try {
+    const prev = JSON.parse(fs.readFileSync("calib.json","utf8"));
+    if (prev && prev.d === today && prev.leagues) { out = prev; console.log("接續今天的進度:已完成", Object.keys(prev.leagues).filter(k=>prev.leagues[k].done).join(", ")||"(無)"); }
+  } catch(e) {}
+
   for (const lg of LEAGUES) {
+    if (out.leagues[lg] && out.leagues[lg].done) { console.log("跳過(今天已完成):", lg); continue; }
+    console.log("處理中:", lg);
+    const now = new Date();
     let hw=0, dr=0, goals=0, n=0;
-    const T = {};                                        // 球隊攻防:key=#id 與小寫隊名
-    const add=(id,nm,gf,ga)=>{
-      const o=(T["#"+id]=T["#"+id]||{gp:0,gf:0,ga:0});
+    const T={};
+    const add=(id,nm,gf,ga,isHome,dt)=>{ const o=(T["#"+id]=T["#"+id]||{gp:0,gf:0,ga:0,hgp:0,hgf:0,hga:0,agp:0,agf:0,aga:0,lp:""});
       o.gp++; o.gf+=gf; o.ga+=ga;
-      if(nm) T[String(nm).toLowerCase()]=o;
-    };
+      if(isHome){ o.hgp++; o.hgf+=gf; o.hga+=ga; } else { o.agp++; o.agf+=gf; o.aga+=ga; }
+      if(dt && dt>o.lp) o.lp=dt;                               // 最近一場日期(休息日計算用)
+      if(nm) T[String(nm).toLowerCase()]=o; };
+    // ── 賽果(近 182 天)──
     for (let seg=0; seg<WEEKS; seg++) {
       const b=new Date(now); b.setDate(b.getDate()-seg*7);
       const a=new Date(now); a.setDate(a.getDate()-(seg+1)*7);
       try {
         const r = await fetch(sb(lg, ymd(a), ymd(b)));
-        if (!r.ok) continue;
-        const j = await r.json();
-        for (const ev of (j.events||[])) {
-          const c=(ev.competitions||[])[0]; if(!c) continue;
-          if(!(((c.status||{}).type)||{}).completed) continue;
-          const H=(c.competitors||[]).find(x=>x.homeAway==="home");
-          const A=(c.competitors||[]).find(x=>x.homeAway==="away");
-          if(!H||!A) continue;
-          const hs=+H.score, as=+A.score;
-          if(isNaN(hs)||isNaN(as)) continue;
-          n++; goals+=hs+as;
-          if(hs>as) hw++; else if(hs===as) dr++;
-          add((H.team||{}).id,(H.team||{}).displayName,hs,as);
-          add((A.team||{}).id,(A.team||{}).displayName,as,hs);
-        }
+        if (r.ok) { const j = await r.json();
+          for (const ev of (j.events||[])) {
+            const c=(ev.competitions||[])[0]; if(!c) continue;
+            if(!(((c.status||{}).type)||{}).completed) continue;
+            const H=(c.competitors||[]).find(x=>x.homeAway==="home");
+            const A=(c.competitors||[]).find(x=>x.homeAway==="away");
+            if(!H||!A) continue;
+            const hs=+H.score, as=+A.score;
+            if(isNaN(hs)||isNaN(as)) continue;
+            n++; goals+=hs+as;
+            if(hs>as) hw++; else if(hs===as) dr++;
+            add((H.team||{}).id,(H.team||{}).displayName,hs,as,true, ev.date||"");
+            add((A.team||{}).id,(A.team||{}).displayName,as,hs,false,ev.date||"");
+          } }
       } catch(e) {}
-      await new Promise(r=>setTimeout(r,250));
+      await sleep(200);
     }
-    if (n >= 8) {
-      const ha = Math.max(0.05, Math.min(0.45, 0.24 + (hw/n-0.46)*1.2));
-      out.leagues[lg] = { ha:+ha.toFixed(3), lgAvg:+Math.max(1,Math.min(2,goals/n/2)).toFixed(3),
-        draw:+(dr/n).toFixed(3), n, teams:T };
-      out.n += n;
-    }
-  }
-  // 第三層:每隊球員名單(id/姓名/位置/背號)——客戶端抓不到時的雲端備援
-  for (const lg of Object.keys(out.leagues)) {
+    if (n < 8) { out.leagues[lg]={done:1, n:0}; save(out, lg+" (樣本不足)"); continue; }
+    const ha = Math.max(0.05, Math.min(0.45, 0.24 + (hw/n-0.46)*1.2));
+    out.leagues[lg] = { ha:+ha.toFixed(3), lgAvg:+Math.max(1,Math.min(2,goals/n/2)).toFixed(3),
+      draw:+(dr/n).toFixed(3), n, teams:T };
+    out.n += n;
+    // ── 名單 + 球員逐季數據(含守門/防守欄位)──
     try {
       const tr = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/teams`);
-      if (!tr.ok) continue;
-      const tj = await tr.json();
-      let teams=[]; try{teams=tj.sports[0].leagues[0].teams.map(t=>t.team);}catch(e){teams=(tj.teams||[]).map(t=>t.team||t);}
-      for (const t of teams.filter(t=>t&&t.id)) {
-        try {
-          const rr = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/teams/${t.id}/roster`);
-          if (!rr.ok) continue;
-          const rj = await rr.json();
-          const grp = rj.athletes||rj.roster||[];
-          const flat=[];
-          const push=a=>{ if(a&&(a.fullName||a.displayName)) flat.push([a.id, a.fullName||a.displayName,
-            (a.position&&(a.position.abbreviation||a.position.name))||"", a.jersey||""]); };
-          grp.forEach(g=>{ if(g&&g.items) g.items.forEach(push); else push(g&&g.athlete?g.athlete:g); });
-          // 每名球員的賽季統計(今年,空則試去年)—— 瀏覽器抓不到時的雲端快照
-          const Y=new Date().getFullYear();
-          const flatWalk=d=>{const f={};(function w2(o){if(!o||typeof o!=="object")return;
-            if(Array.isArray(o)){o.forEach(w2);return;}
-            const k=o.name||o.abbreviation,v=o.displayValue!=null?o.displayValue:(o.value!=null?o.value:null);
-            if(k&&v!=null&&(typeof v==="string"||typeof v==="number")&&f[k]==null)f[k]=v;
-            for(const q in o)w2(o[q]);})(d);return f;};
-          for (const a of flat.slice(0,30)) {
-            const S=[];                                  // 逐季歷史:[[季,出場,球,助,分鐘],...]
-            for (const yr of [Y, Y-1, Y-2, Y-3]) {
-              try {
-                const sr = await fetch(`https://sports.core.api.espn.com/v2/sports/soccer/leagues/${lg}/seasons/${yr}/types/1/athletes/${a[0]}/statistics`);
-                if (!sr.ok) continue;
-                const f = flatWalk(await sr.json());
-                const app=f.appearances??f.gamesPlayed, gl=f.goals??f.totalGoals;
-                if (app!=null||gl!=null) S.push([String(yr),String(app??""),String(gl??""),String(f.assists??f.goalAssists??""),String(f.minutes??""),
-                  String(f.saves??""),String(f.cleanSheets??f.cleanSheet??f.shutouts??""),String(f.goalsConceded??""),
-                  String(f.totalTackles??f.tackles??""),String(f.interceptions??"")]);
-              } catch(e) {}
-              await new Promise(r=>setTimeout(r,80));
+      if (tr.ok) { const tj = await tr.json();
+        let teams=[]; try{teams=tj.sports[0].leagues[0].teams.map(t=>t.team);}catch(e){teams=(tj.teams||[]).map(t=>t.team||t);}
+        const Y=new Date().getFullYear();
+        for (const t of teams.filter(t=>t&&t.id)) {
+          try {
+            const rr = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/teams/${t.id}/roster`);
+            if (!rr.ok) continue;
+            const rj = await rr.json();
+            const grp = rj.athletes||rj.roster||[];
+            const flat=[];
+            const push=a=>{ if(a&&(a.fullName||a.displayName)) flat.push([a.id, a.fullName||a.displayName,
+              (a.position&&(a.position.abbreviation||a.position.name))||"", a.jersey||""]); };
+            grp.forEach(g=>{ if(g&&g.items) g.items.forEach(push); else push(g&&g.athlete?g.athlete:g); });
+            for (const a of flat.slice(0,30)) {
+              const S=[];
+              for (const yr of [Y, Y-1, Y-2, Y-3]) {
+                try {
+                  const sr = await fetch(`https://sports.core.api.espn.com/v2/sports/soccer/leagues/${lg}/seasons/${yr}/types/1/athletes/${a[0]}/statistics`);
+                  if (!sr.ok) continue;
+                  const f = flatWalk(await sr.json());
+                  const app=f.appearances??f.gamesPlayed, gl=f.goals??f.totalGoals;
+                  if (app!=null||gl!=null) S.push([String(yr),String(app??""),String(gl??""),String(f.assists??f.goalAssists??""),String(f.minutes??""),
+                    String(f.saves??""),String(f.cleanSheets??f.cleanSheet??f.shutouts??""),String(f.goalsConceded??""),
+                    String(f.totalTackles??f.tackles??""),String(f.interceptions??"")]);
+                } catch(e) {}
+                await sleep(80);
+              }
+              if (S.length) a.push(S);
             }
-            if (S.length) a.push(S);
-          }
-          if (flat.length) {
-            const key="#"+t.id;
-            out.leagues[lg].teams[key]=out.leagues[lg].teams[key]||{gp:0,gf:0,ga:0};
-            out.leagues[lg].teams[key].r=flat;
-          }
-        } catch(e) {}
-        await new Promise(r=>setTimeout(r,150));
-      }
+            if (flat.length) { const key="#"+t.id;
+              T[key]=T[key]||{gp:0,gf:0,ga:0}; T[key].r=flat; }
+          } catch(e) {}
+          await sleep(120);
+        } }
     } catch(e) {}
+    out.leagues[lg].done = 1;
+    save(out, lg);                       // ← checkpoint:此聯賽完成即存檔+推送
+    console.log("完成:", lg, "(", n, "場 )");
   }
-  require("fs").writeFileSync("calib.json", JSON.stringify(out));
-  console.log("calib.json:", out.n, "場 /", WEEKS*7, "天,", Object.keys(out.leagues).length, "個聯賽");
+  console.log("全部完成:", out.n, "場,", Object.keys(out.leagues).length, "個聯賽");
 })();
