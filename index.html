@@ -692,7 +692,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e80";
+const BUILD = "e81";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1179,10 +1179,18 @@ let STAND_BY_LG={}, LGAVG_BY_LG={}, PREV_BY_LG={};
 function standEff(name,lg,tid){
   const s=standOf(name,lg,tid);
   if(s&&+s.gp>=2) return {s,prior:false};
+  const k=norm(name);
   if(lg&&PREV_BY_LG[lg]){
-    const P=PREV_BY_LG[lg], k=norm(name);
+    const P=PREV_BY_LG[lg];
     const p2=(tid!=null&&P["#"+tid])||P[k]||null;
     if(p2&&+p2.gp>=10) return {s:p2,prior:true};
+  }
+  // 升班馬:本聯賽上季榜找不到 → 跨聯賽先驗(ID/全名精確,如英冠上季榜)
+  for(const x in PREV_BY_LG){
+    if(x===lg) continue;
+    const P=PREV_BY_LG[x];
+    const p3=(tid!=null&&P["#"+tid])||P[k]||null;
+    if(p3&&+p3.gp>=10) return {s:p3,prior:true};
   }
   return {s,prior:false};
 }
