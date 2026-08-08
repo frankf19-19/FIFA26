@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e88";
+const BUILD = "e89";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1370,7 +1370,7 @@ function analysisRows(hn,an,p,lg,hid,aid){
   }else if(okN<=2){
     rows.push(["⚠ 注意", `<span style="color:var(--gold)">可用資料偏少,預測已自動向基準率收縮,參考性有限。</span>`]);
   }
-  const _hd=(sh&&sa&&+sh.gp>=2&&+sa.gp>=2);
+  const _hd=(sh0&&sa0&&+sh0.gp>=2&&+sa0.gp>=2);
   const bothDefault=(baseRating(hn)===68&&baseRating(an)===68);
   rows.push(["實力評級", `${hz} ${rh.toFixed(1)} · ${az} ${ra.toFixed(1)}(差 ${d>=0?"+":""}${d.toFixed(1)},${Math.abs(d)<3?"接近":Math.abs(d)<8?"略有差距":"差距明顯"})`
     + (bothDefault?`<br><span style="color:var(--miss);font-size:11px">兩隊皆無評級資料,68 為系統預設值,非實際實力</span>`
