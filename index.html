@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e113";
+const BUILD = "e114";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2778,8 +2778,8 @@ function makeReview(g){
   }else if(s.draw){
     parts.push(`和局未在預期內(賽前和局機率僅 ${p.D}%),兩隊實際更均勢`);
   }else{
-    const w=s.hs>s.as?hz:az;
-    parts.push(`預測失準:看好 ${zhName(p.pick)},實際 ${w} 勝出`);
+    const w=(s.hs!=null&&s.as!=null)?(s.hs>s.as?hz:az):null;
+    if(w) parts.push(`預測失準:看好 ${zhName(p.pick)},實際 ${w} 勝出`);
   }
   if(s.perf&&s.perf.hsot!=null){
     let line=`場面:射正 ${s.perf.hsot}-${s.perf.asot}`;
@@ -3285,7 +3285,7 @@ async function showGame(g, fromPop){
   // --- 組頁 ---
   const venueLine = g.venue?`<div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin:-6px 0 12px">📍 ${esc(g.venue)} · ${zhName(g.hn)} 主場</div>`:`<div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin:-6px 0 12px">${zhName(g.hn)} 主場 · ${zhName(g.an)} 作客</div>`;
   let narrative=gameNarrative(g,goals,statPairs);
-  const rv0=makeReview(g);
+  const rv0=(g.completed&&g.hs!=null&&g.as!=null)?makeReview(g):null;
   if(rv0) narrative+=` 檢討:${rv0.text}`;
   let kpHtml="";
   try{
@@ -3608,9 +3608,18 @@ function init(){
   applyTheme(th);
   document.querySelectorAll(".th").forEach(el=>el.onclick=()=>applyTheme(el.dataset.th));
   document.querySelectorAll(".nav-p").forEach(el=>el.onclick=()=>{
+    // 先退出比賽詳情/球隊頁,恢復主頁面各區塊
+    const gv=document.getElementById("gameView");
+    if(gv&&!gv.classList.contains("hidden")){
+      gv.classList.add("hidden"); window.__gvId=null;
+      ["fixturesSec","insightSec","standSec","hlSec","todaySec"].forEach(id=>{
+        const e2=document.getElementById(id); if(e2) e2.classList.remove("hidden");
+      });
+      try{ renderTodaySection(); }catch(e){}
+    }
     hideTeam();
     const s=document.getElementById(el.dataset.sec);
-    if(s) try{s.scrollIntoView({behavior:"smooth"});}catch(e){s.scrollIntoView();}
+    if(s){ s.classList.remove("hidden"); try{s.scrollIntoView({behavior:"smooth"});}catch(e){s.scrollIntoView();} }
   });
   buildLeagueTabs();
   const dp=document.getElementById("datePick");
