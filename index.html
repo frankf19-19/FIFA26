@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e111";
+const BUILD = "e112";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1947,7 +1947,13 @@ function renderTodaySection(){
       const h2b=document.querySelector("#todaySec h2"); if(h2b) h2b.textContent="當日賽事";
       if(tag) tag.textContent=TODAY_ISO;
       box.innerHTML=`<div class="empty">${TODAY_ISO} 全 66 聯賽皆無賽事</div>`;
-      try{ document.querySelectorAll("#todaySec .seg [data-cnt], #todaySec .seg b").forEach(el=>el.textContent="0"); }catch(e){}
+      document.querySelectorAll("#stFilter .sf").forEach(b=>{
+        const bb=b.querySelector("b"); if(bb) bb.textContent="0";
+        b.classList.toggle("on", b.dataset.sf==="all");
+        b.classList.toggle("zero", b.dataset.sf!=="all");
+      });
+      ST_FILTER="all";
+      const fx=document.getElementById("focusStrip"); if(fx) fx.innerHTML="";
     } else sec.classList.add("hidden");
     return;
   }
