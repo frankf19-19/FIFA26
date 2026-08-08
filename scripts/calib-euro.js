@@ -63,6 +63,29 @@ const sb = (lg,a,b) => `https://site.api.espn.com/apis/site/v2/sports/soccer/${l
           const push=a=>{ if(a&&(a.fullName||a.displayName)) flat.push([a.id, a.fullName||a.displayName,
             (a.position&&(a.position.abbreviation||a.position.name))||"", a.jersey||""]); };
           grp.forEach(g=>{ if(g&&g.items) g.items.forEach(push); else push(g&&g.athlete?g.athlete:g); });
+          // 每名球員的賽季統計(今年,空則試去年)—— 瀏覽器抓不到時的雲端快照
+          const Y=new Date().getFullYear();
+          const flatWalk=d=>{const f={};(function w2(o){if(!o||typeof o!=="object")return;
+            if(Array.isArray(o)){o.forEach(w2);return;}
+            const k=o.name||o.abbreviation,v=o.displayValue!=null?o.displayValue:(o.value!=null?o.value:null);
+            if(k&&v!=null&&(typeof v==="string"||typeof v==="number")&&f[k]==null)f[k]=v;
+            for(const q in o)w2(o[q]);})(d);return f;};
+          for (const a of flat.slice(0,30)) {
+            const S=[];                                  // 逐季歷史:[[季,出場,球,助,分鐘],...]
+            for (const yr of [Y, Y-1, Y-2, Y-3]) {
+              try {
+                const sr = await fetch(`https://sports.core.api.espn.com/v2/sports/soccer/leagues/${lg}/seasons/${yr}/types/1/athletes/${a[0]}/statistics`);
+                if (!sr.ok) continue;
+                const f = flatWalk(await sr.json());
+                const app=f.appearances??f.gamesPlayed, gl=f.goals??f.totalGoals;
+                if (app!=null||gl!=null) S.push([String(yr),String(app??""),String(gl??""),String(f.assists??f.goalAssists??""),String(f.minutes??""),
+                  String(f.saves??""),String(f.cleanSheets??f.cleanSheet??f.shutouts??""),String(f.goalsConceded??""),
+                  String(f.totalTackles??f.tackles??""),String(f.interceptions??"")]);
+              } catch(e) {}
+              await new Promise(r=>setTimeout(r,80));
+            }
+            if (S.length) a.push(S);
+          }
           if (flat.length) {
             const key="#"+t.id;
             out.leagues[lg].teams[key]=out.leagues[lg].teams[key]||{gp:0,gf:0,ga:0};
