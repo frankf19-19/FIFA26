@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e94";
+const BUILD = "e95";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -3290,6 +3290,19 @@ function hideTeam(){
   document.getElementById("teamView").classList.add("hidden");
   document.getElementById("gameView").classList.add("hidden");
   AD_CACHE=adGet(); MKT_W=mktWGet(); mktWTune(); TWSL_NAMES=twslNamesGet(); TWSL_LGS=twslLgsGet();
+  // 全域事件委派:球員/球隊列不論被重繪幾次,點擊永遠有效(只接手沒有直接綁定的節點)
+  document.addEventListener("click",ev=>{
+    const pl=ev.target.closest(".player[data-player]");
+    if(pl && !pl.onclick){ try{ showPlayer(JSON.parse(decodeURIComponent(pl.dataset.player))); }catch(e){} return; }
+    const lp=ev.target.closest("[data-pid]");
+    if(lp && !lp.onclick && lp.dataset.pid){
+      showPlayer({id:lp.dataset.pid, name:lp.dataset.pname||"", pos:lp.dataset.ppos||"",
+        num:lp.dataset.pnum||"", teamName:lp.dataset.pteam||"", league:curLeague});
+      return;
+    }
+    const tm=ev.target.closest("[data-team]");
+    if(tm && !tm.onclick && tm.dataset.team){ showTeam(tm.dataset.team); }
+  });
   window.CLOUD=null;
   fetch("calib.json?_="+Date.now(),{cache:"no-store"}).then(r=>r.ok?r.json():null).then(j=>{
     if(j&&j.leagues){ window.CLOUD=j;
