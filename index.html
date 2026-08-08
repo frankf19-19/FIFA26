@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e105";
+const BUILD = "e106";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2653,7 +2653,7 @@ function renderCalib(){
 function renderInsights(){
   const box=document.getElementById("insights"), tag=document.getElementById("insTag");
   if(!box) return;
-  const sc=scGet(); const ids=Object.keys(sc).filter(k=>sc[k].pred&&!sc[k].void&&sc[k].out!=null);
+  const sc=scGet(); const ids=Object.keys(sc).filter(k=>sc[k].pred&&!sc[k].void&&sc[k].hs!=null);
   const n=ids.length;
   if(!n){ box.innerHTML=renderCoverage()+renderTWSL()+renderCalib()+`<div class="empty" style="text-align:left">完賽累積後,模型會在這裡整理檢討心得與評級調整。</div>`; tag.textContent=""; return; }
   tag.textContent=`已學習 ${n} 場`;
@@ -2707,7 +2707,7 @@ function renderInsights(){
   };
 }
 function renderScorecard(){
-  const sc=scGet(); const ids=Object.keys(sc).filter(k=>!sc[k].void&&sc[k].out!=null);
+  const sc=scGet(); const ids=Object.keys(sc).filter(k=>!sc[k].void&&sc[k].hs!=null);
   const n=ids.length, hit=ids.filter(k=>sc[k].hit).length;
   const brier=n?ids.reduce((s,k)=>s+sc[k].brier,0)/n:0;
   document.getElementById("scPct").textContent=n?Math.round(hit/n*100)+"%":"—";
@@ -3382,6 +3382,20 @@ function hideTeam(){
     const tm=ev.target.closest("[data-team]");
     if(tm && !tm.onclick && tm.dataset.team){ showTeam(tm.dataset.team); }
   });
+  window.addEventListener("error",ev=>{
+    try{ __toast("⚠ 程式錯誤:"+String(ev.message||"").slice(0,60)+" @行"+(ev.lineno||"?"), 1); }catch(e){}
+  });
+  window.addEventListener("unhandledrejection",ev=>{
+    try{ const m=String((ev.reason&&ev.reason.message)||ev.reason||"").slice(0,60);
+      if(m&&!/Abort|Failed to fetch|HTTP /.test(m)) __toast("⚠ 非同步錯誤:"+m, 1); }catch(e){}
+  });
+  try{
+    const __SG=showGame;
+    showGame=function(g,fromPop){
+      try{ return __SG(g,fromPop); }
+      catch(e){ __toast("⚠ 開啟比賽頁失敗:"+String((e&&e.message)||e).slice(0,70), 1); }
+    };
+  }catch(e){}
   try{
     const __SP=showPlayer;
     showPlayer=function(p,fromPop){
