@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/09 06:27 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/09 06:27";
+/* 由 news_engine.py 自動產生於 2026/08/09 07:32 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/09 07:32";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"FIFA hits out at campaign to 'undermine' president Infantino", d:"2026-08-08", team:"", link:"https://www.espn.com/soccer/story/_/id/49563647/fifa-gianni-infantino-president-uefa"},
