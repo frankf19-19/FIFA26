@@ -1,8 +1,8 @@
-/* 由 news_engine.py 自動產生於 2026/08/10 05:52 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/10 05:52";
+/* 由 news_engine.py 自動產生於 2026/08/10 07:17 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/10 07:17";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
-  {tag:"news", t:"Socceroos transfer tracker: Where Australia's stars will play in 2026-27", d:"2026-08-10", team:"", link:"https://www.espn.com/soccer/story/_/id/49466177/socceroos-transfer-tracker-where-australias-stars-play-2026-27"},
+  {tag:"news", t:"Socceroos transfer tracker: Where Australia's stars will play in 2026-27", d:"2026-08-09", team:"", link:"https://www.espn.com/soccer/story/_/id/49466177/socceroos-transfer-tracker-where-australias-stars-play-2026-27"},
   {tag:"news", t:"FIFA hits out at campaign to 'undermine' president Infantino", d:"2026-08-08", team:"", link:"https://www.espn.com/soccer/story/_/id/49563647/fifa-gianni-infantino-president-uefa"},
   {tag:"news", t:"Gianni Infantino denies UEFA made payment to alleged lover", d:"2026-08-08", team:"", link:"https://www.espn.com/soccer/story/_/id/49560207/gianni-infantino-denies-uefa-made-departure-payment-alleged-lover"},
   {tag:"news", t:"Norway calls on Infantino to quit amid backing from Mexico, Argentina", d:"2026-08-07", team:"", link:"https://www.espn.com/soccer/story/_/id/49551450/gianni-infantino-backed-argentina-fa-praised-owning-mistakes"},
