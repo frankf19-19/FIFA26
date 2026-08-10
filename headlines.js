@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/10 17:27 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/10 17:27";
+/* 由 news_engine.py 自動產生於 2026/08/10 18:13 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/10 18:13";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"UEFA, Concacaf, AFC accuse FIFA of 'breach of trust,' 'deception' over World Cup plan", d:"2026-08-10", team:"", link:"https://www.espn.com/soccer/story/_/id/49573256/uefa-concacaf-afc-accuse-fifa-breach-trust-deception-world-cup-plan"},
