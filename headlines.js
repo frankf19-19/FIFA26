@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/10 20:06 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/10 20:06";
+/* 由 news_engine.py 自動產生於 2026/08/10 21:00 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/10 21:00";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Barred Somali World Cup ref 'grateful' for Super Cup shot", d:"2026-08-10", team:"", link:"https://www.espn.com/soccer/story/_/id/49575753/barred-somali-world-cup-ref-grateful-super-cup-shot"},
