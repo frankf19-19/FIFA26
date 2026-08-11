@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/11 14:52 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/11 14:52";
+/* 由 news_engine.py 自動產生於 2026/08/11 15:54 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/11 15:54";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Trump warns replacing FIFA chief Infantino would be 'terrible mistake'", d:"2026-08-11", team:"", link:"https://www.espn.com/soccer/story/_/id/49579404/trump-warns-soccer-federations-replacing-fifa-president-infantino"},
