@@ -1,5 +1,5 @@
-/* 由 injury_engine.py 自動產生於 2026/08/11 23:03 — 請勿手改 */
-const INJURIES_UPDATED = "2026/08/11 23:03";
+/* 由 injury_engine.py 自動產生於 2026/08/11 23:57 — 請勿手改 */
+const INJURIES_UPDATED = "2026/08/11 23:57";
 const INJURIES_CONFIRMED = true;
 const INJURIES = {
 };
