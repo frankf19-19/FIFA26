@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/11 04:38 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/11 04:38";
+/* 由 news_engine.py 自動產生於 2026/08/11 05:40 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/11 05:40";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Should Barcelona be encouraging Ferran Torres' move to PSG?", d:"2026-08-10", team:"", link:"https://www.espn.com/video/clip/_/id/49577750/should-barcelona-encouraging-ferran-torres-move-psg"},
