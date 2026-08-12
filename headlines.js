@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/12 17:53 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/12 17:53";
+/* 由 news_engine.py 自動產生於 2026/08/12 18:53 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/12 18:53";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Why South America is lukewarm on a 2030 World Cup on home soil", d:"2026-08-12", team:"", link:"https://www.espn.com/soccer/story/_/id/49576985/why-south-america-lukewarm-2030-fifa-world-cup-home-soil"},
