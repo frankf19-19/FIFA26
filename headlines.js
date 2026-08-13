@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/13 19:52 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/13 19:52";
+/* 由 news_engine.py 自動產生於 2026/08/13 20:34 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/13 20:34";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Six Arab federations back Infantino amid revolt over World Cup plan", d:"2026-08-13", team:"", link:"https://www.espn.com/soccer/story/_/id/49599931/six-arab-federations-back-infantino-amid-revolt-world-cup-plan"},
