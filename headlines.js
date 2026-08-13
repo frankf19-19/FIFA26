@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/13 14:51 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/13 14:51";
+/* 由 news_engine.py 自動產生於 2026/08/13 15:52 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/13 15:52";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"CAF boss: Only elections can decide Gianni Infantino's FIFA future", d:"2026-08-13", team:"", link:"https://www.espn.com/soccer/story/_/id/49598888/gianni-infantino-fifa-caf-uefa-afc-football"},
