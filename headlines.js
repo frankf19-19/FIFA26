@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/13 06:54 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/13 06:54";
+/* 由 news_engine.py 自動產生於 2026/08/13 08:14 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/13 08:14";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Former FIFA Council member Isha Johansen says Gianni Infantino should step down 'for the good of football'", d:"2026-08-12", team:"", link:"https://www.espn.com/espn/story/_/id/49588771/former-fifa-council-member-isha-johansen-says-gianni-infantino-step-good-football"},
