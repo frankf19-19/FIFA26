@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/14 13:39 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/14 13:39";
+/* 由 news_engine.py 自動產生於 2026/08/14 14:37 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/14 14:37";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Carrick backs Mainoo after 'challenging' World Cup", d:"2026-08-14", team:"", link:"https://www.espn.com/video/clip/_/id/49607572/carrick-backs-mainoo-challenging-world-cup"},
