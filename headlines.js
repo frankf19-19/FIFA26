@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/14 05:19 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/14 05:19";
+/* 由 news_engine.py 自動產生於 2026/08/14 06:51 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/14 06:51";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Messi tracker: Goals, assists, key moments in 2026", d:"2026-08-13", team:"", link:"https://www.espn.com/soccer/story/_/id/47978642/lionel-messi-2026-tracker-inter-miami-argentina-games-goals-assists-stats"},
