@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e115";
+const BUILD = "e117";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1189,7 +1189,7 @@ function standEff(name,lg,tid){
       return (tid!=null&&T["#"+tid])||T[String(name).toLowerCase()]||null; };
     let ct=scan(C[lg]);
     if(!ct){ for(const x in C){ if(x===lg) continue; ct=scan(C[x]); if(ct) break; } }
-    if(ct&&+ct.gp>=6) return {s:ct,prior:true};
+    if(ct&&+ct.gp>=6) return {s:ct,prior:true,cloud:1};
   }
   if(lg&&PREV_BY_LG[lg]){
     const P=PREV_BY_LG[lg];
@@ -1386,7 +1386,7 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   // ===== 資料品質收縮:資料越少,越往基準率靠(不假裝有把握) =====
   let dq=0;                                     // 0=毫無資料,1=資料充分
   if(mkt) dq+=0.55;                             // 有市場賠率 = 最強訊號
-  if(sh&&sa&&+sh.gp>=2&&+sa.gp>=2) dq+=0.30*(0.5+0.5*Math.min(1,Math.min(+sh.gp,+sa.gp)/10))*(_prior?(Math.min(+sh.gp,+sa.gp)>=15?0.8:0.6):1);
+  if(sh&&sa&&+sh.gp>=2&&+sa.gp>=2) dq+=0.30*(0.5+0.5*Math.min(1,Math.min(+sh.gp,+sa.gp)/10))*((_eh.cloud&&_ea.cloud)?0.9:(_prior?(Math.min(+sh.gp,+sa.gp)>=15?0.8:0.6):1));
   if(schedOf(homeName)&&schedOf(awayName)) dq+=0.15;   // 真實近5場戰績(跨季有效,實戰數據)
   // 已知評級不再計入資料充分度:名氣不是數據(信心只反映真實資料量)
   dq=Math.max(0,Math.min(1,dq));
@@ -2515,7 +2515,8 @@ async function gradeFinished(games){
     if(ex&&ex.pred&&ex.hs!=null)return;         // 已完整評分才跳過;賽前鎖定待評的要照常評
     // ex 存在但無快照 = e12 前的舊記錄 → 升級:補快照與檢討所需欄位(保留原本的命中/Brier,誠實不竄改)
     const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
-    if(noPredGate(p,g.league||curLeague)){ return; }   // 僅非核心聯賽的低資料場次不評分
+    if(noPredGate(p,g.league||curLeague)){ return; }   // 非核心低資料不評分
+    if(((ex&&ex.dq!=null)?ex.dq:(p.dq||0))<0.2){ return; }   // 資料不足場次不計分(46% 命中在污染成績單;畫面照常顯示)
     const sp0=(ex&&ex.pred)?ex.pred:{H:p.H,D:p.D,A:p.A,si:p.si,sj:p.sj,conf:p.conf,pick:p.pick};   // 賽前存證優先
     const realOut = g.hs>g.as?"H":g.hs<g.as?"A":"D";
     const predOut = sp0.H>=sp0.D&&sp0.H>=sp0.A?"H":sp0.A>=sp0.D&&sp0.A>=sp0.H?"A":"D";
