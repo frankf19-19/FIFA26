@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e117";
+const BUILD = "e118";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1759,7 +1759,7 @@ async function checkTodayGames(targetIso, fast){
       const fresh=[];
       Object.keys(TODAY_GAMES).forEach(lid=>(TODAY_GAMES[lid].games||[]).forEach(g=>{
         g.league=g.league||lid;
-        if(g.completed&&g.hs!=null&&g.as!=null&&!(sc0[g.id]&&sc0[g.id].pred)) fresh.push(g);
+        if(g.completed&&g.hs!=null&&g.as!=null&&!(sc0[g.id]&&sc0[g.id].hs!=null)) fresh.push(g);
       }));
       if(fresh.length){ await gradeFinished(fresh); if(typeof renderScorecard==="function") renderScorecard(); if(typeof renderInsights==="function") renderInsights(); }
     }catch(e){}
@@ -2017,12 +2017,13 @@ function renderTodaySection(){
       } else if(done){
         st=`<span class="stx st-done">完場</span>`;
         if(snap&&snap.void){ st+=`<span class="stx r-void">不計</span>`; rowCls="done"; }
-        else if(snap){
+        else if(snap&&snap.hs!=null){
           const exact=(snap.score===true||((snap.v>=2)&&snap.pred&&snap.pred.si===g.hs&&snap.pred.sj===g.as));
           if(snap.hit&&exact){ st+=`<span class="stx r-exact">★ 全中</span>`; rowCls="exact"; }
           else if(snap.hit){ st+=`<span class="stx r-hit">✓ 命中</span>`; rowCls="hit"; }
           else { st+=`<span class="stx r-miss">✗ 未中</span>`; rowCls="miss"; }
-        } else rowCls="done";
+        } else if(snap){ st+=`<span class="stx st-soon">待評分</span>`; rowCls="done"; }
+        else rowCls="done";
       } else {
         const late = g.ts && (Date.now()-g.ts)>3*60000;      // 已過開賽 3 分鐘
         st = late
@@ -2516,7 +2517,8 @@ async function gradeFinished(games){
     // ex 存在但無快照 = e12 前的舊記錄 → 升級:補快照與檢討所需欄位(保留原本的命中/Brier,誠實不竄改)
     const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
     if(noPredGate(p,g.league||curLeague)){ return; }   // 非核心低資料不評分
-    if(((ex&&ex.dq!=null)?ex.dq:(p.dq||0))<0.2){ return; }   // 資料不足場次不計分(46% 命中在污染成績單;畫面照常顯示)
+    const _locked=!!(ex&&ex.locked&&ex.pred);          // 鎖定過=正式顯示過的預測 → 一律結帳(誠信)
+    if(!_locked && Math.max((ex&&ex.dq!=null)?ex.dq:0,(p.dq||0))<0.2){ return; }
     const sp0=(ex&&ex.pred)?ex.pred:{H:p.H,D:p.D,A:p.A,si:p.si,sj:p.sj,conf:p.conf,pick:p.pick};   // 賽前存證優先
     const realOut = g.hs>g.as?"H":g.hs<g.as?"A":"D";
     const predOut = sp0.H>=sp0.D&&sp0.H>=sp0.A?"H":sp0.A>=sp0.D&&sp0.A>=sp0.H?"A":"D";
