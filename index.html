@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e122";
+const BUILD = "e123";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2540,6 +2540,17 @@ async function gradeFinished(games){
     if(noPredGate(p,g.league||curLeague)){ return; }   // 非核心低資料不評分
     const _locked=!!(ex&&ex.locked&&ex.pred);          // 鎖定過=正式顯示過的預測 → 一律結帳(誠信)
     if(!_locked && Math.max((ex&&ex.dq!=null)?ex.dq:0,(p.dq||0))<0.2){ return; }
+    // 失準歸因(每個未中都留下病歷,累積成調參藥方)
+    const __mc=(sp0x,pOut,rOut,gg)=>{
+      if(pOut===rOut) return null;
+      const top=Math.max(sp0x.H,sp0x.D,sp0x.A);
+      if(rOut==="D") return "和局爆冷";
+      if(top>=50) return "熱門翻車";
+      if(top<40) return "均勢誤判";
+      if(pOut==="H"&&rOut==="A") return "主場高估";
+      if(pOut==="A"&&rOut==="H") return "客場低估";
+      return "方向誤判";
+    };
     const sp0=(ex&&(ex.fz||ex.pred))?(ex.fz||ex.pred):{H:p.H,D:p.D,A:p.A,si:p.si,sj:p.sj,conf:p.conf,pick:p.pick};   // 賽前存證優先
     const realOut = g.hs>g.as?"H":g.hs<g.as?"A":"D";
     const predOut = sp0.H>=sp0.D&&sp0.H>=sp0.A?"H":sp0.A>=sp0.D&&sp0.A>=sp0.H?"A":"D";
@@ -2554,6 +2565,7 @@ async function gradeFinished(games){
       pp:[+sp0.H.toFixed(1),+sp0.D.toFixed(1),+sp0.A.toFixed(1)], dq:(ex&&ex.dq!=null)?ex.dq:p.dq, out:realOut,
       locked:(ex&&ex.locked)||0,
       fz:(ex&&ex.fz)||undefined, fzT:(ex&&ex.fzT)||undefined,
+      mc:(ex&&ex.mc)||__mc(sp0,predOut,realOut,g),
       pred:sp0};
     // --- 評級自我校準:淨勝球誤差 → 微調兩隊評級(此消彼長,單場上限 ±2;每場只做一次) ---
     if(!sc[g.id].cal){
@@ -2712,11 +2724,16 @@ function renderInsights(){
   tag.textContent=`已學習 ${n} 場`;
   const S=ids.map(k=>sc[k]);
   const lessons=[];
+  // 教訓0:未中歸因統計(每個失準的病歷 → 對症調參)
+  { const mcs={}; S.forEach(s=>{ if(s.hit===false&&s.mc) mcs[s.mc]=(mcs[s.mc]||0)+1; });
+    const mk2=Object.entries(mcs).sort((a,b)=>b[1]-a[1]);
+    if(mk2.length>=2) lessons.push(`未中歸因統計:${mk2.map(([k,v])=>`${k} ${v}`).join(" · ")} —— 佔比最高者即下一輪調參重點`); }
   // 教訓1:和局偏差
   const draws=S.filter(s=>s.draw);
   if(draws.length>=2){
     const avgD=draws.reduce((a,s)=>a+s.pred.D,0)/draws.length;
     if(avgD<30) lessons.push(`和局共發生 ${draws.length} 次,模型平均只給 ${avgD.toFixed(0)}% 和局機率 → 偏差:低估均勢賽事,遇實力接近對戰應更保守`);
+
   }
   // 教訓2:主場優勢
   const hp=S.filter(s=>s.homePick).length, hw=S.filter(s=>s.hs>s.as).length;
@@ -2804,7 +2821,7 @@ function makeReview(g){
     parts.push(`和局未在預期內(賽前和局機率僅 ${p.D}%),兩隊實際更均勢`);
   }else{
     const w=(s.hs!=null&&s.as!=null)?(s.hs>s.as?hz:az):null;
-    if(w) parts.push(`預測失準:看好 ${zhName(p.pick)},實際 ${w} 勝出`);
+    if(w) parts.push(`預測失準:看好 ${zhName(p.pick)},實際 ${w} 勝出${s.mc?`(歸因:${s.mc})`:""}`);
   }
   if(s.perf&&s.perf.hsot!=null){
     let line=`場面:射正 ${s.perf.hsot}-${s.perf.asot}`;
