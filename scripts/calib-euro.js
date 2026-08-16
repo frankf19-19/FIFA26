@@ -41,9 +41,9 @@ const SOT_G={}, SOT_S={}, SOT_C={};
     const now = new Date();
     let hw=0, dr=0, goals=0, n=0;
     const T={};
-    const add=(id,nm,gf,ga,isHome,dt)=>{ const o=(T["#"+id]=T["#"+id]||{gp:0,gf:0,ga:0,hgp:0,hgf:0,hga:0,agp:0,agf:0,aga:0,lp:""});
-      o.gp++; o.gf+=gf; o.ga+=ga; if(gf===ga) o.dr=(o.dr||0)+1;
-      if(isHome){ o.hgp++; o.hgf+=gf; o.hga+=ga; } else { o.agp++; o.agf+=gf; o.aga+=ga; }
+    const add=(id,nm,gf,ga,isHome,dt,w2)=>{ const w=(w2!=null?w2:1); const o=(T["#"+id]=T["#"+id]||{gp:0,gf:0,ga:0,hgp:0,hgf:0,hga:0,agp:0,agf:0,aga:0,lp:""});
+      o.gp+=w; o.gf+=gf*w; o.ga+=ga*w; if(gf===ga) o.dr=(o.dr||0)+w;
+      if(isHome){ o.hgp+=w; o.hgf+=gf*w; o.hga+=ga*w; } else { o.agp+=w; o.agf+=gf*w; o.aga+=ga*w; }
       if(dt && dt>o.lp) o.lp=dt;                               // 最近一場日期(休息日計算用)
       if(nm) T[String(nm).toLowerCase()]=o; };
     // ── 賽果(近 182 天)──
@@ -61,10 +61,15 @@ const SOT_G={}, SOT_S={}, SOT_C={};
             if(!H||!A) continue;
             const hs=+H.score, as=+A.score;
             if(isNaN(hs)||isNaN(as)) continue;
-            n++; goals+=hs+as;
-            if(hs>as) hw++; else if(hs===as) dr++;
-            add((H.team||{}).id,(H.team||{}).displayName,hs,as,true, ev.date||"");
-            add((A.team||{}).id,(A.team||{}).displayName,as,hs,false,ev.date||"");
+            { const __ag=Math.max(0,(Date.now()-(Date.parse(ev.date)||Date.now()))/86400000);
+              const __wl=Math.exp(-Math.LN2*__ag/60);
+              n+=__wl; goals+=(hs+as)*__wl;
+              if(hs>as) hw+=__wl; else if(hs===as) dr+=__wl; }
+            // 時間衰減:半衰期 60 天(上週的比賽 ≈ 半年前的 8 倍話語權)
+            const __age=Math.max(0,(Date.now()-(Date.parse(ev.date)||Date.now()))/86400000);
+            const __w=Math.exp(-Math.LN2*__age/60);
+            add((H.team||{}).id,(H.team||{}).displayName,hs,as,true, ev.date||"", __w);
+            add((A.team||{}).id,(A.team||{}).displayName,as,hs,false,ev.date||"", __w);
             // 射正數(自產 xG 用):抓該場 summary 的 shotsOnTarget
             try {
               const sr2=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/summary?event=${ev.id}`);
@@ -83,7 +88,7 @@ const SOT_G={}, SOT_S={}, SOT_C={};
                     const ph=hFirst?p0:p1, pa=hFirst?p1:p0;
                     const ch=hFirst?c0:c1, ca2=hFirst?c1:c0;
                     const acc=(id,f,a2,ps,cf,cA)=>{ const o=T["#"+id]; if(o){
-                      o.stn=(o.stn||0)+1; o.stf=(o.stf||0)+f; o.sta=(o.sta||0)+a2;
+                      o.stn=(o.stn||0)+__w; o.stf=(o.stf||0)+f*__w; o.sta=(o.sta||0)+a2*__w;
                       if(ps!=null&&!isNaN(ps)){ o.psn=(o.psn||0)+1; o.psf=(o.psf||0)+ps; }
                       if(cf!=null&&!isNaN(cf)){ o.crf=(o.crf||0)+cf; o.cra=(o.cra||0)+(cA||0); } } };
                     acc((H.team||{}).id, sh2, sa2, ph, ch, ca2); acc((A.team||{}).id, sa2, sh2, pa, ca2, ch);
@@ -98,6 +103,7 @@ const SOT_G={}, SOT_S={}, SOT_C={};
       } catch(e) {}
       await sleep(200);
     }
+    n=+n.toFixed(1);
     if (n < 8) { out.leagues[lg]={done:1, n:0}; save(out, lg+" (樣本不足)"); continue; }
     const ha = Math.max(0.05, Math.min(0.45, 0.24 + (hw/n-0.46)*1.2));
     out.leagues[lg] = { ha:+ha.toFixed(3), lgAvg:+Math.max(1,Math.min(2,goals/n/2)).toFixed(3),
