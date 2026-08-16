@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e125";
+const BUILD = "e126";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -706,6 +706,10 @@ const LEAGUES = [
   {id:"usa.1", zh:"美職聯", full:"美國職業足球大聯盟", core:1},
   {id:"jpn.1", zh:"日職甲", full:"日本足球甲級聯賽 J1", core:1},
   {id:"eng.2", zh:"英冠", full:"英格蘭冠軍足球聯賽", core:1},
+  {id:"sco.1", zh:"蘇超", full:"蘇格蘭超級聯賽", more:1},
+  {id:"eng.charity", zh:"社區盾", full:"英格蘭社區盾", more:1, cup:1, stand:"eng.1"},
+  {id:"uefa.super_cup", zh:"歐洲超級盃", full:"歐洲超級盃", more:1, cup:1, stand:"eng.1"},
+  {id:"sco.league_cup", zh:"蘇聯賽盃", full:"蘇格蘭聯賽盃", more:1, cup:1, stand:"sco.1"},
 ];
 let curLeague = "usa.1";     // 預設美職聯(現在是賽季中;歐洲 8 月開賽後可自行切換)
 let curDate = new Date();
@@ -885,6 +889,8 @@ const ZH = {
   "gamba osaka":"大阪飛腳","cerezo osaka":"大阪櫻花","kawasaki frontale":"川崎前鋒","fc tokyo":"FC東京",
   "nagoya grampus":"名古屋鯨八","avispa fukuoka":"福岡黃蜂","shonan bellmare":"湘南比馬","albirex niigata":"新潟天鵝",
   "kyoto sanga":"京都不死鳥","tokyo verdy":"東京綠茵","kashiwa reysol":"柏太陽神","shimizu s-pulse":"清水心跳",
+  "rangers":"格拉斯哥流浪者","celtic":"塞爾提克","st mirren":"聖米倫","aberdeen":"亞伯丁",
+  "hearts":"哈茨","heart of midlothian":"哈茨","hibernian":"希伯尼安","dundee united":"鄧迪聯","motherwell":"馬瑟威爾",
   "mito hollyhock":"水戶蜀葵","jef united ichihara-chiba":"千葉市原","jef united chiba":"千葉市原",
   "consadole sapporo":"札幌岡薩多","hokkaido consadole sapporo":"札幌岡薩多","fagiano okayama":"岡山綠雉","jubilo iwata":"磐田喜悅",
   "ajax":"阿賈克斯","ajax amsterdam":"阿賈克斯","psv":"PSV燕豪芬","psv eindhoven":"PSV燕豪芬","feyenoord":"飛燕諾",
