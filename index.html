@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e121";
+const BUILD = "e122";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1375,6 +1375,9 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
     if(k==="H")H+=p;else if(k==="D")D+=p;else A+=p;
     if(p>best[k].p) best[k]={p,i,j};}
   const t=H+D+A; H=H/t*100;D=D/t*100;A=A/t*100;
+  // 和局錨定:Poisson 結構性低估和局(診斷實證)→ 拉向該聯賽近182天真實和局率
+  { const LD=(cl&&cl.draw)?cl.draw*100:25.5;
+    if(D<LD){ const d2=D+0.5*(LD-D), sc2=(100-d2)/((H+A)||1); H*=sc2; A*=sc2; D=d2; } }
   if(mkt){ // 市場賠率融合:權重依模型實測表現自動調整(模型不如市場時自動讓位)
     const w=1-MKT_W;
     H=H*w+mkt.h*100*MKT_W; D=D*w+mkt.d*100*MKT_W; A=A*w+mkt.a*100*MKT_W;
@@ -1978,7 +1981,14 @@ function renderTodaySection(){
       let dropped=0;
       t._usable=(t.games||[]).filter(g=>{
         const snap0=scGet()[g.id];
-        if(snap0&&snap0.pred) return true;
+        if(snap0&&snap0.pred){
+          const __k2=Date.parse(g.date)||0;
+          if(__k2>0&&Date.now()>=__k2&&!snap0.fz){
+            try{ const sc0=scGet();
+              if(sc0[g.id]&&sc0[g.id].pred&&!sc0[g.id].fz){ sc0[g.id].fz={...sc0[g.id].pred}; sc0[g.id].fzT=Date.now(); scSet(sc0); } }catch(e){}
+          }
+          return true;
+        }
         const pp=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
         if(noPredGate(pp,l.id)){ dropped++; return false; }
         // 賽前拍照存證:預測一顯示就鎖定,完賽後不得再變(誠信保證)
@@ -2017,8 +2027,9 @@ function renderTodaySection(){
       const snap=scGet()[g.id];
       const _pl=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
       const __ko=(Date.parse(g.date)||0), __started=live||done||(__ko>0&&Date.now()>=__ko);
-      const p=(__started&&snap&&snap.pred)?{..._pl, H:snap.pred.H, D:snap.pred.D, A:snap.pred.A,
-        si:snap.pred.si, sj:snap.pred.sj, conf:snap.pred.conf, pick:snap.pred.pick,
+      const _sp=(snap&&(snap.fz||snap.pred))||null;
+      const p=(__started&&_sp)?{..._pl, H:_sp.H, D:_sp.D, A:_sp.A,
+        si:_sp.si, sj:_sp.sj, conf:_sp.conf, pick:_sp.pick,
         dq:(snap.dq!=null?snap.dq:_pl.dq)}:_pl;    // 賽前即時更新;開賽哨響即凍結(用最後一次賽前鎖定值)
       let st, rowCls="pre";
       if(live){
@@ -2059,7 +2070,7 @@ function renderTodaySection(){
         <span class="tp-side aw">${Math.round(p.A)}%</span>
         <span class="tp-sc" title="客 ${p.sj} - 主 ${p.si}">${p.sj} - ${p.si}</span>
         <span class="tp-side hm">${Math.round(p.H)}%</span>
-        <span class="tp-conf" style="color:${conf}">信心 ${p.conf}</span>
+        <span class="tp-conf" style="color:${conf}">信心 ${p.conf}</span>${(__started&&snap&&(snap.fzT||snap.tU||snap.t))?`<span style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:6px" title="預測已於開賽時封存,之後不再變動">🔒 ${new Date(snap.fzT||snap.tU||snap.t).toTimeString().slice(0,5)}</span>`:''}
         <div class="tg-pred">
           <b class="tp-pick">看好 ${pickSide?`<span class="ha ${pickSide==="主"?"hm":"aw"}">${pickSide}</span> `:""}${pickZh}</b>
           <span class="tp-bar"><i class="a" style="width:${p.A}%"></i><i class="d" style="width:${p.D}%"></i><i class="h" style="width:${p.H}%"></i></span>
@@ -2529,7 +2540,7 @@ async function gradeFinished(games){
     if(noPredGate(p,g.league||curLeague)){ return; }   // 非核心低資料不評分
     const _locked=!!(ex&&ex.locked&&ex.pred);          // 鎖定過=正式顯示過的預測 → 一律結帳(誠信)
     if(!_locked && Math.max((ex&&ex.dq!=null)?ex.dq:0,(p.dq||0))<0.2){ return; }
-    const sp0=(ex&&ex.pred)?ex.pred:{H:p.H,D:p.D,A:p.A,si:p.si,sj:p.sj,conf:p.conf,pick:p.pick};   // 賽前存證優先
+    const sp0=(ex&&(ex.fz||ex.pred))?(ex.fz||ex.pred):{H:p.H,D:p.D,A:p.A,si:p.si,sj:p.sj,conf:p.conf,pick:p.pick};   // 賽前存證優先
     const realOut = g.hs>g.as?"H":g.hs<g.as?"A":"D";
     const predOut = sp0.H>=sp0.D&&sp0.H>=sp0.A?"H":sp0.A>=sp0.D&&sp0.A>=sp0.H?"A":"D";
     const y={H:0,D:0,A:0}; y[realOut]=1;
@@ -2542,6 +2553,7 @@ async function gradeFinished(games){
       homePick:sp0.pick===g.hn, draw:g.hs===g.as, cal:!!(ex&&ex.cal),
       pp:[+sp0.H.toFixed(1),+sp0.D.toFixed(1),+sp0.A.toFixed(1)], dq:(ex&&ex.dq!=null)?ex.dq:p.dq, out:realOut,
       locked:(ex&&ex.locked)||0,
+      fz:(ex&&ex.fz)||undefined, fzT:(ex&&ex.fzT)||undefined,
       pred:sp0};
     // --- 評級自我校準:淨勝球誤差 → 微調兩隊評級(此消彼長,單場上限 ±2;每場只做一次) ---
     if(!sc[g.id].cal){
@@ -2840,7 +2852,7 @@ function gameCard(g){
   let body="";
   if(done){
     const snap=scGet()[g.id];
-    const sp=(snap&&snap.pred)?snap.pred:p;    // 用當初的預測快照,不因校準漂移
+    const sp=(snap&&(snap.fz||snap.pred))?(snap.fz||snap.pred):p;    // 用當初的預測快照,不因校準漂移
     const rv=makeReview(g);
     body=(!snap||!snap.pred)&&noPredGate(p,g.league||curLeague)
       ? `<div class="predline"><span class="k">賽前預測</span><span class="tp-nopred">資料不足,本場未提供預測、不列入計分</span></div>`
