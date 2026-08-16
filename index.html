@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e123";
+const BUILD = "e124";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1333,6 +1333,56 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
       }
     }
   }catch(e){}
+  // ① xG 校正:進球偏離 xG = 運氣成分 → 以比值修正(±10% 封頂;xG≈進球時比值≈1 無作用)
+  let _xg=null;
+  try{
+    const CT2=(window.CLOUD&&window.CLOUD.leagues)||null;
+    const xgOf=(tid,nm)=>{ if(!CT2) return null;
+      for(const x in CT2){ const T=CT2[x].teams||{};
+        const t=(tid!=null&&T["#"+tid])||T[String(nm||"").toLowerCase()];
+        if(t&&t.xg&&t.xg.n>=8&&t.gp>=8) return {xg:t.xg, gf:t.gf/t.gp, ga:t.ga/t.gp}; }
+      return null; };
+    const xh=xgOf(hid,homeName), xa2=xgOf(aid,awayName);
+    if(xh&&xa2){
+      const C=(v)=>Math.max(0.9,Math.min(1.1,v));
+      lh*=C((0.6*xh.xg.xf+0.4*xh.gf)/Math.max(xh.gf,0.3));   // 主隊攻:實進 vs xG
+      la*=C((0.6*xa2.xg.xf+0.4*xa2.gf)/Math.max(xa2.gf,0.3)); // 客隊攻
+      la*=C((0.6*xh.xg.xa+0.4*xh.ga)/Math.max(xh.ga,0.3));    // 主隊防(xGA)
+      lh*=C((0.6*xa2.xg.xa+0.4*xa2.ga)/Math.max(xa2.ga,0.3)); // 客隊防
+      _xg={h:xh.xg.xf,a:xa2.xg.xf};
+    }
+  }catch(e){}
+  // ② 歐戰夾縫:近 4 天內踢過歐冠/歐霸 → 輪換與疲勞折扣(-3%)
+  let _eu=null;
+  try{
+    const CT3=(window.CLOUD&&window.CLOUD.leagues)||null;
+    const euOf=(tid)=>{ if(!CT3||tid==null) return null;
+      for(const L of ["uefa.champions","uefa.europa"]){
+        const t=CT3[L]&&CT3[L].teams&&CT3[L].teams["#"+tid];
+        if(t&&t.lp){ const d=(Date.now()-Date.parse(t.lp))/86400000;
+          if(d>=0&&d<=4) return {d:Math.round(d), c:(L==="uefa.champions"?"歐冠":"歐霸")}; } }
+      return null; };
+    const eh2=euOf(hid), ea2=euOf(aid);
+    if(eh2){ lh*=0.97; _eu=_eu||{}; _eu.h=eh2; }
+    if(ea2){ la*=0.97; _eu=_eu||{}; _eu.a=ea2; }
+  }catch(e){}
+  // ③ 動機情境:賽季後段,保級圈拚命(+2%)、安全中游動力低(-1.5%)
+  let _mv=null;
+  try{
+    const SEASON_N={"eng.1":38,"esp.1":38,"ita.1":38,"ger.1":34,"fra.1":34,"eng.2":46,"jpn.1":38,"usa.1":34};
+    const TEAMS_N ={"eng.1":20,"esp.1":20,"ita.1":20,"ger.1":18,"fra.1":18,"eng.2":24,"jpn.1":20,"usa.1":30};
+    const SN=SEASON_N[lg], TN=TEAMS_N[lg];
+    const st2=STAND_BY_LG[lg]||{};
+    const mvOf=(nm)=>{ const e2=st2[norm(nm)]; if(!e2||e2.rank==null||!SN||!TN) return null;
+      if(+e2.gp/SN<0.72) return null;                          // 賽季後段才啟動
+      const r=+e2.rank;
+      if(r>=TN-2) return {t:"保級拚命",f:1.02};
+      if(r>=8&&r<=TN-6) return {t:"中游無慾",f:0.985};
+      return null; };
+    const mh=mvOf(homeName), ma=mvOf(awayName);
+    if(mh){ lh*=mh.f; _mv=_mv||{}; _mv.h=mh; }
+    if(ma){ la*=ma.f; _mv=_mv||{}; _mv.a=ma; }
+  }catch(e){}
   // 陣容火力微調:雲端球員數據,兩隊皆足才啟用,上限 ±6%(輔助訊號)
   let _sq=null;
   { const qh=cloudSquad(lg,hid), qa=cloudSquad(lg,aid);
@@ -1407,7 +1457,7 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
   const pick = predOut==="H" ? homeName : predOut==="A" ? awayName : "和局";
   return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,conf,pick,mk:!!mkt,
-          lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest};
+          lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv};
 }
 /* 詳細分析:逐項列出模型依據(無資料的項目自動略過,不編造) */
 function analysisRows(hn,an,p,lg,hid,aid){
@@ -1455,6 +1505,9 @@ function analysisRows(hn,an,p,lg,hid,aid){
     : `<span style="color:var(--muted);font-size:11px">(全站通用基準值,尚未依此聯賽校準)</span>`)]);
   if(p.mk) rows.push(["市場賠率", `已融合 ESPN 賠率(模型 ${Math.round((1-MKT_W)*100)}% + 市場 ${Math.round(MKT_W*100)}%,權重依實測表現自動調整)`]);
   else if(DRAW_NUDGE>0) rows.push(["和局補正", `+${DRAW_NUDGE.toFixed(1)}%(歷史顯示模型低估和局)`]);
+  if(p.xg) rows.push(["xG 校正",`場均 xG:${hz} ${p.xg.h} · ${az} ${p.xg.a}(進球偏離 xG 視為運氣,已修正 ±10% 內)`]);
+  if(p.eu) rows.push(["歐戰夾縫",`${p.eu.h?`${hz} ${p.eu.h.d} 天前踢${p.eu.h.c}`:""}${p.eu.h&&p.eu.a?" · ":""}${p.eu.a?`${az} ${p.eu.a.d} 天前踢${p.eu.a.c}`:""}(輪換疲勞 -3%)`]);
+  if(p.mv) rows.push(["動機情境",`${p.mv.h?`${hz}:${p.mv.h.t}`:""}${p.mv.h&&p.mv.a?" · ":""}${p.mv.a?`${az}:${p.mv.a.t}`:""}(賽季後段效應)`]);
   if(p.rest) rows.push(["休息日",`${hz} ${p.rest.h} 天 · ${az} ${p.rest.a} 天(密集賽程 ±3% 內微調)`]);
   if(p.sq&&p.sq.gk) rows.push(["守門對比",`零封率 ${hz} ${(p.sq.gk.h*100).toFixed(0)}% · ${az} ${(p.sq.gk.a*100).toFixed(0)}%(門將數據,微調上限 ±4%)`]);
   if(p.sq) rows.push(["陣容火力",`${hz} ${p.sq.h} · ${az} ${p.sq.a}(前5人每場進攻參與,球員數據,微調上限 ±6%)`]);
