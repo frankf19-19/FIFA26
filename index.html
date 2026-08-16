@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e118";
+const BUILD = "e120";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1983,9 +1983,14 @@ function renderTodaySection(){
         if(noPredGate(pp,l.id)){ dropped++; return false; }
         // 賽前拍照存證:預測一顯示就鎖定,完賽後不得再變(誠信保證)
         if(g.state!=="in"&&!g.completed&&(pp.dq||0)>=0.2){
-          try{ const sc0=scGet();
-            if(!sc0[g.id]){ sc0[g.id]={pred:{H:pp.H,D:pp.D,A:pp.A,si:pp.si,sj:pp.sj,conf:pp.conf,pick:pp.pick}, odds:(g.odds||null),
-              dq:pp.dq, t:Date.now(), v:2, locked:1}; scSet(sc0); } }catch(e){}
+          try{ const sc0=scGet(); const ex0=sc0[g.id];
+            if(!ex0 || (ex0.locked && ex0.hs==null)){        // 賽前:滾動更新(吸收陣容/名單變化);已開賽或已評分:碰都不碰
+              sc0[g.id]={ ...(ex0||{}),
+                pred:{H:pp.H,D:pp.D,A:pp.A,si:pp.si,sj:pp.sj,conf:pp.conf,pick:pp.pick},
+                odds:(g.odds||(ex0&&ex0.odds)||null),
+                dq:pp.dq, t:(ex0&&ex0.t)||Date.now(), tU:Date.now(), v:2, locked:1 };
+              scSet(sc0);
+            } }catch(e){}
         }
         return true;
       });
@@ -2008,8 +2013,11 @@ function renderTodaySection(){
       .slice().sort((a,b)=>a.time.localeCompare(b.time)).map(g=>{
       const live=g.state==="in", done=g.completed;
       const sc = (live||done)?`<span class="tg-sc">${g.as} - ${g.hs}</span>`:`<span class="tg-vs">vs</span>`;
-      const p=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
       const snap=scGet()[g.id];
+      const _pl=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
+      const p=((live||done)&&snap&&snap.pred)?{..._pl, H:snap.pred.H, D:snap.pred.D, A:snap.pred.A,
+        si:snap.pred.si, sj:snap.pred.sj, conf:snap.pred.conf, pick:snap.pred.pick,
+        dq:(snap.dq!=null?snap.dq:_pl.dq)}:_pl;    // 賽前即時更新;開賽哨響即凍結(用最後一次賽前鎖定值)
       let st, rowCls="pre";
       if(live){
         st=`<span class="stx st-live"><span class="dot"></span>${g.detail||"進行中"}</span>`;
@@ -3464,12 +3472,29 @@ function hideTeam(){
     };
   }catch(e){}
   window.CLOUD=null;
-  fetch("calib.json?_="+Date.now(),{cache:"no-store"}).then(r=>r.ok?r.json():null).then(j=>{
+  const __applyCalib=j=>{
     if(j&&j.leagues){ window.CLOUD=j;
+      try{ localStorage.setItem("euroCalibCache", JSON.stringify(j)); }catch(e){}
       const el=document.getElementById("cloudTag");
       if(el) el.textContent="☁ 雲端校準("+(j.days||28)+"天)· 更新 "+String(j.updated||"").replace("T"," ").slice(5,16)+" · 樣本 "+(j.n||0)+" 場";
+      return true;
     }
-  }).catch(()=>{});
+    return false;
+  };
+  (async()=>{
+    for(let i=0;i<3;i++){                          // 失敗重試 3 次(2s/4s 退避)
+      try{
+        const r=await fetch("calib.json?_="+Date.now(),{cache:"no-store"});
+        if(r.ok && __applyCalib(await r.json())) return;
+      }catch(e){}
+      await new Promise(res=>setTimeout(res, 2000*(i+1)));
+    }
+    try{                                            // 全滅 → 用上次成功的本機快取(不裸奔)
+      const c=JSON.parse(localStorage.getItem("euroCalibCache")||"null");
+      if(__applyCalib(c)){ const el=document.getElementById("cloudTag");
+        if(el) el.textContent+="(本機快取)"; }
+    }catch(e){}
+  })();
   applyView();
 }
 
