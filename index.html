@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e124";
+const BUILD = "e125";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1286,7 +1286,11 @@ function cloudSquad(lg, tid){
       const sv=s0[5]||"", cs=s0[6]||"", gc=s0[7]||"", tk=+s0[8]||0, icp=+s0[9]||0;
       if(app<5) continue;
       const pos=String(a[2]||"").toUpperCase();
-      if(pos==="G"||pos==="GK"){ if(!gk||app>gk.app) gk={id:a[0],n:a[1],app,sv,cs,gc,csr:(cs!==""?+(+cs/app).toFixed(2):null)}; continue; }
+      if(pos==="G"||pos==="GK"){ if(!gk||app>gk.app){
+        const svn=+sv||0, gcn=+gc||0;
+        gk={id:a[0],n:a[1],app,sv,cs,gc,
+            csr:(cs!==""?+(+cs/app).toFixed(2):null),
+            svr:((svn+gcn)>=15?+(svn/(svn+gcn)).toFixed(3):null)}; } continue; }
       ps.push({id:a[0], n:a[1], pos:a[2]||"", app, g, as, c:+((g+as)/app).toFixed(2)});
       if(tk+icp>0) dfs.push({id:a[0], n:a[1], pos:a[2]||"", app, tk, icp, d:+((tk+icp)/app).toFixed(1)});
     }
@@ -1314,13 +1318,16 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   const COEF=0.030, BASE=1.32, HA=(cl&&cl.ha!=null)?cl.ha:(0.24+HA_TUNE); // 主場優勢:雲端校準優先,否則本機自調
   let lh=BASE*Math.exp(COEF*d/2 + HA/2), la=BASE*Math.exp(-COEF*d/2 - HA/2);
   // 主客分拆 + 休息日(雲端 v8;主隊採主場戰績、客隊採客場戰績)
-  let _rest=null;
+  let _rest=null, _tdr=null, _psH=null, _psA=null;
   try{
     const CT=(window.CLOUD&&window.CLOUD.leagues)||null;
     const pickT=(tid)=>{ if(!CT||tid==null) return null; let t=null;
       const s=P=>{ if(P&&P.teams&&P.teams["#"+tid]) t=P.teams["#"+tid]; };
       s(CT[lg]); if(!t){ for(const x in CT){ s(CT[x]); if(t) break; } } return t; };
     const th=pickT(hid), ta=pickT(aid);
+    if(th&&ta&&+th.gp>=10&&+ta.gp>=10&&th.dr!=null&&ta.dr!=null)
+      _tdr=100*((+th.dr)+(+ta.dr))/((+th.gp)+(+ta.gp));       // 兩隊合併和局率(隊層體質)
+    if(th&&ta){ _psH=th.ps!=null?+th.ps:null; _psA=ta.ps!=null?+ta.ps:null; }  // 控球風格(顯示)
     if(th&&+th.hgp>=6) sh={gp:th.hgp,gf:th.hgf,ga:th.hga};
     if(ta&&+ta.agp>=6) sa={gp:ta.agp,gf:ta.agf,ga:ta.aga};
     if(th&&ta&&th.lp&&ta.lp){
@@ -1389,13 +1396,21 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
     if(qh&&qa){ const f=Math.max(0.94,Math.min(1.06,Math.pow((qh.atk+0.5)/(qa.atk+0.5),0.25)));
       lh*=f; la/=f; _sq={h:qh.atk,a:qa.atk,f:+f.toFixed(3)};
       // 守門員零封率:好門將壓低「對方」的預期進球(上限 ±4%)
-      const rH=qh.gk&&qh.gk.csr!=null?qh.gk.csr:null, rA=qa.gk&&qa.gk.csr!=null?qa.gk.csr:null;
-      if(rH!=null&&rA!=null){
-        const avg=(rH+rA)/2;
-        lh*=Math.max(0.96,Math.min(1.04,Math.pow((1+avg)/(1+rA),0.6)));
-        la*=Math.max(0.96,Math.min(1.04,Math.pow((1+avg)/(1+rH),0.6)));
-        _sq.gk={h:rH,a:rA};
-      } } }
+      const sH=qh.gk&&qh.gk.svr, sA=qa.gk&&qa.gk.svr;
+      if(sH!=null&&sA!=null){
+        // 撲救率=純門將能力(排除全隊防守混淆);好門將壓低對方進球,±5% 封頂
+        const cAvg=((1-sH)+(1-sA))/2;
+        la*=Math.max(0.95,Math.min(1.05,Math.pow((1-sH)/Math.max(cAvg,0.05),0.5)));
+        lh*=Math.max(0.95,Math.min(1.05,Math.pow((1-sA)/Math.max(cAvg,0.05),0.5)));
+        _sq.gk={h:sH,a:sA,t:"svr"};
+      } else {
+        const rH=qh.gk&&qh.gk.csr!=null?qh.gk.csr:null, rA=qa.gk&&qa.gk.csr!=null?qa.gk.csr:null;
+        if(rH!=null&&rA!=null){
+          const avg=(rH+rA)/2;
+          lh*=Math.max(0.96,Math.min(1.04,Math.pow((1+avg)/(1+rA),0.6)));
+          la*=Math.max(0.96,Math.min(1.04,Math.pow((1+avg)/(1+rH),0.6)));
+          _sq.gk={h:rH,a:rA,t:"cs"};
+        } } } }
   if(sh&&sa&&+sh.gp>=2&&+sa.gp>=2){
     const LG=(cl&&cl.lgAvg)||(lg&&LGAVG_BY_LG[lg])||LG_AVG, gpH=+sh.gp, gpA=+sa.gp;
     const lh2=LG*((+sh.gf/gpH)/LG)*((+sa.ga/gpA)/LG)*Math.exp(HA/2);
@@ -1427,7 +1442,8 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   const t=H+D+A; H=H/t*100;D=D/t*100;A=A/t*100;
   // 和局錨定:Poisson 結構性低估和局(診斷實證)→ 拉向該聯賽近182天真實和局率
   { const LD=(cl&&cl.draw)?cl.draw*100:25.5;
-    if(D<LD){ const d2=D+0.5*(LD-D), sc2=(100-d2)/((H+A)||1); H*=sc2; A*=sc2; D=d2; } }
+    const TGT=(_tdr!=null)?(0.6*LD+0.4*_tdr):LD;             // 兩層錨:聯賽 60% + 兩隊體質 40%
+    if(D<TGT){ const d2=D+0.5*(TGT-D), sc2=(100-d2)/((H+A)||1); H*=sc2; A*=sc2; D=d2; } }
   if(mkt){ // 市場賠率融合:權重依模型實測表現自動調整(模型不如市場時自動讓位)
     const w=1-MKT_W;
     H=H*w+mkt.h*100*MKT_W; D=D*w+mkt.d*100*MKT_W; A=A*w+mkt.a*100*MKT_W;
@@ -1457,7 +1473,7 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
   const pick = predOut==="H" ? homeName : predOut==="A" ? awayName : "和局";
   return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,conf,pick,mk:!!mkt,
-          lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv};
+          lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr};
 }
 /* 詳細分析:逐項列出模型依據(無資料的項目自動略過,不編造) */
 function analysisRows(hn,an,p,lg,hid,aid){
@@ -1505,11 +1521,16 @@ function analysisRows(hn,an,p,lg,hid,aid){
     : `<span style="color:var(--muted);font-size:11px">(全站通用基準值,尚未依此聯賽校準)</span>`)]);
   if(p.mk) rows.push(["市場賠率", `已融合 ESPN 賠率(模型 ${Math.round((1-MKT_W)*100)}% + 市場 ${Math.round(MKT_W*100)}%,權重依實測表現自動調整)`]);
   else if(DRAW_NUDGE>0) rows.push(["和局補正", `+${DRAW_NUDGE.toFixed(1)}%(歷史顯示模型低估和局)`]);
+  if(p.ps){ const st3=v=>v>=57?"控球主導":(v<=43?"防守反擊":"均衡");
+    rows.push(["球風對比",`場均控球 ${hz} ${p.ps.h}%(${st3(p.ps.h)}) · ${az} ${p.ps.a}%(${st3(p.ps.a)})`]); }
+  if(p.tdr!=null) rows.push(["和局體質",`兩隊近182天合併和局率 ${p.tdr.toFixed(0)}%(已納入和局錨定)`]);
   if(p.xg) rows.push(["xG 校正",`場均 xG:${hz} ${p.xg.h} · ${az} ${p.xg.a}(進球偏離 xG 視為運氣,已修正 ±10% 內)`]);
   if(p.eu) rows.push(["歐戰夾縫",`${p.eu.h?`${hz} ${p.eu.h.d} 天前踢${p.eu.h.c}`:""}${p.eu.h&&p.eu.a?" · ":""}${p.eu.a?`${az} ${p.eu.a.d} 天前踢${p.eu.a.c}`:""}(輪換疲勞 -3%)`]);
   if(p.mv) rows.push(["動機情境",`${p.mv.h?`${hz}:${p.mv.h.t}`:""}${p.mv.h&&p.mv.a?" · ":""}${p.mv.a?`${az}:${p.mv.a.t}`:""}(賽季後段效應)`]);
   if(p.rest) rows.push(["休息日",`${hz} ${p.rest.h} 天 · ${az} ${p.rest.a} 天(密集賽程 ±3% 內微調)`]);
-  if(p.sq&&p.sq.gk) rows.push(["守門對比",`零封率 ${hz} ${(p.sq.gk.h*100).toFixed(0)}% · ${az} ${(p.sq.gk.a*100).toFixed(0)}%(門將數據,微調上限 ±4%)`]);
+  if(p.sq&&p.sq.gk) rows.push(["守門對比", p.sq.gk.t==="svr"
+    ? `撲救率 ${hz} ${(p.sq.gk.h*100).toFixed(1)}% · ${az} ${(p.sq.gk.a*100).toFixed(1)}%(純門將能力,±5% 內微調)`
+    : `零封率 ${hz} ${(p.sq.gk.h*100).toFixed(0)}% · ${az} ${(p.sq.gk.a*100).toFixed(0)}%(門將數據,±4% 內微調)`]);
   if(p.sq) rows.push(["陣容火力",`${hz} ${p.sq.h} · ${az} ${p.sq.a}(前5人每場進攻參與,球員數據,微調上限 ±6%)`]);
   rows.push(["預期進球", `${hz} ${p.lh} · ${az} ${p.la} → 最可能比分 ${hz} ${p.si} - ${p.sj} ${az}`]);
   const top=Math.max(p.H,p.D,p.A);
@@ -2052,6 +2073,7 @@ function renderTodaySection(){
               sc0[g.id]={ ...(ex0||{}),
                 pred:{H:pp.H,D:pp.D,A:pp.A,si:pp.si,sj:pp.sj,conf:pp.conf,pick:pp.pick},
                 odds:(g.odds||(ex0&&ex0.odds)||null),
+                odds0:((ex0&&ex0.odds0)||g.odds||null),
                 dq:pp.dq, t:(ex0&&ex0.t)||Date.now(), tU:Date.now(), v:2, locked:1 };
               scSet(sc0);
             } }catch(e){}
@@ -2123,7 +2145,13 @@ function renderTodaySection(){
         <span class="tp-side aw">${Math.round(p.A)}%</span>
         <span class="tp-sc" title="客 ${p.sj} - 主 ${p.si}">${p.sj} - ${p.si}</span>
         <span class="tp-side hm">${Math.round(p.H)}%</span>
-        <span class="tp-conf" style="color:${conf}">信心 ${p.conf}</span>${(__started&&snap&&(snap.fzT||snap.tU||snap.t))?`<span style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:6px" title="預測已於開賽時封存,之後不再變動">🔒 ${new Date(snap.fzT||snap.tU||snap.t).toTimeString().slice(0,5)}</span>`:''}
+        <span class="tp-conf" style="color:${conf}">信心 ${p.conf}</span>${(()=>{try{
+          if(!snap||!snap.odds0||!snap.odds) return "";
+          const d0=snap.odds0, d1=snap.odds;
+          const mv2=[["主",(d1.h-d0.h)*100],["和",(d1.d-d0.d)*100],["客",(d1.a-d0.a)*100]].sort((x,y)=>Math.abs(y[1])-Math.abs(x[1]))[0];
+          if(Math.abs(mv2[1])<4) return "";
+          return `<span style="font-family:var(--mono);font-size:10px;color:${mv2[1]>0?"var(--hit)":"var(--miss)"};margin-left:6px" title="開盤至今市場隱含機率變動(聰明錢流向)">📈 ${mv2[0]}${mv2[1]>0?"+":""}${mv2[1].toFixed(0)}pt</span>`;
+        }catch(e){ return ""; }})()}${(__started&&snap&&(snap.fzT||snap.tU||snap.t))?`<span style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:6px" title="預測已於開賽時封存,之後不再變動">🔒 ${new Date(snap.fzT||snap.tU||snap.t).toTimeString().slice(0,5)}</span>`:''}
         <div class="tg-pred">
           <b class="tp-pick">看好 ${pickSide?`<span class="ha ${pickSide==="主"?"hm":"aw"}">${pickSide}</span> `:""}${pickZh}</b>
           <span class="tp-bar"><i class="a" style="width:${p.A}%"></i><i class="d" style="width:${p.D}%"></i><i class="h" style="width:${p.H}%"></i></span>
@@ -2618,6 +2646,7 @@ async function gradeFinished(games){
       pp:[+sp0.H.toFixed(1),+sp0.D.toFixed(1),+sp0.A.toFixed(1)], dq:(ex&&ex.dq!=null)?ex.dq:p.dq, out:realOut,
       locked:(ex&&ex.locked)||0,
       fz:(ex&&ex.fz)||undefined, fzT:(ex&&ex.fzT)||undefined,
+      odds:(ex&&ex.odds)||undefined, odds0:(ex&&ex.odds0)||undefined,
       mc:(ex&&ex.mc)||__mc(sp0,predOut,realOut,g),
       pred:sp0};
     // --- 評級自我校準:淨勝球誤差 → 微調兩隊評級(此消彼長,單場上限 ±2;每場只做一次) ---
