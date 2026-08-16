@@ -26,6 +26,7 @@ function save(out, lg){
   }
 }
 
+const SOT_G={}, SOT_S={};
 (async () => {
   const today = new Date().toISOString().slice(0,10);
   let out = { updated:"", d:today, days:WEEKS*7, n:0, leagues:{} };
@@ -64,6 +65,26 @@ function save(out, lg){
             if(hs>as) hw++; else if(hs===as) dr++;
             add((H.team||{}).id,(H.team||{}).displayName,hs,as,true, ev.date||"");
             add((A.team||{}).id,(A.team||{}).displayName,as,hs,false,ev.date||"");
+            // 射正數(自產 xG 用):抓該場 summary 的 shotsOnTarget
+            try {
+              const sr2=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/summary?event=${ev.id}`);
+              if (sr2.ok) {
+                const sj2=await sr2.json();
+                const bt=(sj2.boxscore&&sj2.boxscore.teams)||[];
+                const sotOf=t2=>{ const st2=(t2.statistics||[]).find(x=>x.name==="shotsOnTarget"); return st2?+st2.displayValue:null; };
+                if (bt.length===2) {
+                  const id0=String((bt[0].team||{}).id), s0=sotOf(bt[0]), s1=sotOf(bt[1]);
+                  if (s0!=null&&s1!=null) {
+                    const hFirst = id0===String((H.team||{}).id);
+                    const sh2=hFirst?s0:s1, sa2=hFirst?s1:s0;
+                    const acc=(id,f,a2)=>{ const o=T["#"+id]; if(o){ o.stn=(o.stn||0)+1; o.stf=(o.stf||0)+f; o.sta=(o.sta||0)+a2; } };
+                    acc((H.team||{}).id, sh2, sa2); acc((A.team||{}).id, sa2, sh2);
+                    SOT_G[lg]=(SOT_G[lg]||0)+hs+as; SOT_S[lg]=(SOT_S[lg]||0)+sh2+sa2;
+                  }
+                }
+              }
+            } catch(e) {}
+            await sleep(100);
           } }
       } catch(e) {}
       await sleep(200);
@@ -111,41 +132,19 @@ function save(out, lg){
           await sleep(120);
         } }
     } catch(e) {}
+    // 自產 xG:射正 × 聯賽轉化率(每球射正≈多少進球),寫入 xg 欄位
+    try {
+      const conv=(SOT_G[lg]&&SOT_S[lg])?SOT_G[lg]/SOT_S[lg]:0.30;
+      for (const k in T) {
+        const t2=T[k];
+        if (t2.stn>=8) t2.xg={ n:t2.stn, xf:+(conv*t2.stf/t2.stn).toFixed(3), xa:+(conv*t2.sta/t2.stn).toFixed(3) };
+      }
+      console.log("SOT-xG:", lg, "轉化率", (SOT_G[lg]&&SOT_S[lg])?(SOT_G[lg]/SOT_S[lg]).toFixed(3):"預設0.30");
+    } catch(e) {}
     out.leagues[lg].done = 1;
     save(out, lg);                       // ← checkpoint:此聯賽完成即存檔+推送
     console.log("完成:", lg, "(", n, "場 )");
   }
-  // ===== xG 模組 v9.2(FBref/Opta;官方允許爬取,限速 1 req/3.5s)=====
-  const FB={ "eng.1":["9","Premier-League"], "esp.1":["12","La-Liga"], "ita.1":["11","Serie-A"], "ger.1":["20","Bundesliga"], "fra.1":["13","Ligue-1"] };
-  const nrm=x=>String(x||"").toLowerCase().replace(/utd/g,"united").replace(/nott'ham/g,"nottingham").replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();
-  for (const lg of Object.keys(FB)) {
-    try {
-      if (!out.leagues[lg] || !out.leagues[lg].teams) continue;
-      const url=`https://fbref.com/en/comps/${FB[lg][0]}/${FB[lg][1]}-Stats`;
-      const r=await fetch(url,{headers:{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}});
-      if(!r.ok){ console.log("xG 略過(HTTP "+r.status+")",lg); await sleep(3500); continue; }
-      const html=await r.text();
-      const T=out.leagues[lg].teams;
-      const keys=Object.keys(T).filter(k=>!k.startsWith("#"));
-      let cnt=0;
-      const rows=html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g)||[];
-      for(const row of rows){
-        if(!/data-stat="xg_for"/.test(row)) continue;
-        const nm=(row.match(/data-stat="team"[^>]*>(?:<a[^>]*>)?([^<]+)/)||[])[1];
-        const gp=+((row.match(/data-stat="games"[^>]*>([\d]+)/)||[])[1]||0);
-        const xf=+((row.match(/data-stat="xg_for"[^>]*>([\d.]+)/)||[])[1]||0);
-        const xa=+((row.match(/data-stat="xg_against"[^>]*>([\d.]+)/)||[])[1]||0);
-        if(!nm||gp<5||!xf) continue;
-        const nk=nrm(nm);
-        let key=keys.find(k=>nrm(k)===nk)||keys.find(k=>nrm(k).includes(nk)||nk.includes(nrm(k)));
-        if(!key){ key=nm.toLowerCase(); T[key]=T[key]||{gp:0,gf:0,ga:0}; }
-        T[key].xg={n:gp, xf:+(xf/gp).toFixed(3), xa:+(xa/gp).toFixed(3)};
-        cnt++;
-      }
-      if(cnt>0){ console.log("xG 完成:",lg,cnt,"隊(FBref)"); save(out,lg+" xG"); }
-      else console.log("xG 診斷",lg,"| 長度:",html.length,"| 含 xg_for:",/data-stat="xg_for"/.test(html),"| 標題:",(html.match(/<title>([^<]*)/)||[])[1]||"?");
-    } catch(e){ console.log("xG 略過(錯誤)",lg,String(e).slice(0,60)); }
-    await sleep(3500);
-  }
+  // xG 已改為自產(SOT-xG,於各聯賽 checkpoint 內完成;外部源 Understat/FBref 均擋機房 IP)
   console.log("全部完成:", out.n, "場,", Object.keys(out.leagues).length, "個聯賽");
 })();
