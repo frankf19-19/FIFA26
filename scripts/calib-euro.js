@@ -26,7 +26,7 @@ function save(out, lg){
   }
 }
 
-const SOT_G={}, SOT_S={};
+const SOT_G={}, SOT_S={}, SOT_C={};
 (async () => {
   const today = new Date().toISOString().slice(0,10);
   let out = { updated:"", d:today, days:WEEKS*7, n:0, leagues:{} };
@@ -42,7 +42,7 @@ const SOT_G={}, SOT_S={};
     let hw=0, dr=0, goals=0, n=0;
     const T={};
     const add=(id,nm,gf,ga,isHome,dt)=>{ const o=(T["#"+id]=T["#"+id]||{gp:0,gf:0,ga:0,hgp:0,hgf:0,hga:0,agp:0,agf:0,aga:0,lp:""});
-      o.gp++; o.gf+=gf; o.ga+=ga;
+      o.gp++; o.gf+=gf; o.ga+=ga; if(gf===ga) o.dr=(o.dr||0)+1;
       if(isHome){ o.hgp++; o.hgf+=gf; o.hga+=ga; } else { o.agp++; o.agf+=gf; o.aga+=ga; }
       if(dt && dt>o.lp) o.lp=dt;                               // 最近一場日期(休息日計算用)
       if(nm) T[String(nm).toLowerCase()]=o; };
@@ -71,15 +71,24 @@ const SOT_G={}, SOT_S={};
               if (sr2.ok) {
                 const sj2=await sr2.json();
                 const bt=(sj2.boxscore&&sj2.boxscore.teams)||[];
-                const sotOf=t2=>{ const st2=(t2.statistics||[]).find(x=>x.name==="shotsOnTarget"); return st2?+st2.displayValue:null; };
+                const gv=(t2,nm2)=>{ const st2=(t2.statistics||[]).find(x=>x.name===nm2); return st2?parseFloat(st2.displayValue):null; };
+                const sotOf=t2=>gv(t2,"shotsOnTarget");
                 if (bt.length===2) {
                   const id0=String((bt[0].team||{}).id), s0=sotOf(bt[0]), s1=sotOf(bt[1]);
                   if (s0!=null&&s1!=null) {
                     const hFirst = id0===String((H.team||{}).id);
                     const sh2=hFirst?s0:s1, sa2=hFirst?s1:s0;
-                    const acc=(id,f,a2)=>{ const o=T["#"+id]; if(o){ o.stn=(o.stn||0)+1; o.stf=(o.stf||0)+f; o.sta=(o.sta||0)+a2; } };
-                    acc((H.team||{}).id, sh2, sa2); acc((A.team||{}).id, sa2, sh2);
+                    const p0=gv(bt[0],"possessionPct"), p1=gv(bt[1],"possessionPct");
+                    const c0=gv(bt[0],"wonCorners"),   c1=gv(bt[1],"wonCorners");
+                    const ph=hFirst?p0:p1, pa=hFirst?p1:p0;
+                    const ch=hFirst?c0:c1, ca2=hFirst?c1:c0;
+                    const acc=(id,f,a2,ps,cf,cA)=>{ const o=T["#"+id]; if(o){
+                      o.stn=(o.stn||0)+1; o.stf=(o.stf||0)+f; o.sta=(o.sta||0)+a2;
+                      if(ps!=null&&!isNaN(ps)){ o.psn=(o.psn||0)+1; o.psf=(o.psf||0)+ps; }
+                      if(cf!=null&&!isNaN(cf)){ o.crf=(o.crf||0)+cf; o.cra=(o.cra||0)+(cA||0); } } };
+                    acc((H.team||{}).id, sh2, sa2, ph, ch, ca2); acc((A.team||{}).id, sa2, sh2, pa, ca2, ch);
                     SOT_G[lg]=(SOT_G[lg]||0)+hs+as; SOT_S[lg]=(SOT_S[lg]||0)+sh2+sa2;
+                    if(ch!=null&&ca2!=null&&!isNaN(ch)&&!isNaN(ca2)) SOT_C[lg]=(SOT_C[lg]||0)+ch+ca2;
                   }
                 }
               }
@@ -134,10 +143,16 @@ const SOT_G={}, SOT_S={};
     } catch(e) {}
     // 自產 xG:射正 × 聯賽轉化率(每球射正≈多少進球),寫入 xg 欄位
     try {
-      const conv=(SOT_G[lg]&&SOT_S[lg])?SOT_G[lg]/SOT_S[lg]:0.30;
+      const CW=0.12;                                        // 一個角球 ≈ 0.12 個射正的價值
+      const S2=(SOT_S[lg]||0)+CW*(SOT_C[lg]||0);
+      const conv=(SOT_G[lg]&&S2)?SOT_G[lg]/S2:0.30;
       for (const k in T) {
         const t2=T[k];
-        if (t2.stn>=8) t2.xg={ n:t2.stn, xf:+(conv*t2.stf/t2.stn).toFixed(3), xa:+(conv*t2.sta/t2.stn).toFixed(3) };
+        if (t2.stn>=8) {
+          const sf2=t2.stf+CW*(t2.crf||0), sa3=t2.sta+CW*(t2.cra||0);
+          t2.xg={ n:t2.stn, xf:+(conv*sf2/t2.stn).toFixed(3), xa:+(conv*sa3/t2.stn).toFixed(3) };
+          if (t2.psn>=8) t2.ps=+(t2.psf/t2.psn).toFixed(1);   // 平均控球率(顯示用)
+        }
       }
       console.log("SOT-xG:", lg, "轉化率", (SOT_G[lg]&&SOT_S[lg])?(SOT_G[lg]/SOT_S[lg]).toFixed(3):"預設0.30");
     } catch(e) {}
