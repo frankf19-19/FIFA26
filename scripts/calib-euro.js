@@ -115,5 +115,34 @@ function save(out, lg){
     save(out, lg);                       // ← checkpoint:此聯賽完成即存檔+推送
     console.log("完成:", lg, "(", n, "場 )");
   }
+  // ===== xG 模組(Understat 五大聯賽;可選,抓不到就略過)=====
+  const US={ "eng.1":"EPL", "esp.1":"La_liga", "ita.1":"Serie_A", "ger.1":"Bundesliga", "fra.1":"Ligue_1" };
+  for (const lg of Object.keys(US)) {
+    try {
+      if (!out.leagues[lg] || !out.leagues[lg].teams) continue;
+      const r = await fetch("https://understat.com/league/"+US[lg], {headers:{"User-Agent":"Mozilla/5.0"}});
+      if (!r.ok) { console.log("xG 略過(HTTP)", lg); continue; }
+      const html = await r.text();
+      const m = html.match(/teamsData\s*=\s*JSON\.parse\('([^']+)'\)/);
+      if (!m) { console.log("xG 略過(格式)", lg); continue; }
+      const raw = m[1].replace(/\\x([0-9A-Fa-f]{2})/g, (_,h)=>String.fromCharCode(parseInt(h,16)));
+      const td = JSON.parse(raw);
+      let cnt=0;
+      for (const k in td) {
+        const t=td[k], hist=t.history||[];
+        if (hist.length < 5) continue;
+        let xf=0, xa=0;
+        hist.forEach(g=>{ xf+=+g.xG||0; xa+=+g.xGA||0; });
+        const key=String(t.title||"").toLowerCase();
+        const T=out.leagues[lg].teams;
+        const ent=T[key]||(T[key]={gp:0,gf:0,ga:0});
+        ent.xg={ n:hist.length, xf:+(xf/hist.length).toFixed(3), xa:+(xa/hist.length).toFixed(3) };
+        cnt++;
+      }
+      console.log("xG 完成:", lg, cnt, "隊");
+      save(out, lg+" xG");
+    } catch(e) { console.log("xG 略過(錯誤)", lg, String(e).slice(0,60)); }
+    await sleep(1500);
+  }
   console.log("全部完成:", out.n, "場,", Object.keys(out.leagues).length, "個聯賽");
 })();
