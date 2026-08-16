@@ -123,10 +123,23 @@ function save(out, lg){
       const r = await fetch("https://understat.com/league/"+US[lg], {headers:{"User-Agent":"Mozilla/5.0"}});
       if (!r.ok) { console.log("xG 略過(HTTP)", lg); continue; }
       const html = await r.text();
-      const m = html.match(/teamsData\s*=\s*JSON\.parse\('([^']+)'\)/);
-      if (!m) { console.log("xG 略過(格式)", lg); continue; }
-      const raw = m[1].replace(/\\x([0-9A-Fa-f]{2})/g, (_,h)=>String.fromCharCode(parseInt(h,16)));
-      const td = JSON.parse(raw);
+      let td=null;
+      let m = html.match(/teamsData\s*=\s*JSON\.parse\('([^']+)'\)/) || html.match(/teamsData\s*=\s*JSON\.parse\("([^"]+)"\)/);
+      if (m) {
+        const raw = m[1].replace(/\\x([0-9A-Fa-f]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)))
+                        .replace(/\\u([0-9A-Fa-f]{4})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));
+        try{ td=JSON.parse(raw); }catch(e){ console.log("xG 解碼失敗", lg, String(e).slice(0,50)); }
+      } else {
+        const m2 = html.match(/teamsData\s*=\s*(\{[\s\S]*?\})\s*[;,\n]/);
+        if (m2) { try{ td=JSON.parse(m2[1]); }catch(e){} }
+      }
+      if (!td) {
+        console.log("xG 診斷", lg, "| 長度:", html.length,
+          "| 含 teamsData:", /teamsData/.test(html),
+          "| 含 Cloudflare:", /cloudflare|Just a moment|challenge/i.test(html),
+          "| 標題:", (html.match(/<title>([^<]*)/)||[])[1]||"?");
+        continue;
+      }
       let cnt=0;
       for (const k in td) {
         const t=td[k], hist=t.history||[];
