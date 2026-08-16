@@ -693,7 +693,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e120";
+const BUILD = "e121";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1982,7 +1982,8 @@ function renderTodaySection(){
         const pp=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
         if(noPredGate(pp,l.id)){ dropped++; return false; }
         // 賽前拍照存證:預測一顯示就鎖定,完賽後不得再變(誠信保證)
-        if(g.state!=="in"&&!g.completed&&(pp.dq||0)>=0.2){
+        const __kick=Date.parse(g.date)||0;
+        if(g.state!=="in"&&!g.completed&&(__kick===0||Date.now()<__kick)&&(pp.dq||0)>=0.2){
           try{ const sc0=scGet(); const ex0=sc0[g.id];
             if(!ex0 || (ex0.locked && ex0.hs==null)){        // 賽前:滾動更新(吸收陣容/名單變化);已開賽或已評分:碰都不碰
               sc0[g.id]={ ...(ex0||{}),
@@ -2015,7 +2016,8 @@ function renderTodaySection(){
       const sc = (live||done)?`<span class="tg-sc">${g.as} - ${g.hs}</span>`:`<span class="tg-vs">vs</span>`;
       const snap=scGet()[g.id];
       const _pl=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
-      const p=((live||done)&&snap&&snap.pred)?{..._pl, H:snap.pred.H, D:snap.pred.D, A:snap.pred.A,
+      const __ko=(Date.parse(g.date)||0), __started=live||done||(__ko>0&&Date.now()>=__ko);
+      const p=(__started&&snap&&snap.pred)?{..._pl, H:snap.pred.H, D:snap.pred.D, A:snap.pred.A,
         si:snap.pred.si, sj:snap.pred.sj, conf:snap.pred.conf, pick:snap.pred.pick,
         dq:(snap.dq!=null?snap.dq:_pl.dq)}:_pl;    // 賽前即時更新;開賽哨響即凍結(用最後一次賽前鎖定值)
       let st, rowCls="pre";
