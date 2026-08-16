@@ -115,47 +115,37 @@ function save(out, lg){
     save(out, lg);                       // ← checkpoint:此聯賽完成即存檔+推送
     console.log("完成:", lg, "(", n, "場 )");
   }
-  // ===== xG 模組(Understat 五大聯賽;可選,抓不到就略過)=====
-  const US={ "eng.1":"EPL", "esp.1":"La_liga", "ita.1":"Serie_A", "ger.1":"Bundesliga", "fra.1":"Ligue_1" };
-  for (const lg of Object.keys(US)) {
+  // ===== xG 模組 v9.2(FBref/Opta;官方允許爬取,限速 1 req/3.5s)=====
+  const FB={ "eng.1":["9","Premier-League"], "esp.1":["12","La-Liga"], "ita.1":["11","Serie-A"], "ger.1":["20","Bundesliga"], "fra.1":["13","Ligue-1"] };
+  const nrm=x=>String(x||"").toLowerCase().replace(/utd/g,"united").replace(/nott'ham/g,"nottingham").replace(/[^a-z0-9 ]/g,"").replace(/\s+/g," ").trim();
+  for (const lg of Object.keys(FB)) {
     try {
       if (!out.leagues[lg] || !out.leagues[lg].teams) continue;
-      const r = await fetch("https://understat.com/league/"+US[lg], {headers:{"User-Agent":"Mozilla/5.0"}});
-      if (!r.ok) { console.log("xG 略過(HTTP)", lg); continue; }
-      const html = await r.text();
-      let td=null;
-      let m = html.match(/teamsData\s*=\s*JSON\.parse\('([^']+)'\)/) || html.match(/teamsData\s*=\s*JSON\.parse\("([^"]+)"\)/);
-      if (m) {
-        const raw = m[1].replace(/\\x([0-9A-Fa-f]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)))
-                        .replace(/\\u([0-9A-Fa-f]{4})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));
-        try{ td=JSON.parse(raw); }catch(e){ console.log("xG 解碼失敗", lg, String(e).slice(0,50)); }
-      } else {
-        const m2 = html.match(/teamsData\s*=\s*(\{[\s\S]*?\})\s*[;,\n]/);
-        if (m2) { try{ td=JSON.parse(m2[1]); }catch(e){} }
-      }
-      if (!td) {
-        console.log("xG 診斷", lg, "| 長度:", html.length,
-          "| 含 teamsData:", /teamsData/.test(html),
-          "| 含 Cloudflare:", /cloudflare|Just a moment|challenge/i.test(html),
-          "| 標題:", (html.match(/<title>([^<]*)/)||[])[1]||"?");
-        continue;
-      }
+      const url=`https://fbref.com/en/comps/${FB[lg][0]}/${FB[lg][1]}-Stats`;
+      const r=await fetch(url,{headers:{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}});
+      if(!r.ok){ console.log("xG 略過(HTTP "+r.status+")",lg); await sleep(3500); continue; }
+      const html=await r.text();
+      const T=out.leagues[lg].teams;
+      const keys=Object.keys(T).filter(k=>!k.startsWith("#"));
       let cnt=0;
-      for (const k in td) {
-        const t=td[k], hist=t.history||[];
-        if (hist.length < 5) continue;
-        let xf=0, xa=0;
-        hist.forEach(g=>{ xf+=+g.xG||0; xa+=+g.xGA||0; });
-        const key=String(t.title||"").toLowerCase();
-        const T=out.leagues[lg].teams;
-        const ent=T[key]||(T[key]={gp:0,gf:0,ga:0});
-        ent.xg={ n:hist.length, xf:+(xf/hist.length).toFixed(3), xa:+(xa/hist.length).toFixed(3) };
+      const rows=html.match(/<tr[^>]*>[\s\S]*?<\/tr>/g)||[];
+      for(const row of rows){
+        if(!/data-stat="xg_for"/.test(row)) continue;
+        const nm=(row.match(/data-stat="team"[^>]*>(?:<a[^>]*>)?([^<]+)/)||[])[1];
+        const gp=+((row.match(/data-stat="games"[^>]*>([\d]+)/)||[])[1]||0);
+        const xf=+((row.match(/data-stat="xg_for"[^>]*>([\d.]+)/)||[])[1]||0);
+        const xa=+((row.match(/data-stat="xg_against"[^>]*>([\d.]+)/)||[])[1]||0);
+        if(!nm||gp<5||!xf) continue;
+        const nk=nrm(nm);
+        let key=keys.find(k=>nrm(k)===nk)||keys.find(k=>nrm(k).includes(nk)||nk.includes(nrm(k)));
+        if(!key){ key=nm.toLowerCase(); T[key]=T[key]||{gp:0,gf:0,ga:0}; }
+        T[key].xg={n:gp, xf:+(xf/gp).toFixed(3), xa:+(xa/gp).toFixed(3)};
         cnt++;
       }
-      console.log("xG 完成:", lg, cnt, "隊");
-      save(out, lg+" xG");
-    } catch(e) { console.log("xG 略過(錯誤)", lg, String(e).slice(0,60)); }
-    await sleep(1500);
+      if(cnt>0){ console.log("xG 完成:",lg,cnt,"隊(FBref)"); save(out,lg+" xG"); }
+      else console.log("xG 診斷",lg,"| 長度:",html.length,"| 含 xg_for:",/data-stat="xg_for"/.test(html),"| 標題:",(html.match(/<title>([^<]*)/)||[])[1]||"?");
+    } catch(e){ console.log("xG 略過(錯誤)",lg,String(e).slice(0,60)); }
+    await sleep(3500);
   }
   console.log("全部完成:", out.n, "場,", Object.keys(out.leagues).length, "個聯賽");
 })();
