@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/17 04:56 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/17 04:56";
+/* 由 news_engine.py 自動產生於 2026/08/17 05:32 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/17 05:32";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"FAQ: Latest on FIFA, Infantino mess as opposition applies pressure", d:"2026-08-16", team:"", link:"https://www.espn.com/soccer/story/_/id/49601593/fifa-gianni-infantino-presidency-world-cup-explainer-saudi-arabia-analysis-marcotti"},
