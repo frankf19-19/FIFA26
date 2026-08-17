@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/17 19:58 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/17 19:58";
+/* 由 news_engine.py 自動產生於 2026/08/17 20:28 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/17 20:28";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Scotland FA latest to withdraw support for FIFA's Gianni Infantino", d:"2026-08-17", team:"", link:"https://www.espn.com/soccer/story/_/id/49639158/scotland-fa-latest-withdraw-support-fifa-gianni-infantino"},
