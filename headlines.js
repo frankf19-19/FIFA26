@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/18 23:15 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/18 23:15";
+/* 由 news_engine.py 自動產生於 2026/08/18 23:44 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/18 23:44";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Premier League chief Masters: FIFA has hit 'self-destruct button'", d:"2026-08-18", team:"", link:"https://www.espn.com/soccer/story/_/id/49650143/premier-league-richard-master-fifa-gianni-infantino"},
