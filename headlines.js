@@ -1,8 +1,8 @@
-/* 由 news_engine.py 自動產生於 2026/08/18 02:34 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/18 02:34";
+/* 由 news_engine.py 自動產生於 2026/08/18 03:26 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/18 03:26";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
-  {tag:"news", t:"FIFA executive Kevin Lamour departs amid backlash over Infantino's World Cup sale plan", d:"2026-08-17", team:"", link:"https://www.espn.com/soccer/story/_/id/49642660/fifa-executive-kevin-lamour-departs-amid-backlash-infantino-world-cup-sale-plan"},
+  {tag:"news", t:"FIFA executive Kevin Lamour departs amid backlash over Infantino's World Cup sale plan", d:"2026-08-18", team:"", link:"https://www.espn.com/soccer/story/_/id/49642660/fifa-executive-kevin-lamour-departs-amid-backlash-infantino-world-cup-sale-plan"},
   {tag:"news", t:"Scotland FA latest to withdraw support for FIFA's Gianni Infantino", d:"2026-08-17", team:"", link:"https://www.espn.com/soccer/story/_/id/49639158/scotland-fa-latest-withdraw-support-fifa-gianni-infantino"},
   {tag:"news", t:"FAQ: Latest on FIFA, Infantino mess as opposition applies pressure", d:"2026-08-16", team:"", link:"https://www.espn.com/soccer/story/_/id/49601593/fifa-gianni-infantino-presidency-world-cup-explainer-saudi-arabia-analysis-marcotti"},
   {tag:"news", t:"Andrew Giuliani backs FIFA's Gianni Infantino, calls critics 'jealous'", d:"2026-08-14", team:"", link:"https://www.espn.com/soccer/story/_/id/49610097/andrew-giuliani-backs-fifa-gianni-infantino-calls-critics-jealous"},
