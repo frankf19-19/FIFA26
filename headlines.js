@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/19 17:48 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/19 17:48";
+/* 由 news_engine.py 自動產生於 2026/08/19 18:23 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/19 18:23";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Premier League's Webb: Balogun World Cup red card saga fuels ref distrust", d:"2026-08-19", team:"", link:"https://www.espn.com/soccer/story/_/id/49658888/premier-league-howard-webb-balogun-world-cup-red-card-saga-fuels-ref-distrust"},
