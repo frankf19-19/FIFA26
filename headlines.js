@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/21 14:07 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/21 14:07";
+/* 由 news_engine.py 自動產生於 2026/08/21 14:52 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/21 14:52";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"What does the season hold for Africa's nine players in ESPN's FC 100 for 2026", d:"2026-08-21", team:"", link:"https://www.espn.com/espn/story/_/id/49669869/what-does-season-hold-africa-nine-players-espn-fc-100-2026"},
