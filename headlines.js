@@ -1,10 +1,10 @@
-/* 由 news_engine.py 自動產生於 2026/08/21 10:04 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/21 10:04";
+/* 由 news_engine.py 自動產生於 2026/08/21 10:45 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/21 10:45";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
-  {tag:"news", t:"What does the season hold for Africa's nine players in ESPN's FC 100 for 2026", d:"2026-08-21", team:"", link:"https://www.espn.com/espn/story/_/id/49669869/what-does-season-hold-africa-nine-players-espn-fc-100-2026"},
   {tag:"news", t:"Socceroos transfer tracker: Where Australia's stars will play in 2026-27", d:"2026-08-21", team:"", link:"https://www.espn.com/soccer/story/_/id/49466177/socceroos-transfer-tracker-where-australias-stars-play-2026-27"},
   {tag:"news", t:"Messi tracker: Goals, assists, key moments in 2026", d:"2026-08-20", team:"", link:"https://www.espn.com/soccer/story/_/id/47978642/lionel-messi-2026-tracker-inter-miami-argentina-games-goals-assists-stats"},
+  {tag:"news", t:"What does the season hold for Africa's nine players in ESPN's FC 100 for 2026", d:"2026-08-20", team:"", link:"https://www.espn.com/espn/story/_/id/49669869/what-does-season-hold-africa-nine-players-espn-fc-100-2026"},
   {tag:"news", t:"Premier League's Webb: Balogun World Cup red card saga fuels ref distrust", d:"2026-08-19", team:"", link:"https://www.espn.com/soccer/story/_/id/49658888/premier-league-howard-webb-balogun-world-cup-red-card-saga-fuels-ref-distrust"},
   {tag:"news", t:"Simeone: Alvarez is one of the best players Atlético have, if not the best", d:"2026-08-19", team:"", link:"https://www.espn.com/video/clip/_/id/49659966/alvarez-one-best-players-atletico-not-best"},
   {tag:"news", t:"Premier League chief Masters: FIFA has hit 'self-destruct button'", d:"2026-08-18", team:"", link:"https://www.espn.com/soccer/story/_/id/49650143/premier-league-richard-master-fifa-gianni-infantino"},
