@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e133";
+const BUILD = "e134";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1153,9 +1153,24 @@ function mktWTune(){
   else if(b<0.57) MKT_W=Math.max(0.35,MKT_W-0.02);
   try{localStorage.setItem("euroMKTW",String(MKT_W));}catch(e){}
 }
-function rating(name){
-  const d=ADJ_CACHE[norm(name)]||0;
-  return baseRating(name)+Math.max(-8,Math.min(8,d))+formBonus(name);   // 校準 ±8 + 近況 ±1.8
+const LEARN_ON_CLOUD=false;   // e134:雙方皆有雲端實戰紀錄時,是否仍套用逐場線上學習(評級±/攻防乘數)。預設關閉:雲端 182 天戰績已是該隊實力紀錄,逐場再學等於同一訊號算兩次
+function cloudTeamOf(lg,tid,name){
+  try{ const C=(window.CLOUD&&window.CLOUD.leagues)||null; if(!C) return null;
+    const scan=P=>{ if(!P||!P.teams) return null; const T=P.teams; return (tid!=null&&T["#"+tid])||T[String(name||"").toLowerCase()]||null; };
+    let t=scan(C[lg]); if(!t){ for(const x in C){ if(x===lg) continue; t=scan(C[x]); if(t) break; } }
+    return t; }catch(e){ return null; }
+}
+function cloudRating(t){   // e134:無人工評級的隊(預設 68)→ 以雲端場均淨勝球推估(每 +0.5 球 ≈ +5 分,±10 封頂)
+  if(!t||!(+t.gp>=8)) return null;
+  const gd=(+t.gf-+t.ga)/+t.gp;
+  return 68+Math.max(-10,Math.min(10,gd*10));
+}
+function rating(name,opt){
+  const useAdj=!(opt&&opt.noAdj);
+  const d=useAdj?(ADJ_CACHE[norm(name)]||0):0;
+  let base=baseRating(name);
+  if(opt&&opt.cloud&&base===68&&baseRating(name)===68){ const cr=cloudRating(opt.cloud); if(cr!=null) base=cr; }
+  return base+Math.max(-8,Math.min(8,d))+formBonus(name);   // 校準 ±8 + 近況 ±1.8
 }
 const ZHN={}; for(const k in ZH){ const nk=norm(k); if(nk.length>=3) ZHN[nk]=ZH[k]; }   // 過短的鍵(如 b93→"b")會誤配,一律不納入模糊比對
 /* 詞邊界比對:避免 "timbers" 因含 "b" 而被配到別隊 */
@@ -1331,7 +1346,10 @@ function noPredGate(p,lg){
 function predict(homeName,awayName,mkt,lg,hid,aid){
   if(lg){ const L0=LEAGUES.find(x=>x.id===lg); if(L0&&L0.stand) lg=L0.stand; }   // 盃賽借用母聯賽的積分榜與進球環境
   const cl=(window.CLOUD&&window.CLOUD.leagues&&window.CLOUD.leagues[lg])||null;
-  const rh=rating(homeName), ra=rating(awayName);
+  // e134:雲端主導判定(雙方皆 ≥10 場雲端實戰)→ 關閉逐場學習器,評級缺省者改用雲端淨勝球推估
+  const _ctH=cloudTeamOf(lg,hid,homeName), _ctA=cloudTeamOf(lg,aid,awayName);
+  const _cb=!!(_ctH&&_ctA&&+_ctH.gp>=10&&+_ctA.gp>=10)&&!LEARN_ON_CLOUD;
+  const rh=rating(homeName,{noAdj:_cb,cloud:_ctH}), ra=rating(awayName,{noAdj:_cb,cloud:_ctA});
   // 先查真實戰績(本季或上季先驗):有數據 → 評級只當輔助(影響力 ×0.4),數據主導
   const _eh=standEff(homeName,lg,hid), _ea=standEff(awayName,lg,aid);
   let sh=_eh.s, sa=_ea.s; const _prior=(_eh.prior||_ea.prior);
@@ -1453,7 +1471,7 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   }
   lh*=injAdj(homeName); la*=injAdj(awayName);   // 傷兵折扣:主力缺陣自動下修預期進球
   lh*=restAdj(homeName); la*=restAdj(awayName); // 賽程疲勞:三天內連戰 -4%,休整逾週 +1%
-  { const sq_=v=>Math.pow(v,0.6);               // e132:攻防乘數降溫(0.6 次方),避免單場運氣主導
+  if(!_cb){ const sq_=v=>Math.pow(v,0.6);       // e132:攻防乘數降溫(0.6 次方);e134:雲端主導時整個不套用
     lh*=sq_(atkOf(homeName)*defOf(awayName));   // 攻防分離校準:主隊進攻力 × 客隊防守漏洞
     la*=sq_(atkOf(awayName)*defOf(homeName)); }
   lh=Math.max(0.2,Math.min(lh,4.2)); la=Math.max(0.2,Math.min(la,4.2));
@@ -2112,7 +2130,7 @@ function renderTodaySection(){
                 pred:{H:pp.H,D:pp.D,A:pp.A,si:pp.si,sj:pp.sj,conf:pp.conf,pick:pp.pick},
                 odds:(g.odds||(ex0&&ex0.odds)||null),
                 odds0:((ex0&&ex0.odds0)||g.odds||null),
-                dq:pp.dq, t:(ex0&&ex0.t)||Date.now(), tU:Date.now(), v:2, locked:1 };
+                dq:pp.dq, t:(ex0&&ex0.t)||Date.now(), tU:Date.now(), v:2, locked:1, lg:l.id };
               scSet(sc0);
             } }catch(e){}
         }
@@ -2682,7 +2700,7 @@ async function gradeFinished(games){
       hnk:norm(g.hn), ank:norm(g.an), t:(ex&&ex.t)||Date.now(), v:ex?(ex.v||1):2,
       homePick:sp0.pick===g.hn, draw:g.hs===g.as, cal:!!(ex&&ex.cal),
       pp:[+sp0.H.toFixed(1),+sp0.D.toFixed(1),+sp0.A.toFixed(1)], dq:(ex&&ex.dq!=null)?ex.dq:p.dq, out:realOut,
-      locked:(ex&&ex.locked)||0,
+      locked:(ex&&ex.locked)||0, lg:(ex&&ex.lg)||g.league||curLeague,
       fz:(ex&&ex.fz)||undefined, fzT:(ex&&ex.fzT)||undefined,
       odds:(ex&&ex.odds)||undefined, odds0:(ex&&ex.odds0)||undefined,
       mc:(ex&&ex.mc)||__mc(sp0,predOut,realOut,g),
@@ -2805,6 +2823,33 @@ function renderTWSL(){
       ${gap}
     </div></div>`;
 }
+/* e134:分聯賽成績(舊紀錄無 lg 欄位 → 以雲端隊名回推聯賽) */
+const LG_CEIL={"usa.1":47,"jpn.1":48,"eng.2":46,"sco.1":54,"eng.1":56,"esp.1":55,"ita.1":54,"ger.1":53,"fra.1":54,"uefa.champions":58,"uefa.europa":53};
+function lgOfRec(s){
+  if(s.lg) return s.lg;
+  try{ const C=(window.CLOUD&&window.CLOUD.leagues)||null; if(!C) return null;
+    const k=s.hnk, k2=s.ank; let best=null;
+    for(const x in C){ const T=C[x].teams||{}; const hit=(T[k]?1:0)+(T[k2]?1:0); if(hit===2) return x; if(hit===1&&!best) best=x; }
+    return best; }catch(e){ return null; }
+}
+function renderByLeague(){
+  const rows=Object.values(scGet()).filter(s=>s&&!s.void&&s.hs!=null&&s.pred);
+  const by={};
+  rows.forEach(s=>{ const lg=lgOfRec(s)||"?"; const o=(by[lg]=by[lg]||{n:0,hit:0,b:0,hp:0,hw:0});
+    o.n++; if(s.hit) o.hit++; o.b+=(s.brier||0); if(s.homePick) o.hp++; if(s.hs>s.as) o.hw++; });
+  const ents=Object.entries(by).filter(([k,v])=>v.n>=5).sort((a,b)=>b[1].n-a[1].n);
+  if(!ents.length) return "";
+  const zh=k=>{ const L=LEAGUES.find(x=>x.id===k); return L?L.zh:(k==="?"?"未知":k); };
+  const tr=ents.map(([k,v])=>{ const hr=v.hit/v.n*100, br=v.b/v.n, ceil=LG_CEIL[k];
+    const col=ceil==null?"var(--ink2)":hr>=ceil-3?"var(--hit)":hr>=ceil-8?"var(--gold)":"var(--miss)";
+    return `<tr><td>${zh(k)}</td><td style="text-align:right">${v.n}</td><td style="text-align:right;color:${col}">${hr.toFixed(0)}%</td><td style="text-align:right;color:var(--muted)">${ceil!=null?ceil+"%":"—"}</td><td style="text-align:right">${br.toFixed(3)}</td><td style="text-align:right">${(v.hp/v.n*100).toFixed(0)}% / ${(v.hw/v.n*100).toFixed(0)}%</td></tr>`; }).join("");
+  return `<div class="ins cal-card"><div class="ins-h">🏟 分聯賽成績</div><div class="ins-b">
+    <table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;line-height:1.9">
+      <thead><tr style="color:var(--muted)"><th style="text-align:left;font-weight:normal">聯賽</th><th style="text-align:right;font-weight:normal">場</th><th style="text-align:right;font-weight:normal">命中</th><th style="text-align:right;font-weight:normal">參考天花板</th><th style="text-align:right;font-weight:normal">Brier</th><th style="text-align:right;font-weight:normal">看好主 / 實際主勝</th></tr></thead>
+      <tbody>${tr}</tbody></table>
+    <div style="margin-top:6px;font-size:11px;color:var(--muted)">參考天花板 = 博彩公司熱門的長期命中率;均勢聯賽(美職聯、日職、英冠)天生較低,請分聯賽看,不要只看總平均</div>
+  </div></div>`;
+}
 function renderCalib(){
   const r=calibReport();
   if(!r) return "";
@@ -2840,7 +2885,7 @@ function renderInsights(){
   if(!box) return;
   const sc=scGet(); const ids=Object.keys(sc).filter(k=>sc[k].pred&&!sc[k].void&&sc[k].hs!=null);
   const n=ids.length;
-  if(!n){ box.innerHTML=renderCoverage()+renderTWSL()+renderCalib()+`<div class="empty" style="text-align:left">完賽累積後,模型會在這裡整理檢討心得與評級調整。</div>`; tag.textContent=""; return; }
+  if(!n){ box.innerHTML=renderCoverage()+renderTWSL()+renderCalib()+renderByLeague()+`<div class="empty" style="text-align:left">完賽累積後,模型會在這裡整理檢討心得與評級調整。</div>`; tag.textContent=""; return; }
   tag.textContent=`已學習 ${n} 場`;
   const S=ids.map(k=>sc[k]);
   const lessons=[];
@@ -2908,7 +2953,7 @@ function renderInsights(){
   if(tune.length) html+=`<div class="pos-group" style="margin:12px 0 6px">自動調參</div><div style="font-family:var(--mono);font-size:12px;color:var(--ink2)">${tune.join(" · ")}</div>`;
   html+=`<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:12px">心得由模型依實際賽果自動生成 · 校準值存於此瀏覽器,持續累積會越來越準
     · <a href="#" id="resetSC" style="color:var(--miss)">重設所有計分紀錄</a></div></div>`;
-  box.innerHTML=renderCoverage()+renderTWSL()+renderCalib()+html;
+  box.innerHTML=renderCoverage()+renderTWSL()+renderCalib()+renderByLeague()+html;
   const rst=document.getElementById("resetSC");
   if(rst) rst.onclick=(ev)=>{ev.preventDefault();
     if(!confirm("確定重設?將清除所有預測成績、檢討與評級校準,從乾淨狀態重新累積(建議:早期紀錄曾受顯示問題影響)。"))return;
