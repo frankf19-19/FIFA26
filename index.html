@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e134";
+const BUILD = "e135";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1025,6 +1025,11 @@ let LG_AVG=1.40;        // 本聯賽平均每隊每場進球(由積分榜自動�
 let DRAW_NUDGE=0;       // 和局機率補正(百分點)
 let HA_TUNE=0;          // 主場係數微調
 let LEDGER_BASE=null;   // e133:帳本實測 H/D/A 基準率(樣本≥40 啟用),收縮時取代全球通用基準
+let GOAL_TUNE={_:1};    // e135:進球水位倍率(實際總進球 ÷ 預期 λh+λa),全域 + 分聯賽,帶收縮
+let GD_SCALE={_:1};     // e135:淨勝差尺度(實際淨勝球對預期 λh−λa 的回歸斜率),>1 = 強弱差被壓扁
+let SCORE_TUNE_N=0;
+function goalTuneOf(lg){ return (lg&&GOAL_TUNE[lg]!=null)?GOAL_TUNE[lg]:GOAL_TUNE._; }
+function gdScaleOf(lg){ return (lg&&GD_SCALE[lg]!=null)?GD_SCALE[lg]:GD_SCALE._; }
 /* 一次性修復:e23 前的舊快照可能「看好某隊但比分平局」(當時的顯示 bug),
    修成與看好一致的比分;命中/Brier 為真實評分,原封不動 */
 function migrateSnapshots(){
@@ -1067,7 +1072,23 @@ function computeTuning(){
     const homeRate=all.filter(s=>s.hs>s.as).length/n*100;
     HA_TUNE=Math.max(-0.08,Math.min(0.08,(homeRate-avgH)/100*0.35));
     if(n>=40) LEDGER_BASE={H:homeRate, D:drawRate, A:Math.max(0,100-homeRate-drawRate)};
-  }else{ DRAW_NUDGE=0; HA_TUNE=0; }
+  }
+  // --- e135 比分學習迴路:只用「賽前鎖定時存下的 λ」對照實際比分(無前視) ---
+  { const R=all.filter(s=>s.hs!=null&&s.pred&&s.pred.lh!=null&&s.pred.la!=null&&(s.pred.lh+s.pred.la)>0.4);
+    SCORE_TUNE_N=R.length;
+    const fit=rows=>{ const m=rows.length; if(m<30) return null;
+      let sa=0,sp=0,xy=0,xx=0;
+      rows.forEach(s=>{ const lh=+s.pred.lh, la=+s.pred.la; sa+=s.hs+s.as; sp+=lh+la;
+        const dp=lh-la, da=s.hs-s.as; xy+=dp*da; xx+=dp*dp; });
+      const rG=sp>0?sa/sp:1, beta=xx>0?xy/xx:1;
+      return { g:Math.max(0.85,Math.min(1.15, 1+(rG-1)*m/(m+60))),      // 進球倍率,樣本 60 場時吃一半
+               s:Math.max(0.80,Math.min(1.35, 1+(beta-1)*m/(m+80))) };  // 淨勝差尺度,樣本 80 場時吃一半
+    };
+    const gAll=fit(R); GOAL_TUNE={_:gAll?gAll.g:1}; GD_SCALE={_:gAll?gAll.s:1};
+    const byLg={}; R.forEach(s=>{ const lg=(typeof lgOfRec==="function")?lgOfRec(s):s.lg; if(lg&&lg!=="?") (byLg[lg]=byLg[lg]||[]).push(s); });
+    for(const lg in byLg){ const f=fit(byLg[lg]); if(f){ GOAL_TUNE[lg]=+(0.5*f.g+0.5*GOAL_TUNE._).toFixed(3); GD_SCALE[lg]=+(0.5*f.s+0.5*GD_SCALE._).toFixed(3); } }
+  }
+  if(n<8){ DRAW_NUDGE=0; HA_TUNE=0; }
 }
 /* ===== 真實近況與休息天數:ESPN 每隊賽程(每日快取,背景載入) ===== */
 let SCHED_CACHE={}, SCHED_DAY=null, SCHED_BUSY=false;
@@ -1475,6 +1496,10 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
     lh*=sq_(atkOf(homeName)*defOf(awayName));   // 攻防分離校準:主隊進攻力 × 客隊防守漏洞
     la*=sq_(atkOf(awayName)*defOf(homeName)); }
   lh=Math.max(0.2,Math.min(lh,4.2)); la=Math.max(0.2,Math.min(la,4.2));
+  { // e135:比分學習 —— 進球水位倍率 × 淨勝差尺度(兩者皆由帳本賽前 λ 對照實際比分回歸而來)
+    const G=goalTuneOf(lg), S=gdScaleOf(lg);
+    if(G!==1||S!==1){ const m=(lh+la)*G, r=Math.log(lh/la)*S; lh=m/(1+Math.exp(-r)); la=m-lh;
+      lh=Math.max(0.2,Math.min(lh,4.2)); la=Math.max(0.2,Math.min(la,4.2)); } }
   let H=0,D=0,A=0;
   const best={H:{p:-1,i:1,j:0}, D:{p:-1,i:1,j:1}, A:{p:-1,i:0,j:1}};   // 各結果下最可能的單一比分
   // Dixon-Coles 低分修正:獨立卜瓦松會低估 0-0/1-1(和局),高估 1-0/0-1
@@ -2127,7 +2152,7 @@ function renderTodaySection(){
           try{ const sc0=scGet(); const ex0=sc0[g.id];
             if(!ex0 || (ex0.locked && ex0.hs==null)){        // 賽前:滾動更新(吸收陣容/名單變化);已開賽或已評分:碰都不碰
               sc0[g.id]={ ...(ex0||{}),
-                pred:{H:pp.H,D:pp.D,A:pp.A,si:pp.si,sj:pp.sj,conf:pp.conf,pick:pp.pick},
+                pred:{H:pp.H,D:pp.D,A:pp.A,si:pp.si,sj:pp.sj,conf:pp.conf,pick:pp.pick,lh:pp.lh,la:pp.la},
                 odds:(g.odds||(ex0&&ex0.odds)||null),
                 odds0:((ex0&&ex0.odds0)||g.odds||null),
                 dq:pp.dq, t:(ex0&&ex0.t)||Date.now(), tU:Date.now(), v:2, locked:1, lg:l.id };
@@ -2825,12 +2850,14 @@ function renderTWSL(){
 }
 /* e134:分聯賽成績(舊紀錄無 lg 欄位 → 以雲端隊名回推聯賽) */
 const LG_CEIL={"usa.1":47,"jpn.1":48,"eng.2":46,"sco.1":54,"eng.1":56,"esp.1":55,"ita.1":54,"ger.1":53,"fra.1":54,"uefa.champions":58,"uefa.europa":53};
+let _LG_MAP=null, _LG_MAP_SRC=null;
 function lgOfRec(s){
   if(s.lg) return s.lg;
   try{ const C=(window.CLOUD&&window.CLOUD.leagues)||null; if(!C) return null;
-    const k=s.hnk, k2=s.ank; let best=null;
-    for(const x in C){ const T=C[x].teams||{}; const hit=(T[k]?1:0)+(T[k2]?1:0); if(hit===2) return x; if(hit===1&&!best) best=x; }
-    return best; }catch(e){ return null; }
+    if(_LG_MAP_SRC!==C){ _LG_MAP={}; _LG_MAP_SRC=C;
+      for(const x in C){ const T=C[x].teams||{}; for(const k in T){ if(k.startsWith("#")) continue; const nk=norm(k); if(nk&&!_LG_MAP[nk]) _LG_MAP[nk]=x; } } }
+    const a=_LG_MAP[s.hnk]||_LG_MAP[norm(s.hn||"")], b=_LG_MAP[s.ank]||_LG_MAP[norm(s.an||"")];
+    return (a&&b&&a===b)?a:(a||b||null); }catch(e){ return null; }
 }
 function renderByLeague(){
   const rows=Object.values(scGet()).filter(s=>s&&!s.void&&s.hs!=null&&s.pred);
@@ -2950,6 +2977,8 @@ function renderInsights(){
   if(Math.abs(HA_TUNE)>0.005) tune.push(`主場係數 ${(0.24+HA_TUNE).toFixed(2)}(基準 0.24)`);
   const fc=Object.keys(FORM_CACHE).length;
   if(fc) tune.push(`近況因子已涵蓋 ${fc} 隊(近5場戰績納入評級)`);
+  if(SCORE_TUNE_N>=30) tune.push(`比分學習:進球水位 ×${GOAL_TUNE._.toFixed(2)} · 淨勝差尺度 ×${GD_SCALE._.toFixed(2)}(樣本 ${SCORE_TUNE_N} 場,分聯賽另有微調)`);
+  else tune.push(`比分學習:樣本 ${SCORE_TUNE_N}/30 場,累積中(僅計入 e135 起鎖定的預測)`);
   if(tune.length) html+=`<div class="pos-group" style="margin:12px 0 6px">自動調參</div><div style="font-family:var(--mono);font-size:12px;color:var(--ink2)">${tune.join(" · ")}</div>`;
   html+=`<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:12px">心得由模型依實際賽果自動生成 · 校準值存於此瀏覽器,持續累積會越來越準
     · <a href="#" id="resetSC" style="color:var(--miss)">重設所有計分紀錄</a></div></div>`;
