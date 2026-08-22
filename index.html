@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e135";
+const BUILD = "e136";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2091,7 +2091,7 @@ function renderTodaySection(){
   const _r=()=>{
     _open.forEach(id=>{ const b=document.getElementById(id); if(b){ b.classList.add("open");
       const btn=document.querySelector(`.an-btn[data-an="${id.replace(/^an-/,"")}"]`); if(btn) btn.textContent="收合分析 ▴"; } });
-    if(Math.abs(window.scrollY-_sy)>4) window.scrollTo(0,_sy);
+    // e136:捲動位置改由 _keepScroll 錨定處理,這裡不再強制跳回
   };
   setTimeout(_r,0);
   const sec=document.getElementById("todaySec"), box=document.getElementById("todayBox"), tag=document.getElementById("todayTag");
@@ -3883,6 +3883,38 @@ function applyTheme(t){
   document.querySelectorAll(".th").forEach(x=>x.classList.toggle("on",x.dataset.th===t));
   try{localStorage.setItem("euroTheme",t);}catch(e){}
 }
+/* ===== e136:自動更新不跳畫面 =====
+   原理:重繪前記住「畫面上第一個可見區塊」和它距離視窗頂端的距離;重繪後找回同一個區塊,
+   把它放回一模一樣的位置。這樣就算上方的積分榜/心得面板高度變了,你正在看的那一行也不會移動。 */
+function _scrollAnchorTake(){
+  try{
+    const sy=window.scrollY;
+    const cands=document.querySelectorAll(".tg-row[data-gid],.game .detail-btn[data-gid],[id]");
+    for(const el of cands){
+      if(el.id==="teamView"||el.id==="gameView"||el.tagName==="SCRIPT"||el.tagName==="STYLE") continue;
+      const r=el.getBoundingClientRect(); if(!(r.height>0)) continue;
+      if(r.bottom>0){ const key=el.id?("#"+el.id):(el.dataset.gid?("[data-gid=\""+el.dataset.gid+"\"]"):null);
+        if(key) return {key,top:r.top,sy}; }
+    }
+    return {key:null,top:0,sy};
+  }catch(e){ return null; }
+}
+function _scrollAnchorRestore(an){
+  if(!an) return;
+  try{
+    let el=an.key?document.querySelector(an.key):null;
+    if(el&&an.key.startsWith("[")) el=[...document.querySelectorAll(an.key)].find(x=>x.getBoundingClientRect().height>0)||el;
+    if(el){ const d=el.getBoundingClientRect().top-an.top; if(Math.abs(d)>1) window.scrollBy(0,d); }
+    else if(Math.abs(window.scrollY-an.sy)>1) window.scrollTo(0,an.sy);
+  }catch(e){}
+}
+function _keepScroll(fn){
+  return function(){ const an=_scrollAnchorTake(); const r=fn.apply(this,arguments);
+    _scrollAnchorRestore(an); requestAnimationFrame(()=>_scrollAnchorRestore(an)); return r; };
+}
+["renderGames","renderStandings","renderHeadlines","renderScorecard","renderInsights","renderTodaySection","renderFocus"].forEach(n=>{
+  if(typeof window[n]==="function") window[n]=_keepScroll(window[n]);
+});
 function init(){
   document.getElementById("buildTag").textContent="build "+BUILD;
   migrateSnapshots();
