@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e130";
+const BUILD = "e131";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2834,6 +2834,25 @@ function renderInsights(){
   tag.textContent=`已學習 ${n} 場`;
   const S=ids.map(k=>sc[k]);
   const lessons=[];
+  // 精準比分解剖:方向命中場內,比分為何中/為何錯
+  { const gd=S.filter(s=>s.hs!=null&&s.hit&&s.pred&&s.pred.si!=null);
+    if(gd.length>=15){
+      const cls={exact:0, marginOK:0, totLow:0, totHigh:0};
+      const predDist={}, realDist={};
+      gd.forEach(s=>{
+        const pi=+s.pred.si, pj=+s.pred.sj, ai=+s.hs, aj=+s.as;
+        predDist[pi+"-"+pj]=(predDist[pi+"-"+pj]||0)+1;
+        realDist[ai+"-"+aj]=(realDist[ai+"-"+aj]||0)+1;
+        if(pi===ai&&pj===aj) cls.exact++;
+        else if((pi-pj)===(ai-aj)){                            // 淨勝差全對,只差水位
+          if((ai+aj)<(pi+pj)) cls.totLow++;                    //   同差更悶:猜2-1出1-0
+          else cls.totHigh++;                                  //   同差更奔放:猜1-0出2-1
+        } else cls.marginOK=cls.marginOK+1;                    // 淨勝差錯(但方向對)
+      });
+      const top=(o)=>Object.entries(o).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${k}×${v}`).join("、");
+      lessons.push(`精準比分解剖(方向命中的 ${gd.length} 場):全中 ${cls.exact} · 同淨勝差但更悶 ${cls.totLow} · 同淨勝差更奔放 ${cls.totHigh} · 淨勝差錯 ${cls.marginOK} —— ${cls.totLow>cls.totHigh+2?"勝差判讀準,但實際常以更低比分實現(猜2-1出1-0)→ 進球水位偏高,λ 應收斂":(cls.totHigh>cls.totLow+2?"勝差判讀準,但實際更奔放 → 進球水位偏低":(cls.marginOK>cls.totLow+cls.totHigh?"主要敗因是淨勝差判讀 → 攻防強度差距需收斂":"分佈均衡,無系統性偏差"))}`);
+      lessons.push(`比分分佈對照:模型最愛猜 ${top(predDist)};實際最常出 ${top(realDist)} —— 兩者若差異大,即選格偏好需要修正的方向`);
+    } }
   { const g2=S.filter(s=>s.hs!=null), hh=g2.filter(s=>s.hit), exx=g2.filter(s=>s.score===true).length;
     if(g2.length>=20) lessons.push(`精準比分:${exx}/${g2.length}(${(100*exx/g2.length).toFixed(1)}%,理論天花板約 11%);方向命中的 ${hh.length} 場內全中 ${exx} 場(${hh.length?(100*exx/hh.length).toFixed(1):0}%)—— 提升途徑:先抬方向命中率,再靠淨勝差收斂選對格子`); }
   // 教訓0:未中歸因統計(每個失準的病歷 → 對症調參)
