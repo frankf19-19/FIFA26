@@ -1,4 +1,5 @@
-/* 歐陸足球雲端校準 v8:可中斷續跑(checkpoint)+ 逐場賽果帳本 matches.json(回測用)。
+/* 歐陸足球雲端校準 v9:可中斷續跑(checkpoint)+ 逐場賽果帳本 matches.json(回測用)
+   + 比賽過程(半場比分、進球時間、紅黃牌、射門、犯規)→ 每隊「過程體質」指標(領先守成率、落後追平率、下半場淨進球、紅牌率)。
    每完成一個聯賽 → 立刻寫入 calib.json 並 commit+push;
    中斷重跑時,跳過「當天已完成」的聯賽,從斷點接續。 */
 const { execSync } = require("child_process");
@@ -36,6 +37,38 @@ function save(out, lg){
 }
 
 const SOT_G={}, SOT_S={}, SOT_C={};
+/* v9:從 summary.keyEvents 抽出比賽過程。回傳 {ht:[h,a], gm:"12H,45A,78H", rc:[h,a], yc:[h,a]} */
+function parseProcess(sj, homeId){
+  const ev=(sj&&sj.keyEvents)||[]; if(!ev.length) return null;
+  const out={ht:[0,0], gm:[], rc:[0,0], yc:[0,0]}; let any=false;
+  for(const e of ev){
+    const t=String((e.type&&e.type.text)||"").toLowerCase();
+    const tid=String((e.team&&e.team.id)||""); if(!tid) continue;
+    const side=tid===String(homeId)?0:1;
+    const per=(e.period&&e.period.number)||0;
+    const disp=String((e.clock&&e.clock.displayValue)||"");
+    const mm=parseInt(disp,10); const plus=(disp.match(/\+(\d+)/)||[])[1];
+    const min=(isNaN(mm)?0:mm)+(plus?+plus:0);
+    const isGoal=(t.includes("goal")||(t.includes("penalty")&&t.includes("scored")))&&!t.includes("missed")&&!t.includes("saved")&&!t.includes("shootout")&&!t.includes("disallowed");
+    if(isGoal){ any=true; const own=t.includes("own"); const s=own?1-side:side; out.gm.push(min+(s===0?"H":"A")); if(per===1||(per===0&&min<=45)) out.ht[s]++; }
+    else if(t.includes("red")){ any=true; out.rc[side]++; }
+    else if(t.includes("yellow")){ any=true; out.yc[side]++; }
+  }
+  if(!any) return null;
+  out.gm=out.gm.join(",");
+  return out;
+}
+function accProcess(T, hid, aid, hs, as, pr, w){
+  if(!pr) return;
+  const o=id=>{ const t=T["#"+id]; if(!t) return null; t.pr=t.pr||{n:0,g1:0,g2:0,c1:0,c2:0,lt:0,ltw:0,ltd:0,tr:0,trx:0,rc:0}; return t.pr; };
+  const h1=pr.ht[0], a1=pr.ht[1], h2=hs-h1, a2=as-a1;
+  if(h2<0||a2<0) return;                                   // 事件與終場比分對不上(烏龍球歸屬等)→ 不納入過程統計
+  const H=o(hid), A=o(aid); if(!H||!A) return;
+  const side=(t,gf1,ga1,gf2,ga2,rcn,gf,ga)=>{ t.n+=w; t.g1+=gf1*w; t.c1+=ga1*w; t.g2+=gf2*w; t.c2+=ga2*w; t.rc+=rcn*w;
+    if(gf1>ga1){ t.lt+=w; if(gf>ga) t.ltw+=w; else if(gf===ga) t.ltd+=w; }
+    if(gf1<ga1){ t.tr+=w; if(gf>=ga) t.trx+=w; } };
+  side(H,h1,a1,h2,a2,pr.rc[0],hs,as); side(A,a1,h1,a2,h2,pr.rc[1],as,hs);
+}
 (async () => {
   const today = new Date().toISOString().slice(0,10);
   let out = { updated:"", d:today, days:WEEKS*7, n:0, leagues:{} };
@@ -79,7 +112,8 @@ const SOT_G={}, SOT_S={}, SOT_C={};
               const prevM=MATCHES[ev.id]||{};
               MATCHES[ev.id]={ lg, d:(ev.date||"").slice(0,10), hid:String((H.team||{}).id||""), hn:(H.team||{}).displayName||"",
                 aid:String((A.team||{}).id||""), an:(A.team||{}).displayName||"", hs, as,
-                ...(prevM.sot?{sot:prevM.sot}:{}), ...(prevM.ml?{ml:prevM.ml}:{}), ...(ol?{ml:ol}:{}) };
+                ...(prevM.sot?{sot:prevM.sot}:{}), ...(prevM.ev?{ev:prevM.ev}:{}), ...(prevM.noev?{noev:1}:{}),
+                ...(prevM.sh?{sh:prevM.sh}:{}), ...(prevM.fl?{fl:prevM.fl}:{}), ...(prevM.ml?{ml:prevM.ml}:{}), ...(ol?{ml:ol}:{}) };
             } catch(e) {}
             { const __ag=Math.max(0,(Date.now()-(Date.parse(ev.date)||Date.now()))/86400000);
               const __wl=Math.exp(-Math.LN2*__ag/60);
@@ -91,8 +125,9 @@ const SOT_G={}, SOT_S={}, SOT_C={};
             add((H.team||{}).id,(H.team||{}).displayName,hs,as,true, ev.date||"", __w);
             add((A.team||{}).id,(A.team||{}).displayName,as,hs,false,ev.date||"", __w);
             // 射正數(自產 xG 用):抓該場 summary 的 shotsOnTarget(v8:帳本已有射正 → 直接沿用,省請求)
-            const __cached=MATCHES[ev.id]&&MATCHES[ev.id].sot;
-            if (__cached) { const [sh2,sa2,ch,ca2,ph,pa]=__cached;
+            const __cached=MATCHES[ev.id]&&MATCHES[ev.id].sot&&(MATCHES[ev.id].ev||MATCHES[ev.id].noev);
+            if (__cached) { const [sh2,sa2,ch,ca2,ph,pa]=MATCHES[ev.id].sot;
+              accProcess(T,(H.team||{}).id,(A.team||{}).id,hs,as,MATCHES[ev.id].ev,__w);
               const acc0=(id,f,a2,ps,cf,cA)=>{ const o=T["#"+id]; if(o){
                 o.stn=(o.stn||0)+__w; o.stf=(o.stf||0)+f*__w; o.sta=(o.sta||0)+a2*__w;
                 if(ps!=null){ o.psn=(o.psn||0)+1; o.psf=(o.psf||0)+ps; }
@@ -104,6 +139,17 @@ const SOT_G={}, SOT_S={}, SOT_C={};
               const sr2=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/summary?event=${ev.id}`);
               if (sr2.ok) {
                 const sj2=await sr2.json();
+                try { const pr=parseProcess(sj2,(H.team||{}).id);
+                  if (MATCHES[ev.id]) { if(pr) MATCHES[ev.id].ev=pr; else MATCHES[ev.id].noev=1; }
+                  accProcess(T,(H.team||{}).id,(A.team||{}).id,hs,as,pr,__w);
+                  // 射門/犯規(帳本留底)
+                  const bt0=(sj2.boxscore&&sj2.boxscore.teams)||[];
+                  if (bt0.length===2&&MATCHES[ev.id]) { const g2=(t2,nm2)=>{ const st2=(t2.statistics||[]).find(x=>x.name===nm2); return st2?parseFloat(st2.displayValue):null; };
+                    const hf=String((bt0[0].team||{}).id)===String((H.team||{}).id);
+                    const ts0=g2(bt0[0],"totalShots"), ts1=g2(bt0[1],"totalShots"), f0=g2(bt0[0],"foulsCommitted"), f1=g2(bt0[1],"foulsCommitted");
+                    if(ts0!=null&&ts1!=null) MATCHES[ev.id].sh=hf?[ts0,ts1]:[ts1,ts0];
+                    if(f0!=null&&f1!=null) MATCHES[ev.id].fl=hf?[f0,f1]:[f1,f0]; }
+                } catch(e) {}
                 const bt=(sj2.boxscore&&sj2.boxscore.teams)||[];
                 const gv=(t2,nm2)=>{ const st2=(t2.statistics||[]).find(x=>x.name===nm2); return st2?parseFloat(st2.displayValue):null; };
                 const sotOf=t2=>gv(t2,"shotsOnTarget");
@@ -137,8 +183,13 @@ const SOT_G={}, SOT_S={}, SOT_C={};
     n=+n.toFixed(1);
     if (n < 8) { out.leagues[lg]={done:1, n:0}; save(out, lg+" (樣本不足)"); continue; }
     const ha = Math.max(0.05, Math.min(0.45, 0.24 + (hw/n-0.46)*1.2));
+    // v9:聯賽過程平均(領先守成率 / 落後不敗率 / 下半場淨進球 / 紅牌率),供前端算各隊相對體質
+    let pA={n:0,lt:0,ltw:0,tr:0,trx:0,h2:0,rc:0};
+    for (const k in T) { const q=T[k]&&T[k].pr; if(!q||k[0]!=="#") continue; pA.n+=q.n; pA.lt+=q.lt; pA.ltw+=q.ltw; pA.tr+=q.tr; pA.trx+=q.trx; pA.h2+=((q.g2-q.c2)-(q.g1-q.c1)); pA.rc+=q.rc; }
+    const prAvg = pA.n>0 ? { hold:+(pA.lt?pA.ltw/pA.lt:0.75).toFixed(3), cb:+(pA.tr?pA.trx/pA.tr:0.35).toFixed(3), rc:+(pA.rc/pA.n).toFixed(3) } : null;
+    for (const k in T) { const q=T[k]&&T[k].pr; if(q) for(const f in q) q[f]=+(+q[f]).toFixed(2); }
     out.leagues[lg] = { ha:+ha.toFixed(3), lgAvg:+Math.max(1,Math.min(2,goals/n/2)).toFixed(3),
-      draw:+(dr/n).toFixed(3), n, teams:T };
+      draw:+(dr/n).toFixed(3), n, teams:T, ...(prAvg?{prAvg}:{}) };
     out.n += n;
     // ── 名單 + 球員逐季數據(含守門/防守欄位)──
     try {
