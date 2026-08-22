@@ -1,0 +1,27 @@
+name: euro-cloud-pred
+on:
+  schedule:
+    - cron: "*/30 * * * *"        # 每 30 分鐘:預測未開賽、鎖定已開賽、評分已完賽
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: euro-cloud-pred
+  cancel-in-progress: false
+jobs:
+  pred:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm i jsdom@24 --no-save --silent
+      - run: node scripts/predict-euro.js
+      - name: commit cloud-pred.json
+        run: |
+          git config user.name  "pred-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add cloud-pred.json
+          git diff --cached --quiet || git commit -m "cloud prediction"
+          git pull --rebase origin main || { git rebase --abort || true; git pull --no-rebase -X ours origin main; }
+          git push
