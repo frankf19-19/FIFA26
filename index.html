@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e138";
+const BUILD = "e140";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1409,7 +1409,19 @@ function noPredGate(p,lg){
   if(L0&&(L0.core||L0.cup)) return false;
   return p&&p.dq!=null&&p.dq<0.2;
 }
+let CLOUD_PRED=null;   // e140:雲端統一預測(cloud-pred.json):{sc, byKey}
 function predict(homeName,awayName,mkt,lg,hid,aid){
+  const loc=predictLocal(homeName,awayName,mkt,lg,hid,aid);
+  try{ if(CLOUD_PRED&&CLOUD_PRED.byKey&&hid!=null&&aid!=null){
+    const id=CLOUD_PRED.byKey[lg+"|"+hid+"|"+aid]; const s=id&&CLOUD_PRED.sc[id];
+    const cp=s&&(s.fz||s.pred);
+    if(cp&&cp.H!=null&&Math.abs(Date.now()-(s.tU||s.t||0))<4*86400000){   // 4 天內的雲端預測才採用
+      return {...loc, H:cp.H, D:cp.D, A:cp.A, si:cp.si, sj:cp.sj, conf:cp.conf, pick:cp.pick, lh:cp.lh!=null?cp.lh:loc.lh, la:cp.la!=null?cp.la:loc.la,
+        prs:cp.prs!=null?cp.prs:loc.prs, pw:cp.pw!=null?cp.pw:loc.pw, pls:cp.pls!=null?cp.pls:loc.pls, plw:cp.plw!=null?cp.plw:loc.plw, dq:s.dq!=null?s.dq:loc.dq, cloud:1};
+    } } }catch(e){}
+  return loc;
+}
+function predictLocal(homeName,awayName,mkt,lg,hid,aid){
   if(lg){ const L0=LEAGUES.find(x=>x.id===lg); if(L0&&L0.stand) lg=L0.stand; }   // 盃賽借用母聯賽的積分榜與進球環境
   const cl=(window.CLOUD&&window.CLOUD.leagues&&window.CLOUD.leagues[lg])||null;
   // e134:雲端主導判定(雙方皆 ≥10 場雲端實戰)→ 關閉逐場學習器,評級缺省者改用雲端淨勝球推估
@@ -2714,7 +2726,7 @@ function parseEvents(data){
     if(!home||!away)return;
     const st=(c.status||ev.status||{}).type||{};
     out.push({
-      id:ev.id, localIso: isoDate(new Date(ev.date)), ts:new Date(ev.date).getTime(),
+      id:ev.id, date:ev.date, localIso: isoDate(new Date(ev.date)), ts:new Date(ev.date).getTime(),   // e140:補 date 欄位,開賽凍結改以真實開球時間觸發
       hn:home.team.displayName, an:away.team.displayName,
       hid:home.team.id, aid:away.team.id,
       hlogo:home.team.logo||"", alogo:away.team.logo||"",
@@ -3067,8 +3079,36 @@ function renderInsights(){
   else tune.push(`比分學習:樣本 ${SCORE_TUNE_N}/30 場,累積中(僅計入 e135 起鎖定的預測)`);
   if(tune.length) html+=`<div class="pos-group" style="margin:12px 0 6px">自動調參</div><div style="font-family:var(--mono);font-size:12px;color:var(--ink2)">${tune.join(" · ")}</div>`;
   html+=`<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:12px">心得由模型依實際賽果自動生成 · 校準值存於此瀏覽器,持續累積會越來越準
-    · <a href="#" id="resetSC" style="color:var(--miss)">重設所有計分紀錄</a></div></div>`;
+    · <a href="#" id="expSC" style="color:var(--gold)">匯出學習資料</a> · <a href="#" id="impSC" style="color:var(--gold)">匯入學習資料</a><input type="file" id="impFile" accept="application/json,.json" style="display:none">
+    · <a href="#" id="resetSC" style="color:var(--miss)">重設所有計分紀錄</a>
+    <div style="margin-top:6px">${CLOUD_PRED?`<span id="cloudPredTag" style="color:var(--hit)">☁ 雲端統一預測 · 更新 ${String(CLOUD_PRED.updated||"").replace("T"," ").slice(5,16)} · 帳本 ${CLOUD_PRED.n||0} 筆</span> —— 預測與學習參數由雲端每 30 分鐘統一計算,手機與電腦數字一致`:`<span style="color:var(--gold)">尚未取得雲端統一預測(cloud-pred.json),目前用本機學習:已學習 ${n} 場,各裝置可能不同</span>`}</div></div></div>`;
   box.innerHTML=renderCoverage()+renderTWSL()+renderCalib()+renderByLeague()+html;
+  // e139:跨裝置同步 —— 匯出/匯入所有學習資料(帳本、評級校準、攻防乘數、市場權重、聯賽審核)
+  const KEYS=["euroSC","euroADJ","euroAD","euroMKTW","euroLGD","euroDYN","euroTWSLN","euroTWSLL","euroADv2"];
+  const ex=document.getElementById("expSC");
+  if(ex) ex.onclick=(ev)=>{ ev.preventDefault();
+    const o={v:1,build:BUILD,t:new Date().toISOString(),data:{}};
+    KEYS.forEach(k=>{ try{ const v=localStorage.getItem(k); if(v!=null) o.data[k]=v; }catch(e){} });
+    const blob=new Blob([JSON.stringify(o)],{type:"application/json"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`fifa26-learn-${new Date().toISOString().slice(0,10)}.json`; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),2000); };
+  const im=document.getElementById("impSC"), fi=document.getElementById("impFile");
+  if(im&&fi){ im.onclick=(ev)=>{ ev.preventDefault(); fi.value=""; fi.click(); };
+    fi.onchange=async()=>{ const f=fi.files&&fi.files[0]; if(!f) return;
+      try{ const o=JSON.parse(await f.text()); if(!o||!o.data) throw new Error("格式不對");
+        const D=o.data; let added=0, upd=0;
+        // 帳本:依比賽 id 合併 —— 對方有完整評分(hs 有值)而本機沒有 → 採對方;其餘保留本機
+        if(D.euroSC){ const mine=scGet(), theirs=JSON.parse(D.euroSC);
+          for(const id in theirs){ const t=theirs[id], m=mine[id];
+            if(!m){ mine[id]=t; added++; } else if(t&&t.hs!=null&&(m.hs==null)){ mine[id]=t; upd++; } }
+          scSet(mine); }
+        // 其他參數:本機若是空的才採用(不覆蓋本機已學到的)
+        ["euroADJ","euroAD","euroLGD","euroDYN","euroTWSLN","euroTWSLL","euroADv2"].forEach(k=>{ try{ const cur=localStorage.getItem(k); if((cur==null||cur==="{}"||cur==="[]")&&D[k]!=null) localStorage.setItem(k,D[k]); }catch(e){} });
+        if(D.euroMKTW!=null){ try{ if(localStorage.getItem("euroMKTW")==null) localStorage.setItem("euroMKTW",D.euroMKTW); }catch(e){} }
+        ADJ_CACHE=adjGet(); AD_CACHE=adGet(); MKT_W=mktWGet(); LGDATA=lgdGet();
+        alert(`匯入完成:新增 ${added} 場、補齊 ${upd} 場評分。重新整理後生效。`);
+        computeTuning(); renderScorecard(); renderInsights(); load();
+      }catch(e){ alert("匯入失敗:"+e.message); } }; }
   const rst=document.getElementById("resetSC");
   if(rst) rst.onclick=(ev)=>{ev.preventDefault();
     if(!confirm("確定重設?將清除所有預測成績、檢討與評級校準,從乾淨狀態重新累積(建議:早期紀錄曾受顯示問題影響)。"))return;
@@ -4001,9 +4041,28 @@ function _keepScroll(fn){
 ["renderGames","renderStandings","renderHeadlines","renderScorecard","renderInsights","renderTodaySection","renderFocus"].forEach(n=>{
   if(typeof window[n]==="function") window[n]=_keepScroll(window[n]);
 });
+async function loadCloudPred(){
+  try{
+    const r=await fetch("cloud-pred.json?_="+Date.now(),{cache:"no-store"}); if(!r.ok) return false;
+    const j=await r.json(); if(!j||!j.sc) return false;
+    CLOUD_PRED=j;
+    // 帳本合併:雲端有的以雲端為準(所有裝置一致);雲端沒有的保留本機
+    const mine=scGet(); let n=0;
+    for(const id in j.sc){ const c=j.sc[id]; if(!c||!c.pred) continue; mine[id]={...(mine[id]||{}),...c}; n++; }
+    scSet(mine);
+    // 學習參數:雲端為準
+    const P=j.params||{};
+    for(const k of ["euroADJ","euroAD","euroMKTW","euroADv2","euroLGD","euroDYN"]){ if(P[k]!=null){ try{ localStorage.setItem(k,P[k]); }catch(e){} } }
+    ADJ_CACHE=adjGet(); AD_CACHE=adGet(); MKT_W=mktWGet();
+    const el=document.getElementById("cloudPredTag"); if(el) el.textContent=`☁ 雲端統一預測 · 更新 ${String(j.updated||"").replace("T"," ").slice(5,16)} · 帳本 ${j.n||0} 筆`;
+    return true;
+  }catch(e){ return false; }
+}
 function init(){
   document.getElementById("buildTag").textContent="build "+BUILD;
   migrateSnapshots();
+  // e140:先吃雲端統一預測,再算學習參數 → 任何裝置看到的都一樣
+  loadCloudPred().then(ok=>{ computeTuning(); if(ok){ try{ renderScorecard(); renderInsights(); load(); }catch(e){} } });
   computeTuning();
   let th="navy"; try{th=localStorage.getItem("euroTheme")||"navy";}catch(e){}
   applyTheme(th);
