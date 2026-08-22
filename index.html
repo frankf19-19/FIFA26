@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e131";
+const BUILD = "e132";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1350,8 +1350,13 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
     if(th&&ta&&+th.gp>=10&&+ta.gp>=10&&th.dr!=null&&ta.dr!=null)
       _tdr=100*((+th.dr)+(+ta.dr))/((+th.gp)+(+ta.gp));       // 兩隊合併和局率(隊層體質)
     if(th&&ta){ _psH=th.ps!=null?+th.ps:null; _psA=ta.ps!=null?+ta.ps:null; }  // 控球風格(顯示)
-    if(th&&+th.hgp>=6) sh={gp:th.hgp,gf:th.hgf,ga:th.hga};
-    if(ta&&+ta.agp>=6) sa={gp:ta.agp,gf:ta.agf,ga:ta.aga};
+    // e132:主客分拆樣本太少(5~12 場)→ 與整體戰績 55/45 混合,場數採整體 gp(資料權重得以提高)
+    const mixT=(t,sg,sf,sa_)=>{ const g=+t.gp, s=+t[sg]; if(!(g>=8&&s>=5)) return null;
+      const rf=0.55*(+t[sf]/s)+0.45*(+t.gf/g), ra_=0.55*(+t[sa_]/s)+0.45*(+t.ga/g);
+      return {gp:g, gf:rf*g, ga:ra_*g, _cloud:1}; };
+    const mh=th&&mixT(th,"hgp","hgf","hga"), ma=ta&&mixT(ta,"agp","agf","aga");
+    if(mh) sh=mh; else if(th&&+th.hgp>=6) sh={gp:th.hgp,gf:th.hgf,ga:th.hga};
+    if(ma) sa=ma; else if(ta&&+ta.agp>=6) sa={gp:ta.agp,gf:ta.agf,ga:ta.aga};
     if(th&&ta&&th.lp&&ta.lp){
       const now=Date.now();
       const dh=Math.round((now-new Date(th.lp))/86400000), da=Math.round((now-new Date(ta.lp))/86400000);
@@ -1438,14 +1443,16 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
     const LG=(cl&&cl.lgAvg)||(lg&&LGAVG_BY_LG[lg])||LG_AVG, gpH=+sh.gp, gpA=+sa.gp;
     const lh2=LG*((+sh.gf/gpH)/LG)*((+sa.ga/gpA)/LG)*Math.exp(HA/2);
     const la2=LG*((+sa.gf/gpA)/LG)*((+sh.ga/gpH)/LG)*Math.exp(-HA/2);
-    const wS=Math.min(0.6, 0.3+0.03*Math.min(gpH,gpA));
+    const wCap=(sh._cloud&&sa._cloud)?0.8:0.6;                 // e132:雙方皆雲端實戰 → 數據主導 80%
+    const wS=Math.min(wCap, 0.3+0.03*Math.min(gpH,gpA));
     lh=lh*(1-wS)+Math.max(.2,Math.min(lh2,4.2))*wS;
     la=la*(1-wS)+Math.max(.2,Math.min(la2,4.2))*wS;
   }
   lh*=injAdj(homeName); la*=injAdj(awayName);   // 傷兵折扣:主力缺陣自動下修預期進球
   lh*=restAdj(homeName); la*=restAdj(awayName); // 賽程疲勞:三天內連戰 -4%,休整逾週 +1%
-  lh*=atkOf(homeName)*defOf(awayName);          // 攻防分離校準:主隊進攻力 × 客隊防守漏洞
-  la*=atkOf(awayName)*defOf(homeName);
+  { const sq_=v=>Math.pow(v,0.6);               // e132:攻防乘數降溫(0.6 次方),避免單場運氣主導
+    lh*=sq_(atkOf(homeName)*defOf(awayName));   // 攻防分離校準:主隊進攻力 × 客隊防守漏洞
+    la*=sq_(atkOf(awayName)*defOf(homeName)); }
   lh=Math.max(0.2,Math.min(lh,4.2)); la=Math.max(0.2,Math.min(la,4.2));
   let H=0,D=0,A=0;
   const best={H:{p:-1,i:1,j:0}, D:{p:-1,i:1,j:1}, A:{p:-1,i:0,j:1}};   // 各結果下最可能的單一比分
@@ -2693,7 +2700,7 @@ async function gradeFinished(games){
       // 攻防分離學習:主隊進球超出預期 → 主攻↑、客防↓(反之亦然)
       try{
         AD_CACHE=Object.keys(AD_CACHE).length?AD_CACHE:adGet();
-        const LR=0.06*factor, CL=v=>Math.max(0.75,Math.min(1.30,v));
+        const LR=0.03*factor, CL=v=>Math.max(0.85,Math.min(1.18,v));   // e132:學習率減半、邊界收窄
         const kh=norm(g.hn), ka=norm(g.an);
         AD_CACHE[kh]=AD_CACHE[kh]||{a:1,d:1}; AD_CACHE[ka]=AD_CACHE[ka]||{a:1,d:1};
         const eh=Math.max(0.25,p.lh||1.3), ea=Math.max(0.25,p.la||1.1);
@@ -2704,11 +2711,11 @@ async function gradeFinished(games){
         AD_CACHE[kh].d=CL(AD_CACHE[kh].d*(1+LR*Math.max(-1,Math.min(1,ra1))));
         adSet(AD_CACHE);
       }catch(e){}
-      const delta=Math.max(-2,Math.min(2, factor*1.6*Math.tanh(err/2)));
+      const delta=Math.max(-1,Math.min(1, factor*0.9*Math.tanh(err/2)));   // e132:單場評級修正上限 ±1
       if(Math.abs(delta)>0.05){
         const hn=norm(g.hn), an=norm(g.an);
-        ADJ_CACHE[hn]=Math.max(-8,Math.min(8,(ADJ_CACHE[hn]||0)+delta));
-        ADJ_CACHE[an]=Math.max(-8,Math.min(8,(ADJ_CACHE[an]||0)-delta));
+        ADJ_CACHE[hn]=Math.max(-5,Math.min(5,(ADJ_CACHE[hn]||0)+delta));
+        ADJ_CACHE[an]=Math.max(-5,Math.min(5,(ADJ_CACHE[an]||0)-delta));
         adjSet(ADJ_CACHE);
         sc[g.id].adj=+delta.toFixed(2);
       }
@@ -3575,7 +3582,13 @@ async function showGame(g, fromPop){
 function hideTeam(){
   document.getElementById("teamView").classList.add("hidden");
   document.getElementById("gameView").classList.add("hidden");
-  AD_CACHE=adGet(); MKT_W=mktWGet(); mktWTune(); TWSL_NAMES=twslNamesGet(); TWSL_LGS=twslLgsGet();
+  AD_CACHE=adGet(); MKT_W=mktWGet(); mktWTune();
+  try{ if(!localStorage.getItem("euroADv2")){                   // e132 一次性:舊累積的攻防/評級修正壓回一半
+    for(const k in AD_CACHE){ const o=AD_CACHE[k]; if(o){ o.a=Math.max(0.85,Math.min(1.18,1+((+o.a||1)-1)*0.5)); o.d=Math.max(0.85,Math.min(1.18,1+((+o.d||1)-1)*0.5)); } }
+    adSet(AD_CACHE);
+    for(const k in ADJ_CACHE){ ADJ_CACHE[k]=Math.max(-5,Math.min(5,(+ADJ_CACHE[k]||0)*0.5)); }
+    adjSet(ADJ_CACHE);
+    localStorage.setItem("euroADv2","1"); } }catch(e){} TWSL_NAMES=twslNamesGet(); TWSL_LGS=twslLgsGet();
   // 穿透式點擊網(capture):就算有透明元素蓋住名單,也往下找到球員/球隊列照樣導頁
   document.addEventListener("click",ev=>{
     try{
