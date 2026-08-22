@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e132";
+const BUILD = "e133";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1024,6 +1024,7 @@ let FORM_CACHE={};      // norm(team) -> {pts,seq:"WWDLW"}
 let LG_AVG=1.40;        // 本聯賽平均每隊每場進球(由積分榜自動計算)
 let DRAW_NUDGE=0;       // 和局機率補正(百分點)
 let HA_TUNE=0;          // 主場係數微調
+let LEDGER_BASE=null;   // e133:帳本實測 H/D/A 基準率(樣本≥40 啟用),收縮時取代全球通用基準
 /* 一次性修復:e23 前的舊快照可能「看好某隊但比分平局」(當時的顯示 bug),
    修成與看好一致的比分;命中/Brier 為真實評分,原封不動 */
 function migrateSnapshots(){
@@ -1065,6 +1066,7 @@ function computeTuning(){
     const avgH=all.reduce((a,s)=>a+s.pred.H,0)/n;
     const homeRate=all.filter(s=>s.hs>s.as).length/n*100;
     HA_TUNE=Math.max(-0.08,Math.min(0.08,(homeRate-avgH)/100*0.35));
+    if(n>=40) LEDGER_BASE={H:homeRate, D:drawRate, A:Math.max(0,100-homeRate-drawRate)};
   }else{ DRAW_NUDGE=0; HA_TUNE=0; }
 }
 /* ===== 真實近況與休息天數:ESPN 每隊賽程(每日快取,背景載入) ===== */
@@ -1334,8 +1336,9 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   const _eh=standEff(homeName,lg,hid), _ea=standEff(awayName,lg,aid);
   let sh=_eh.s, sa=_ea.s; const _prior=(_eh.prior||_ea.prior);
   const _hasData=!!(sh&&sa&&+sh.gp>=2&&+sa.gp>=2);
-  const d=(rh-ra)*(_hasData?0.4:1.0);
-  const COEF=0.030, BASE=1.32, HA=(cl&&cl.ha!=null)?cl.ha:(0.24+HA_TUNE); // 主場優勢:雲端校準優先,否則本機自調
+  const d=(rh-ra)*(_hasData?0.6:1.0);   // e133:0.4→0.6
+  const COEF=0.030, HA=(cl&&cl.ha!=null)?cl.ha:(0.24+HA_TUNE); // 主場優勢:雲端校準優先,否則本機自調
+  const BASE=Math.max(1.1,Math.min(1.9,(cl&&cl.lgAvg)||(lg&&LGAVG_BY_LG[lg])||1.32)); // e133:進球水位依聯賽實際
   let lh=BASE*Math.exp(COEF*d/2 + HA/2), la=BASE*Math.exp(-COEF*d/2 - HA/2);
   // 主客分拆 + 休息日(雲端 v8;主隊採主場戰績、客隊採客場戰績)
   let _rest=null, _tdr=null, _psH=null, _psA=null, _tierN=null;
@@ -1473,7 +1476,7 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   // 和局錨定:Poisson 結構性低估和局(診斷實證)→ 拉向該聯賽近182天真實和局率
   { const LD=(cl&&cl.draw)?cl.draw*100:25.5;
     const TGT=(_tdr!=null)?(0.6*LD+0.4*_tdr):LD;             // 兩層錨:聯賽 60% + 兩隊體質 40%
-    if(D<TGT){ const d2=D+0.5*(TGT-D), sc2=(100-d2)/((H+A)||1); H*=sc2; A*=sc2; D=d2; } }
+    if(D<TGT){ const d2=D+0.3*(TGT-D), sc2=(100-d2)/((H+A)||1); H*=sc2; A*=sc2; D=d2; } }   // e133:0.5→0.3
   if(mkt){ // 市場賠率融合:權重依模型實測表現自動調整(模型不如市場時自動讓位)
     const w=1-MKT_W;
     H=H*w+mkt.h*100*MKT_W; D=D*w+mkt.d*100*MKT_W; A=A*w+mkt.a*100*MKT_W;
@@ -1489,9 +1492,9 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   if(schedOf(homeName)&&schedOf(awayName)) dq+=0.15;   // 真實近5場戰績(跨季有效,實戰數據)
   // 已知評級不再計入資料充分度:名氣不是數據(信心只反映真實資料量)
   dq=Math.max(0,Math.min(1,dq));
-  const shrink=0.30*(1-dq);                     // 資料全無時,把 30% 權重讓給基準率
+  const shrink=0.15*(1-dq);                     // e133:30%→15%(收縮只防極端,不再把強弱差壓平)
   if(shrink>0.001){
-    const bH=45.5,bD=25.5,bA=29.0;              // 足球長期基準率
+    const bH=LEDGER_BASE?LEDGER_BASE.H:45.5, bD=LEDGER_BASE?LEDGER_BASE.D:25.5, bA=LEDGER_BASE?LEDGER_BASE.A:29.0;   // e133:帳本實測優先
     H=H*(1-shrink)+bH*shrink; D=D*(1-shrink)+bD*shrink; A=A*(1-shrink)+bA*shrink;
     const t3=H+D+A; H=H/t3*100; D=D/t3*100; A=A/t3*100;
   }
