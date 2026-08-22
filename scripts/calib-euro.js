@@ -1,4 +1,4 @@
-/* 歐陸足球雲端校準 v9:可中斷續跑(checkpoint)+ 逐場賽果帳本 matches.json(回測用)
+/* 歐陸足球雲端校準 v10(v9 + 先發陣容「有他/沒他」球員影響力學習 + 天氣留底與聯賽天氣進球比):可中斷續跑(checkpoint)+ 逐場賽果帳本 matches.json(回測用)
    + 比賽過程(半場比分、進球時間、紅黃牌、射門、犯規)→ 每隊「過程體質」指標(領先守成率、落後追平率、下半場淨進球、紅牌率)。
    每完成一個聯賽 → 立刻寫入 calib.json 並 commit+push;
    中斷重跑時,跳過「當天已完成」的聯賽,從斷點接續。 */
@@ -58,6 +58,45 @@ function parseProcess(sj, homeId){
   out.gm=out.gm.join(",");
   return out;
 }
+/* v10:先發陣容 → 球員「有他 / 沒他」影響力。PL[teamId][playerId]={n,gd,nm} ; TT[teamId]={n,gd} */
+const PL={}, TT={};
+let PREV_NM={};   // 上次 calib.json 裡的球員名(快取路徑沒有名字時補用)
+try { const pc=JSON.parse(fs.readFileSync("calib.json","utf8")); for(const lg in (pc.leagues||{})){ const Ts=pc.leagues[lg].teams||{}; for(const k in Ts){ (Ts[k].pi||[]).forEach(a=>{ if(a[1]) PREV_NM[a[0]]=a[1]; }); (Ts[k].r||[]).forEach(a=>{ if(a[1]) PREV_NM[String(a[0])]=a[1]; }); } } } catch(e) {}
+function parseXI(sj, homeId){
+  const rs=(sj&&sj.rosters)||[]; if(rs.length!==2) return null;
+  const pick=r=>(r.roster||[]).filter(x=>x.starter).map(x=>{ const a=x.athlete||{}; return [String(a.id||""),(a.displayName||"").slice(0,40)]; }).filter(x=>x[0]);
+  const h=rs.find(r=>String((r.team||{}).id)===String(homeId)), a=rs.find(r=>String((r.team||{}).id)!==String(homeId));
+  if(!h||!a) return null; const H=pick(h), A=pick(a);
+  if(H.length<7||A.length<7) return null;
+  return {h:H, a:A};
+}
+function accXI(hid, aid, hs, as, xi, w){
+  if(!xi) return;
+  const side=(tid,list,gd)=>{ const t=(TT[tid]=TT[tid]||{n:0,gd:0}); t.n+=w; t.gd+=gd*w;
+    const P=(PL[tid]=PL[tid]||{}); list.forEach(([pid,nm])=>{ const o=(P[pid]=P[pid]||{n:0,gd:0,nm}); o.n+=w; o.gd+=gd*w; if(nm) o.nm=nm; }); };
+  side(String(hid), xi.h, hs-as); side(String(aid), xi.a, as-hs);
+}
+function finishXI(T){
+  for(const tid in PL){ const t=T["#"+tid]; const tot=TT[tid]; if(!t||!tot||tot.n<6) continue;
+    const out=[];
+    for(const pid in PL[tid]){ const o=PL[tid][pid]; const nw=tot.n-o.n;
+      if(o.n<3||nw<3) continue;                                   // 兩邊都要 ≥3 場才有比較意義
+      const w_=o.gd/o.n, wo=(tot.gd-o.gd)/nw;
+      const k=Math.min(1, Math.min(o.n,nw)/8);                     // 收縮:兩邊各 8 場才全額
+      const imp=+(k*(w_-wo)).toFixed(2);
+      if(Math.abs(imp)>=0.15) out.push([pid,o.nm,imp,+o.n.toFixed(1),+nw.toFixed(1)]); }
+    out.sort((a,b)=>Math.abs(b[2])-Math.abs(a[2]));
+    if(out.length) t.pi=out.slice(0,10);                           // 每隊最多存 10 人
+  }
+}
+/* v10:天氣(ESPN 有給才存) */
+function parseWx(ev,c){ const w=(c&&c.weather)||ev.weather||null; if(!w) return null;
+  const o={}; if(w.displayValue) o.c=String(w.displayValue).slice(0,30); if(w.temperature!=null) o.t=+w.temperature; if(w.conditionId!=null) o.id=String(w.conditionId);
+  return Object.keys(o).length?o:null; }
+const WX={};
+function accWx(lg,wx,hs,as,w){ if(!wx||!wx.c) return; const c=String(wx.c).toLowerCase();
+  const k=/rain|shower|storm|snow|drizzle|sleet/.test(c)?"wet":"dry";
+  const o=(WX[lg]=WX[lg]||{wet:{n:0,g:0},dry:{n:0,g:0}}); o[k].n+=w; o[k].g+=(hs+as)*w; }
 function accProcess(T, hid, aid, hs, as, pr, w){
   if(!pr) return;
   const o=id=>{ const t=T["#"+id]; if(!t) return null; t.pr=t.pr||{n:0,g1:0,g2:0,c1:0,c2:0,lt:0,ltw:0,ltd:0,tr:0,trx:0,rc:0}; return t.pr; };
@@ -104,6 +143,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
             const hs=+H.score, as=+A.score;
             if(isNaN(hs)||isNaN(as)) continue;
             // v8:逐場帳本(不覆蓋已存在且已含射正的紀錄;賠率若 ESPN 有提供則一併存)
+            const __wx=parseWx(ev,c);
             try {
               const od=(c.odds||[])[0]; let ol=null;
               if (od) { const ml=x=>x&&x.moneyLine!=null?+x.moneyLine:null;
@@ -113,7 +153,9 @@ function accProcess(T, hid, aid, hs, as, pr, w){
               MATCHES[ev.id]={ lg, d:(ev.date||"").slice(0,10), hid:String((H.team||{}).id||""), hn:(H.team||{}).displayName||"",
                 aid:String((A.team||{}).id||""), an:(A.team||{}).displayName||"", hs, as,
                 ...(prevM.sot?{sot:prevM.sot}:{}), ...(prevM.ev?{ev:prevM.ev}:{}), ...(prevM.noev?{noev:1}:{}),
-                ...(prevM.sh?{sh:prevM.sh}:{}), ...(prevM.fl?{fl:prevM.fl}:{}), ...(prevM.ml?{ml:prevM.ml}:{}), ...(ol?{ml:ol}:{}) };
+                ...(prevM.sh?{sh:prevM.sh}:{}), ...(prevM.fl?{fl:prevM.fl}:{}), ...(prevM.xi?{xi:prevM.xi}:{}), ...(prevM.noxi?{noxi:1}:{}),
+                ...(prevM.wx?{wx:prevM.wx}:{}), ...(__wx?{wx:__wx}:{}), ...(prevM.ml?{ml:prevM.ml}:{}), ...(ol?{ml:ol}:{}) };
+              accWx(lg, (__wx||prevM.wx), hs, as, 1);
             } catch(e) {}
             { const __ag=Math.max(0,(Date.now()-(Date.parse(ev.date)||Date.now()))/86400000);
               const __wl=Math.exp(-Math.LN2*__ag/60);
@@ -125,9 +167,10 @@ function accProcess(T, hid, aid, hs, as, pr, w){
             add((H.team||{}).id,(H.team||{}).displayName,hs,as,true, ev.date||"", __w);
             add((A.team||{}).id,(A.team||{}).displayName,as,hs,false,ev.date||"", __w);
             // 射正數(自產 xG 用):抓該場 summary 的 shotsOnTarget(v8:帳本已有射正 → 直接沿用,省請求)
-            const __cached=MATCHES[ev.id]&&MATCHES[ev.id].sot&&(MATCHES[ev.id].ev||MATCHES[ev.id].noev);
+            const __cached=MATCHES[ev.id]&&MATCHES[ev.id].sot&&(MATCHES[ev.id].ev||MATCHES[ev.id].noev)&&(MATCHES[ev.id].xi||MATCHES[ev.id].noxi);
             if (__cached) { const [sh2,sa2,ch,ca2,ph,pa]=MATCHES[ev.id].sot;
               accProcess(T,(H.team||{}).id,(A.team||{}).id,hs,as,MATCHES[ev.id].ev,__w);
+              try{ const x=MATCHES[ev.id].xi; if(x) accXI((H.team||{}).id,(A.team||{}).id,hs,as,{h:x[0].split(",").map(s=>[s,""]),a:x[1].split(",").map(s=>[s,""])},__w); }catch(e){}
               const acc0=(id,f,a2,ps,cf,cA)=>{ const o=T["#"+id]; if(o){
                 o.stn=(o.stn||0)+__w; o.stf=(o.stf||0)+f*__w; o.sta=(o.sta||0)+a2*__w;
                 if(ps!=null){ o.psn=(o.psn||0)+1; o.psf=(o.psf||0)+ps; }
@@ -142,6 +185,9 @@ function accProcess(T, hid, aid, hs, as, pr, w){
                 try { const pr=parseProcess(sj2,(H.team||{}).id);
                   if (MATCHES[ev.id]) { if(pr) MATCHES[ev.id].ev=pr; else MATCHES[ev.id].noev=1; }
                   accProcess(T,(H.team||{}).id,(A.team||{}).id,hs,as,pr,__w);
+                  const xi=parseXI(sj2,(H.team||{}).id);
+                  if (MATCHES[ev.id]) { if(xi) MATCHES[ev.id].xi=[xi.h.map(x=>x[0]).join(","), xi.a.map(x=>x[0]).join(",")]; else MATCHES[ev.id].noxi=1; }
+                  accXI((H.team||{}).id,(A.team||{}).id,hs,as,xi,__w);
                   // 射門/犯規(帳本留底)
                   const bt0=(sj2.boxscore&&sj2.boxscore.teams)||[];
                   if (bt0.length===2&&MATCHES[ev.id]) { const g2=(t2,nm2)=>{ const st2=(t2.statistics||[]).find(x=>x.name===nm2); return st2?parseFloat(st2.displayValue):null; };
@@ -243,6 +289,14 @@ function accProcess(T, hid, aid, hs, as, pr, w){
         }
       }
       console.log("SOT-xG:", lg, "轉化率", (SOT_G[lg]&&SOT_S[lg])?(SOT_G[lg]/SOT_S[lg]).toFixed(3):"預設0.30");
+    } catch(e) {}
+    // v10:球員影響力(名字補自名冊 r 欄位)與聯賽天氣進球比
+    try {
+      for (const tid in PL) { const t=T["#"+tid]; const r=(t&&t.r)||[]; const nmOf={}; r.forEach(a=>{ nmOf[String(a[0])]=a[1]; });
+        for (const pid in PL[tid]) if(!PL[tid][pid].nm) PL[tid][pid].nm=nmOf[pid]||PREV_NM[pid]||""; }
+      finishXI(T);
+      const W=WX[lg]; if (W && W.wet.n>=15 && W.dry.n>=15) out.leagues[lg].wx={ wet:+(W.wet.g/W.wet.n).toFixed(2), dry:+(W.dry.g/W.dry.n).toFixed(2), n:[Math.round(W.wet.n),Math.round(W.dry.n)] };
+      for (const k in PL) delete PL[k]; for (const k in TT) delete TT[k];
     } catch(e) {}
     out.leagues[lg].done = 1;
     save(out, lg);                       // ← checkpoint:此聯賽完成即存檔+推送
