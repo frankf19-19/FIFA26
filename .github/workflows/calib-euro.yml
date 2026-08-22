@@ -17,7 +17,7 @@ jobs:
         run: |
           git config user.name  "calib-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add calib.json
+          git add calib.json matches.json
           git diff --cached --quiet || git commit -m "daily euro calibration"
           # 執行期間若 repo 有新 commit,先同步再推(衝突時保留本次校準結果)
           git pull --rebase origin main || { git rebase --abort || true; git pull --no-rebase -X ours origin main; }
