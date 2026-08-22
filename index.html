@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e137";
+const BUILD = "e138";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1028,7 +1028,24 @@ let LEDGER_BASE=null;   // e133:帳本實測 H/D/A 基準率(樣本≥40 啟用)
 let GOAL_TUNE={_:1};    // e135:進球水位倍率(實際總進球 ÷ 預期 λh+λa),全域 + 分聯賽,帶收縮
 let GD_SCALE={_:1};     // e135:淨勝差尺度(實際淨勝球對預期 λh−λa 的回歸斜率),>1 = 強弱差被壓扁
 let SCORE_TUNE_N=0;
-let PROC_W=0.06, PROC_N=0;   // e137:過程體質權重(先驗 0.06,依帳本回歸自動學習,範圍 0~0.25)
+let PROC_W=0.06, PROC_N=0;
+let PL_W=0.5, PL_N=0;        // e138:球員缺陣影響力權重(淨勝球→λ 的換算,先驗 0.5,依帳本回歸學習,範圍 0~1.2)
+let WX_TODAY={};             // e138:今日各場天氣(hid|aid → {c,t}),由賽程解析
+/* e138:學來的球員缺陣影響 —— 雲端「有他/沒他」淨勝球差(pi)對上傷停名單;對不上的球員退回通用折扣 */
+function injLearned(teamName, t){
+  const k=norm(teamName);
+  let lst=INJURIES[k];
+  if(!lst){ let best=null; for(const kk in INJURIES){ if(kk.length>=4&&wordHit(k,kk)&&(!best||kk.length>best.length)) best=kk; } if(best) lst=INJURIES[best]; }
+  if(!lst||!lst.length) return {imp:0, generic:1, names:[]};
+  const pi=(t&&t.pi)||[]; const byN={}; pi.forEach(a=>{ if(a[1]) byN[norm(a[1])]=a; });
+  let imp=0, outs=0, doubts=0; const names=[];
+  lst.forEach(x=>{ const nk=norm(x.name); let hit=byN[nk];
+    if(!hit){ const last=nk.split(" ").slice(-1)[0]; if(last&&last.length>=4){ const c=Object.keys(byN).filter(n=>n.split(" ").includes(last)); if(c.length===1) hit=byN[c[0]]; } }
+    if(hit){ const v=-Math.max(0,+hit[2])*(x.out?1:0.4); imp+=v; if(v<0) names.push(`${hit[1]} −${(-v).toFixed(2)}`); }   // 只採「在場時球隊更好」的球員(缺陣=損失);在場反而更差的球員,缺陣不獎勵
+    else { if(x.out) outs++; else doubts++; } });
+  const generic=Math.max(0.85, 1 - 0.035*Math.min(outs,4) - 0.012*Math.min(doubts,4));
+  return {imp:Math.max(-2,imp), generic, names};
+}   // e137:過程體質權重(先驗 0.06,依帳本回歸自動學習,範圍 0~0.25)
 /* e137:球隊過程體質 —— 領先守成率、落後不敗率、下半場淨進球、紅牌率,相對聯賽平均 → 分數 -1~+1 */
 function procScore(t,lg){
   try{ const q=t&&t.pr; if(!q||!(+q.n>=8)) return null;
@@ -1107,6 +1124,12 @@ function computeTuning(){
         const slope=xx>0?xy/xx:0, used=pw/P.length;
         // 殘差對 prs 的斜率 ≈ 「每單位過程分差還缺多少淨勝球」;λ 端換算約 ÷(λh+λa)/2 ≈ ÷1.4
         PROC_W=Math.max(0,Math.min(0.25, used + (slope/1.4)*P.length/(P.length+80) )); } }
+    // e138:球員缺陣權重學習 —— 賽前存的 pls(缺陣影響差)與殘差回歸
+    { const P=R.filter(s=>s.pred.pls!=null&&Math.abs(+s.pred.pls)>0.05); PL_N=P.length;
+      if(P.length>=25){ let xy=0,xx=0,pw=0;
+        P.forEach(s=>{ const x=+s.pred.pls, res=(s.hs-s.as)-(+s.pred.lh-+s.pred.la); xy+=x*res; xx+=x*x; pw+=(+s.pred.plw||0.5); });
+        const slope=xx>0?xy/xx:0, used=pw/P.length;
+        PL_W=Math.max(0,Math.min(1.2, used + (slope/1.4)*P.length/(P.length+60) )); } }
     const byLg={}; R.forEach(s=>{ const lg=(typeof lgOfRec==="function")?lgOfRec(s):s.lg; if(lg&&lg!=="?") (byLg[lg]=byLg[lg]||[]).push(s); });
     for(const lg in byLg){ const f=fit(byLg[lg]); if(f){ GOAL_TUNE[lg]=+(0.5*f.g+0.5*GOAL_TUNE._).toFixed(3); GD_SCALE[lg]=+(0.5*f.s+0.5*GD_SCALE._).toFixed(3); } }
   }
@@ -1512,7 +1535,20 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
     lh=lh*(1-wS)+Math.max(.2,Math.min(lh2,4.2))*wS;
     la=la*(1-wS)+Math.max(.2,Math.min(la2,4.2))*wS;
   }
-  lh*=injAdj(homeName); la*=injAdj(awayName);   // 傷兵折扣:主力缺陣自動下修預期進球
+  // e138:傷停 → 學來的個別球員影響(淨勝球/場 × 學習權重)+ 對不上的球員用通用折扣
+  let _pls=0, _plc=null;
+  { const ih=injLearned(homeName,_ctH), ia=injLearned(awayName,_ctA);
+    lh*=ih.generic; la*=ia.generic;
+    _pls=+(ih.imp-ia.imp).toFixed(3);
+    if(ih.imp<0) lh*=Math.exp(PL_W*ih.imp/2);   // 缺陣損失一半落在自家進攻
+    if(ia.imp<0) la*=Math.exp(PL_W*ia.imp/2);
+    if(ih.imp<0) la*=Math.exp(-PL_W*ih.imp/2);  // 另一半落在自家防守(對手多進)
+    if(ia.imp<0) lh*=Math.exp(-PL_W*ia.imp/2);
+    if(ih.names.length||ia.names.length) _plc={h:ih.names,a:ia.names}; }
+  // e138:天氣 —— 該聯賽雨天/乾天場均進球比(雲端學來),今日有雨才套,±6% 封頂
+  let _wxf=1, _wxc=null;
+  { const wx=WX_TODAY[String(hid)+"|"+String(aid)]; const W=cl&&cl.wx;
+    if(wx&&wx.c){ _wxc=wx; if(W&&W.wet&&W.dry&&/rain|shower|storm|snow|drizzle|sleet/i.test(wx.c)){ _wxf=Math.max(0.94,Math.min(1.06,W.wet/W.dry)); lh*=_wxf; la*=_wxf; } } }
   lh*=restAdj(homeName); la*=restAdj(awayName); // 賽程疲勞:三天內連戰 -4%,休整逾週 +1%
   // e137:過程體質(雲端逐場事件學來的):守得住領先、追得回落後、下半場更強的隊 → 預期進球微調,權重由帳本回歸學習
   let _prc=null, _prs=0;
@@ -1576,7 +1612,7 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
   const pick = predOut==="H" ? homeName : predOut==="A" ? awayName : "和局";
   return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,conf,pick,mk:!!mkt,
-          lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr,tier:_tierN,prc:_prc,prs:+_prs.toFixed(3),pw:PROC_W};
+          lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr,tier:_tierN,prc:_prc,prs:+_prs.toFixed(3),pw:PROC_W,plc:_plc,pls:_pls,plw:PL_W,wx:_wxc,wxf:+_wxf.toFixed(3)};
 }
 /* 詳細分析:逐項列出模型依據(無資料的項目自動略過,不編造) */
 function analysisRows(hn,an,p,lg,hid,aid){
@@ -1636,6 +1672,8 @@ function analysisRows(hn,an,p,lg,hid,aid){
   if(p.eu) rows.push(["歐戰夾縫",`${p.eu.h?`${hz} ${p.eu.h.d} 天前踢${p.eu.h.c}`:""}${p.eu.h&&p.eu.a?" · ":""}${p.eu.a?`${az} ${p.eu.a.d} 天前踢${p.eu.a.c}`:""}(輪換疲勞 -3%)`]);
   if(p.mv) rows.push(["動機情境",`${p.mv.h?`${hz}:${p.mv.h.t}`:""}${p.mv.h&&p.mv.a?" · ":""}${p.mv.a?`${az}:${p.mv.a.t}`:""}(賽季後段效應)`]);
   if(p.rest) rows.push(["休息日",`${hz} ${p.rest.h} 天 · ${az} ${p.rest.a} 天(密集賽程 ±3% 內微調)`]);
+  if(p.plc) rows.push(["缺陣影響",`${hz}:${p.plc.h.length?p.plc.h.join("、"):"—"} ｜ ${az}:${p.plc.a.length?p.plc.a.join("、"):"—"}(數字=該球員在場時球隊每場多贏幾球,由雲端先發紀錄學來;權重 ${p.plw.toFixed(2)})`]);
+  if(p.wx) rows.push(["天氣",`${p.wx.c||""}${p.wx.t!=null?" "+p.wx.t+"°":""}${p.wxf!==1?`(雨天進球比 ×${p.wxf},該聯賽實測)`:"(無需調整)"}`]);
   if(p.prc&&(p.prc.h||p.prc.a)){ const f=q=>q?`守成 ${q.hold!=null?(q.hold*100).toFixed(0)+"%":"—"} · 追回 ${q.cb!=null?(q.cb*100).toFixed(0)+"%":"—"} · 下半場 ${q.h2>=0?"+":""}${q.h2}`:"—";
     rows.push(["過程體質",`${hz} ${f(p.prc.h)} ｜ ${az} ${f(p.prc.a)}(逐場事件學來,體質差 ${p.prs>=0?"+":""}${p.prs},權重 ${p.pw.toFixed(2)})`]); }
   if(p.sq&&p.sq.gk) rows.push(["守門對比", p.sq.gk.t==="svr"
@@ -2181,7 +2219,7 @@ function renderTodaySection(){
           try{ const sc0=scGet(); const ex0=sc0[g.id];
             if(!ex0 || (ex0.locked && ex0.hs==null)){        // 賽前:滾動更新(吸收陣容/名單變化);已開賽或已評分:碰都不碰
               sc0[g.id]={ ...(ex0||{}),
-                pred:{H:pp.H,D:pp.D,A:pp.A,si:pp.si,sj:pp.sj,conf:pp.conf,pick:pp.pick,lh:pp.lh,la:pp.la,prs:pp.prs,pw:pp.pw},
+                pred:{H:pp.H,D:pp.D,A:pp.A,si:pp.si,sj:pp.sj,conf:pp.conf,pick:pp.pick,lh:pp.lh,la:pp.la,prs:pp.prs,pw:pp.pw,pls:pp.pls,plw:pp.plw},
                 odds:(g.odds||(ex0&&ex0.odds)||null),
                 odds0:((ex0&&ex0.odds0)||g.odds||null),
                 dq:pp.dq, t:(ex0&&ex0.t)||Date.now(), tU:Date.now(), v:2, locked:1, lg:l.id };
@@ -2686,6 +2724,7 @@ function parseEvents(data){
       time:new Date(ev.date).toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false}),
       detail:st.shortDetail||"",
       venue:(c.venue&&(c.venue.fullName||c.venue.displayName))||"",
+      wx:(function(){ try{ const w=c.weather||ev.weather; if(!w) return null; const o={}; if(w.displayValue) o.c=String(w.displayValue); if(w.temperature!=null) o.t=+w.temperature; if(o.c||o.t!=null){ WX_TODAY[String(home.team.id)+"|"+String(away.team.id)]=o; return o; } return null; }catch(e){ return null; } })(),
       odds:(function(){try{
         const o=(c.odds||[])[0]; if(!o)return null;
         const ml=x=>x&&x.moneyLine!=null?+x.moneyLine:null;
@@ -3022,6 +3061,7 @@ function renderInsights(){
   if(Math.abs(HA_TUNE)>0.005) tune.push(`主場係數 ${(0.24+HA_TUNE).toFixed(2)}(基準 0.24)`);
   const fc=Object.keys(FORM_CACHE).length;
   if(fc) tune.push(`近況因子已涵蓋 ${fc} 隊(近5場戰績納入評級)`);
+  tune.push(PL_N>=25?`缺陣影響權重 ${PL_W.toFixed(2)}(先驗 0.5,樣本 ${PL_N} 場自動回歸)`:`缺陣影響權重 ${PL_W.toFixed(2)}(先驗;有缺陣紀錄的樣本 ${PL_N}/25 累積中)`);
   tune.push(PROC_N>=30?`過程體質權重 ${PROC_W.toFixed(3)}(先驗 0.06,樣本 ${PROC_N} 場自動回歸)`:`過程體質權重 ${PROC_W.toFixed(2)}(先驗;樣本 ${PROC_N}/30 累積中)`);
   if(SCORE_TUNE_N>=30) tune.push(`比分學習:進球水位 ×${GOAL_TUNE._.toFixed(2)} · 淨勝差尺度 ×${GD_SCALE._.toFixed(2)}(樣本 ${SCORE_TUNE_N} 場,分聯賽另有微調)`);
   else tune.push(`比分學習:樣本 ${SCORE_TUNE_N}/30 場,累積中(僅計入 e135 起鎖定的預測)`);
