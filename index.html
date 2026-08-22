@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e128";
+const BUILD = "e129";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1325,13 +1325,29 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   const COEF=0.030, BASE=1.32, HA=(cl&&cl.ha!=null)?cl.ha:(0.24+HA_TUNE); // 主場優勢:雲端校準優先,否則本機自調
   let lh=BASE*Math.exp(COEF*d/2 + HA/2), la=BASE*Math.exp(-COEF*d/2 - HA/2);
   // 主客分拆 + 休息日(雲端 v8;主隊採主場戰績、客隊採客場戰績)
-  let _rest=null, _tdr=null, _psH=null, _psA=null;
+  let _rest=null, _tdr=null, _psH=null, _psA=null, _tierN=null;
   try{
     const CT=(window.CLOUD&&window.CLOUD.leagues)||null;
-    const pickT=(tid)=>{ if(!CT||tid==null) return null; let t=null;
-      const s=P=>{ if(P&&P.teams&&P.teams["#"+tid]) t=P.teams["#"+tid]; };
-      s(CT[lg]); if(!t){ for(const x in CT){ s(CT[x]); if(t) break; } } return t; };
+    const TIER={ "eng.1":1,"esp.1":1,"ita.1":1,"ger.1":1,"fra.1":1,"jpn.1":1,"usa.1":1,"sco.1":1,
+                 "uefa.champions":1,"uefa.europa":1, "eng.2":2 };
+    const pickT=(tid)=>{ if(!CT||tid==null) return null; let t=null, src=null;
+      const s=(P,key)=>{ if(!t&&P&&P.teams&&P.teams["#"+tid]){ t=P.teams["#"+tid]; src=key; } };
+      s(CT[lg],lg); if(!t){ for(const x in CT){ s(CT[x],x); if(t) break; } }
+      if(!t) return null;
+      // 級距換算:資料來自較低級別(升班馬)→ 攻擊打 82 折、失球加 18%;來自較高級別(降班馬)→ 反向
+      const gT=TIER[lg], sT=TIER[src];
+      if(gT!=null&&sT!=null&&sT!==gT&&src!==lg){
+        const f=(sT>gT)?0.82:1.18;                            // sT>gT = 低級別資料用於高級別比賽
+        const t2={...t};
+        ["gf","hgf","agf"].forEach(k=>{ if(t2[k]!=null) t2[k]=+(t2[k]*f).toFixed(2); });
+        ["ga","hga","aga"].forEach(k=>{ if(t2[k]!=null) t2[k]=+(t2[k]/f).toFixed(2); });
+        if(t2.xg) t2.xg={...t2.xg, xf:+(t2.xg.xf*f).toFixed(3), xa:+(t2.xg.xa/f).toFixed(3)};
+        t2._tier={from:src,dir:(sT>gT?"升班":"降班")};
+        return t2;
+      }
+      return t; };
     const th=pickT(hid), ta=pickT(aid);
+    if((th&&th._tier)||(ta&&ta._tier)) _tierN={h:th&&th._tier,a:ta&&ta._tier};
     if(th&&ta&&+th.gp>=10&&+ta.gp>=10&&th.dr!=null&&ta.dr!=null)
       _tdr=100*((+th.dr)+(+ta.dr))/((+th.gp)+(+ta.gp));       // 兩隊合併和局率(隊層體質)
     if(th&&ta){ _psH=th.ps!=null?+th.ps:null; _psA=ta.ps!=null?+ta.ps:null; }  // 控球風格(顯示)
@@ -1480,7 +1496,7 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
   const pick = predOut==="H" ? homeName : predOut==="A" ? awayName : "和局";
   return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,conf,pick,mk:!!mkt,
-          lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr};
+          lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr,tier:_tierN};
 }
 /* 詳細分析:逐項列出模型依據(無資料的項目自動略過,不編造) */
 function analysisRows(hn,an,p,lg,hid,aid){
@@ -1528,6 +1544,11 @@ function analysisRows(hn,an,p,lg,hid,aid){
     : `<span style="color:var(--muted);font-size:11px">(全站通用基準值,尚未依此聯賽校準)</span>`)]);
   if(p.mk) rows.push(["市場賠率", `已融合 ESPN 賠率(模型 ${Math.round((1-MKT_W)*100)}% + 市場 ${Math.round(MKT_W*100)}%,權重依實測表現自動調整)`]);
   else if(DRAW_NUDGE>0) rows.push(["和局補正", `+${DRAW_NUDGE.toFixed(1)}%(歷史顯示模型低估和局)`]);
+  if(p.tier){ const tt=x=>x?`${zhName(x===p.tier.h?hz:az)||""}`:"";
+    const parts2=[];
+    if(p.tier.h) parts2.push(`${hz}(${p.tier.h.dir}馬,資料來自${p.tier.h.from==="eng.2"?"英冠":p.tier.h.from},已依級距換算)`);
+    if(p.tier.a) parts2.push(`${az}(${p.tier.a.dir}馬,資料來自${p.tier.a.from==="eng.2"?"英冠":p.tier.a.from},已依級距換算)`);
+    rows.push(["級距修正",parts2.join(" · ")+"(低級別戰績攻擊×0.82、防守×1.18)"]); }
   if(p.ps){ const st3=v=>v>=57?"控球主導":(v<=43?"防守反擊":"均衡");
     rows.push(["球風對比",`場均控球 ${hz} ${p.ps.h}%(${st3(p.ps.h)}) · ${az} ${p.ps.a}%(${st3(p.ps.a)})`]); }
   if(p.tdr!=null) rows.push(["和局體質",`兩隊近182天合併和局率 ${p.tdr.toFixed(0)}%(已納入和局錨定)`]);
@@ -3601,7 +3622,7 @@ function hideTeam(){
     if(j&&j.leagues){ window.CLOUD=j;
       try{ localStorage.setItem("euroCalibCache", JSON.stringify(j)); }catch(e){}
       const el=document.getElementById("cloudTag");
-      if(el) el.textContent="☁ 雲端校準("+(j.days||28)+"天)· 更新 "+String(j.updated||"").replace("T"," ").slice(5,16)+" · 樣本 "+(j.n||0)+" 場";
+      if(el) el.textContent="☁ 雲端校準("+(j.days||28)+"天)· 更新 "+String(j.updated||"").replace("T"," ").slice(5,16)+" · 樣本 "+Math.round(+j.n||0)+" 場";
       return true;
     }
     return false;
