@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e129";
+const BUILD = "e130";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1185,6 +1185,19 @@ function poisson(k,l){let e=Math.exp(-l),f=1;for(let i=2;i<=k;i++)f*=i;return e*
 /* 各聯賽獨立的積分榜快取(原本只存「目前聯賽」一份,導致總覽上其他聯賽全部無資料) */
 let STAND_BY_LG={}, LGAVG_BY_LG={}, PREV_BY_LG={};
 /* 有效戰績:本季不足 2 場時,回退上季最終積分榜(標記 prior) */
+const TIER_MAP={ "eng.1":1,"esp.1":1,"ita.1":1,"ger.1":1,"fra.1":1,"jpn.1":1,"usa.1":1,"sco.1":1,
+  "uefa.champions":1,"uefa.europa":1, "eng.2":2 };
+function tierAdj(t,srcLg,gameLg){                            // 跨級距資料換匯:低級別攻擊×0.82、失球÷0.82
+  const gT=TIER_MAP[gameLg], sT=TIER_MAP[srcLg];
+  if(gT==null||sT==null||sT===gT||srcLg===gameLg) return t;
+  const f=(sT>gT)?0.82:1.18;
+  const t2={...t};
+  ["gf","hgf","agf"].forEach(k=>{ if(t2[k]!=null) t2[k]=+(t2[k]*f).toFixed(2); });
+  ["ga","hga","aga"].forEach(k=>{ if(t2[k]!=null) t2[k]=+(t2[k]/f).toFixed(2); });
+  if(t2.xg) t2.xg={...t2.xg, xf:+(t2.xg.xf*f).toFixed(3), xa:+(t2.xg.xa/f).toFixed(3)};
+  t2._tier={from:srcLg, dir:(sT>gT?"升班":"降班")};
+  return t2;
+}
 function standEff(name,lg,tid){
   const s=standOf(name,lg,tid);
   if(s&&+s.gp>=2) return {s,prior:false};
@@ -1194,9 +1207,9 @@ function standEff(name,lg,tid){
   if(C){
     const scan=P=>{ if(!P||!P.teams) return null; const T=P.teams;
       return (tid!=null&&T["#"+tid])||T[String(name).toLowerCase()]||null; };
-    let ct=scan(C[lg]);
-    if(!ct){ for(const x in C){ if(x===lg) continue; ct=scan(C[x]); if(ct) break; } }
-    if(ct&&+ct.gp>=6) return {s:ct,prior:true,cloud:1};
+    let ct=scan(C[lg]), ctSrc=lg;
+    if(!ct){ for(const x in C){ if(x===lg) continue; ct=scan(C[x]); if(ct){ ctSrc=x; break; } } }
+    if(ct&&+ct.gp>=6) return {s:tierAdj(ct,ctSrc,lg),prior:true,cloud:1};
   }
   if(lg&&PREV_BY_LG[lg]){
     const P=PREV_BY_LG[lg];
@@ -1208,7 +1221,7 @@ function standEff(name,lg,tid){
     if(x===lg) continue;
     const P=PREV_BY_LG[x];
     const p3=(tid!=null&&P["#"+tid])||P[k]||null;
-    if(p3&&+p3.gp>=10) return {s:p3,prior:true};
+    if(p3&&+p3.gp>=10) return {s:tierAdj(p3,x,lg),prior:true};
   }
   return {s,prior:false};
 }
@@ -1328,24 +1341,10 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
   let _rest=null, _tdr=null, _psH=null, _psA=null, _tierN=null;
   try{
     const CT=(window.CLOUD&&window.CLOUD.leagues)||null;
-    const TIER={ "eng.1":1,"esp.1":1,"ita.1":1,"ger.1":1,"fra.1":1,"jpn.1":1,"usa.1":1,"sco.1":1,
-                 "uefa.champions":1,"uefa.europa":1, "eng.2":2 };
     const pickT=(tid)=>{ if(!CT||tid==null) return null; let t=null, src=null;
       const s=(P,key)=>{ if(!t&&P&&P.teams&&P.teams["#"+tid]){ t=P.teams["#"+tid]; src=key; } };
       s(CT[lg],lg); if(!t){ for(const x in CT){ s(CT[x],x); if(t) break; } }
-      if(!t) return null;
-      // 級距換算:資料來自較低級別(升班馬)→ 攻擊打 82 折、失球加 18%;來自較高級別(降班馬)→ 反向
-      const gT=TIER[lg], sT=TIER[src];
-      if(gT!=null&&sT!=null&&sT!==gT&&src!==lg){
-        const f=(sT>gT)?0.82:1.18;                            // sT>gT = 低級別資料用於高級別比賽
-        const t2={...t};
-        ["gf","hgf","agf"].forEach(k=>{ if(t2[k]!=null) t2[k]=+(t2[k]*f).toFixed(2); });
-        ["ga","hga","aga"].forEach(k=>{ if(t2[k]!=null) t2[k]=+(t2[k]/f).toFixed(2); });
-        if(t2.xg) t2.xg={...t2.xg, xf:+(t2.xg.xf*f).toFixed(3), xa:+(t2.xg.xa/f).toFixed(3)};
-        t2._tier={from:src,dir:(sT>gT?"升班":"降班")};
-        return t2;
-      }
-      return t; };
+      return t?tierAdj(t,src,lg):null; };
     const th=pickT(hid), ta=pickT(aid);
     if((th&&th._tier)||(ta&&ta._tier)) _tierN={h:th&&th._tier,a:ta&&ta._tier};
     if(th&&ta&&+th.gp>=10&&+ta.gp>=10&&th.dr!=null&&ta.dr!=null)
@@ -1414,8 +1413,9 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
     if(ma){ la*=ma.f; _mv=_mv||{}; _mv.a=ma; }
   }catch(e){}
   // 陣容火力微調:雲端球員數據,兩隊皆足才啟用,上限 ±6%(輔助訊號)
+  // 跨級距對戰時停用:不同級別刷的球員數據不可直接比較
   let _sq=null;
-  { const qh=cloudSquad(lg,hid), qa=cloudSquad(lg,aid);
+  if(!_tierN){ const qh=cloudSquad(lg,hid), qa=cloudSquad(lg,aid);
     if(qh&&qa){ const f=Math.max(0.94,Math.min(1.06,Math.pow((qh.atk+0.5)/(qa.atk+0.5),0.25)));
       lh*=f; la/=f; _sq={h:qh.atk,a:qa.atk,f:+f.toFixed(3)};
       // 守門員零封率:好門將壓低「對方」的預期進球(上限 ±4%)
