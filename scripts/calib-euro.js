@@ -1,4 +1,4 @@
-/* 歐陸足球雲端校準 v7:可中斷續跑(checkpoint)。
+/* 歐陸足球雲端校準 v8:可中斷續跑(checkpoint)+ 逐場賽果帳本 matches.json(回測用)。
    每完成一個聯賽 → 立刻寫入 calib.json 並 commit+push;
    中斷重跑時,跳過「當天已完成」的聯賽,從斷點接續。 */
 const { execSync } = require("child_process");
@@ -14,12 +14,21 @@ const flatWalk = d => { const f={}; (function w(o){ if(!o||typeof o!=="object")r
   if(k&&v!=null&&(typeof v==="string"||typeof v==="number")&&f[k]==null)f[k]=v;
   for(const q in o)w(o[q]); })(d); return f; };
 
+/* v8:逐場賽果帳本(以 ESPN event id 為鍵,跨日累積、永不刪除 → 歷史會越來越長,供離線回測) */
+let MATCHES = {};
+try { MATCHES = JSON.parse(fs.readFileSync("matches.json","utf8")) || {}; } catch(e) { MATCHES = {}; }
+function saveMatches(){
+  const keys = Object.keys(MATCHES).sort((a,b)=>(MATCHES[a].d||"").localeCompare(MATCHES[b].d||""));
+  const o={}; keys.forEach(k=>o[k]=MATCHES[k]);
+  fs.writeFileSync("matches.json", JSON.stringify(o));
+}
 function save(out, lg){
   out.updated = new Date().toISOString();
   fs.writeFileSync("calib.json", JSON.stringify(out));
+  try { saveMatches(); } catch(e) {}
   if (process.env.GIT_PUSH === "1") {
     try {
-      execSync(`git add calib.json && (git diff --cached --quiet || git commit -m "calib checkpoint: ${lg}")`, {stdio:"inherit"});
+      execSync(`git add calib.json matches.json && (git diff --cached --quiet || git commit -m "calib checkpoint: ${lg}")`, {stdio:"inherit"});
       execSync(`git pull --rebase origin main || (git rebase --abort; git pull --no-rebase -X ours origin main)`, {stdio:"inherit", shell:"/bin/bash"});
       execSync(`git push`, {stdio:"inherit"});
     } catch(e) { console.log("push 暫時失敗(資料已寫入,下個 checkpoint 再試):", String(e).slice(0,80)); }
@@ -61,6 +70,17 @@ const SOT_G={}, SOT_S={}, SOT_C={};
             if(!H||!A) continue;
             const hs=+H.score, as=+A.score;
             if(isNaN(hs)||isNaN(as)) continue;
+            // v8:逐場帳本(不覆蓋已存在且已含射正的紀錄;賠率若 ESPN 有提供則一併存)
+            try {
+              const od=(c.odds||[])[0]; let ol=null;
+              if (od) { const ml=x=>x&&x.moneyLine!=null?+x.moneyLine:null;
+                const mh=ml(od.homeTeamOdds), ma=ml(od.awayTeamOdds), md=ml(od.drawOdds);
+                if (mh!=null&&ma!=null&&md!=null) ol=[mh,md,ma]; }
+              const prevM=MATCHES[ev.id]||{};
+              MATCHES[ev.id]={ lg, d:(ev.date||"").slice(0,10), hid:String((H.team||{}).id||""), hn:(H.team||{}).displayName||"",
+                aid:String((A.team||{}).id||""), an:(A.team||{}).displayName||"", hs, as,
+                ...(prevM.sot?{sot:prevM.sot}:{}), ...(prevM.ml?{ml:prevM.ml}:{}), ...(ol?{ml:ol}:{}) };
+            } catch(e) {}
             { const __ag=Math.max(0,(Date.now()-(Date.parse(ev.date)||Date.now()))/86400000);
               const __wl=Math.exp(-Math.LN2*__ag/60);
               n+=__wl; goals+=(hs+as)*__wl;
@@ -70,8 +90,17 @@ const SOT_G={}, SOT_S={}, SOT_C={};
             const __w=Math.exp(-Math.LN2*__age/60);
             add((H.team||{}).id,(H.team||{}).displayName,hs,as,true, ev.date||"", __w);
             add((A.team||{}).id,(A.team||{}).displayName,as,hs,false,ev.date||"", __w);
-            // 射正數(自產 xG 用):抓該場 summary 的 shotsOnTarget
-            try {
+            // 射正數(自產 xG 用):抓該場 summary 的 shotsOnTarget(v8:帳本已有射正 → 直接沿用,省請求)
+            const __cached=MATCHES[ev.id]&&MATCHES[ev.id].sot;
+            if (__cached) { const [sh2,sa2,ch,ca2,ph,pa]=__cached;
+              const acc0=(id,f,a2,ps,cf,cA)=>{ const o=T["#"+id]; if(o){
+                o.stn=(o.stn||0)+__w; o.stf=(o.stf||0)+f*__w; o.sta=(o.sta||0)+a2*__w;
+                if(ps!=null){ o.psn=(o.psn||0)+1; o.psf=(o.psf||0)+ps; }
+                if(cf!=null){ o.crf=(o.crf||0)+cf; o.cra=(o.cra||0)+(cA||0); } } };
+              acc0((H.team||{}).id,sh2,sa2,ph,ch,ca2); acc0((A.team||{}).id,sa2,sh2,pa,ca2,ch);
+              SOT_G[lg]=(SOT_G[lg]||0)+hs+as; SOT_S[lg]=(SOT_S[lg]||0)+sh2+sa2;
+              if(ch!=null&&ca2!=null) SOT_C[lg]=(SOT_C[lg]||0)+ch+ca2; }
+            else try {
               const sr2=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/summary?event=${ev.id}`);
               if (sr2.ok) {
                 const sj2=await sr2.json();
@@ -83,10 +112,12 @@ const SOT_G={}, SOT_S={}, SOT_C={};
                   if (s0!=null&&s1!=null) {
                     const hFirst = id0===String((H.team||{}).id);
                     const sh2=hFirst?s0:s1, sa2=hFirst?s1:s0;
+
                     const p0=gv(bt[0],"possessionPct"), p1=gv(bt[1],"possessionPct");
                     const c0=gv(bt[0],"wonCorners"),   c1=gv(bt[1],"wonCorners");
                     const ph=hFirst?p0:p1, pa=hFirst?p1:p0;
                     const ch=hFirst?c0:c1, ca2=hFirst?c1:c0;
+                    try { if (MATCHES[ev.id]) MATCHES[ev.id].sot=[sh2,sa2,ch??null,ca2??null,ph??null,pa??null]; } catch(e) {}
                     const acc=(id,f,a2,ps,cf,cA)=>{ const o=T["#"+id]; if(o){
                       o.stn=(o.stn||0)+__w; o.stf=(o.stf||0)+f*__w; o.sta=(o.sta||0)+a2*__w;
                       if(ps!=null&&!isNaN(ps)){ o.psn=(o.psn||0)+1; o.psf=(o.psf||0)+ps; }
