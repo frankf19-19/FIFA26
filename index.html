@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e140";
+const BUILD = "e141";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2219,7 +2219,7 @@ function renderTodaySection(){
           const __k2=Date.parse(g.date)||0;
           if(__k2>0&&Date.now()>=__k2&&!snap0.fz){
             try{ const sc0=scGet();
-              if(sc0[g.id]&&sc0[g.id].pred&&!sc0[g.id].fz){ sc0[g.id].fz={...sc0[g.id].pred}; sc0[g.id].fzT=Date.now(); scSet(sc0); } }catch(e){}
+              if(sc0[g.id]&&sc0[g.id].pred&&!sc0[g.id].fz){ sc0[g.id].fz={...sc0[g.id].pred}; sc0[g.id].fzT=sc0[g.id].tU||sc0[g.id].t||Date.now(); scSet(sc0); } }catch(e){}   // e141:鎖定時間顯示最後一次賽前預測時間
           }
           return true;
         }
