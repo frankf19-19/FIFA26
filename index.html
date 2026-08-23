@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e144";
+const BUILD = "e145";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1668,6 +1668,21 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
   return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,conf,pick,mk:!!mkt,pure:_pure,mkp:_mkp,mw:_mw,
           lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr,tier:_tierN,prc:_prc,prs:+_prs.toFixed(3),pw:PROC_W,plc:_plc,pls:_pls,plw:PL_W,wx:_wxc,wxf:+_wxf.toFixed(3)};
 }
+/* e145:列表上的一行比分理由(未完賽顯示;完賽由檢討行取代) */
+function scoreReasonLine(p,hz,az){
+  try{
+    if(p==null||p.lh==null||p.la==null) return "";
+    const tab=scoreTable(p.lh,p.la);
+    const kOf=(i,j)=>i>j?"H":i===j?"D":"A";
+    const pkK=p.H>=p.A&&p.H>=p.D?"H":(p.A>=p.D?"A":"D");
+    const pSel=(tab.find(x=>x[0]===p.si&&x[1]===p.sj)||[0,0,0])[2];
+    const alt=tab.filter(x=>kOf(x[0],x[1])===pkK&&!(x[0]===p.si&&x[1]===p.sj))[0];
+    const dirZh=pkK==="H"?`${hz} 勝`:pkK==="A"?`${az} 勝`:"和局";
+    const tot=(p.lh+p.la).toFixed(1);
+    const lvl=tot>=3.1?"對攻":tot<=2.3?"悶戰":"中等節奏";
+    return `為何 ${p.si}-${p.sj}:看好 ${dirZh},預期進球 ${hz} ${p.lh}、${az} ${p.la}(${lvl});${dirZh}比分中 ${p.si}-${p.sj} 機率最高 ${pSel.toFixed(1)}%${alt?`,次選 ${alt[0]}-${alt[1]} ${alt[2].toFixed(1)}%`:""}${p.mk?" · 已含市場賠率":""} —— 點「詳細分析」看完整依據`;
+  }catch(e){ return ""; }
+}
 /* 詳細分析:逐項列出模型依據(無資料的項目自動略過,不編造) */
 function analysisRows(hn,an,p,lg,hid,aid){
   if(lg){ const L0=LEAGUES.find(x=>x.id===lg); if(L0&&L0.stand) lg=L0.stand; }
@@ -2384,7 +2399,8 @@ function renderTodaySection(){
             return `<span class="tp-twsl" title="台灣運彩場中盤口${t.no?" · 場次 "+t.no:""}">運彩 ${t.odds?`${t.odds.a} / ${t.odds.d} / ${t.odds.h}`:"場中開盤"}</span>`;})()}
           <button class="an-btn" data-an="${g.id}">詳細分析 ▾</button>
         </div>
-        ${(()=>{ if(!done) return "";
+        ${(()=>{ if(!done){ const sr=scoreReasonLine(p,zhName(g.hn),zhName(g.an));   // e145:未完賽 → 顯示比分理由
+            return sr?`<div class="tg-rv" style="color:var(--muted)">💡 ${sr}</div>`:""; }
           const rv=(typeof makeReview==="function")?makeReview(g):null;
           if(!rv||!rv.text) return "";
           return `<div class="tg-rv ${rv.good?"ok":"bad"}">${rv.good?"✓":"✗"} ${rv.text}</div>`;
