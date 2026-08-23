@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e143";
+const BUILD = "e144";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1280,6 +1280,17 @@ function isoDate(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2
 
 /* ================= Poisson 預測 ================= */
 function poisson(k,l){let e=Math.exp(-l),f=1;for(let i=2;i<=k;i++)f*=i;return e*Math.pow(l,k)/f;}
+/* e144:給「比分依據」用 —— 依 λ 重建比分矩陣(與 predict 同一套 Poisson + Dixon-Coles),回傳排序後的比分機率 */
+function scoreTable(lh,la){
+  const RHO=-0.13;
+  const tau=(i,j)=>{ if(i===0&&j===0) return Math.max(0.01,1-lh*la*RHO); if(i===0&&j===1) return Math.max(0.01,1+lh*RHO);
+    if(i===1&&j===0) return Math.max(0.01,1+la*RHO); if(i===1&&j===1) return Math.max(0.01,1-RHO); return 1; };
+  const out=[]; let t=0;
+  for(let i=0;i<8;i++)for(let j=0;j<8;j++){ const p=poisson(i,lh)*poisson(j,la)*tau(i,j); t+=p; out.push([i,j,p]); }
+  out.forEach(x=>x[2]=x[2]/t*100);
+  out.sort((a,b)=>b[2]-a[2]);
+  return out;
+}
 /* 各聯賽獨立的積分榜快取(原本只存「目前聯賽」一份,導致總覽上其他聯賽全部無資料) */
 let STAND_BY_LG={}, LGAVG_BY_LG={}, PREV_BY_LG={};
 /* 有效戰績:本季不足 2 場時,回退上季最終積分榜(標記 prior) */
@@ -1725,6 +1736,25 @@ function analysisRows(hn,an,p,lg,hid,aid){
     : `零封率 ${hz} ${(p.sq.gk.h*100).toFixed(0)}% · ${az} ${(p.sq.gk.a*100).toFixed(0)}%(門將數據,±4% 內微調)`]);
   if(p.sq) rows.push(["陣容火力",`${hz} ${p.sq.h} · ${az} ${p.sq.a}(前5人每場進攻參與,球員數據,微調上限 ±6%)`]);
   rows.push(["預期進球", `${hz} ${p.lh} · ${az} ${p.la} → 最可能比分 ${hz} ${p.si} - ${p.sj} ${az}`]);
+  // e144:比分依據 —— 逐步交代這個比分怎麼來的,以及它的機率排名與誠實的不確定性
+  try{
+    const tab=scoreTable(p.lh,p.la);
+    const kOf=(i,j)=>i>j?"H":i===j?"D":"A";
+    const pkK=p.H>=p.A&&p.H>=p.D?"H":(p.A>=p.D?"A":"D");
+    const inPick=tab.filter(x=>kOf(x[0],x[1])===pkK);
+    const overall=tab.slice(0,3).map(x=>`${x[0]}-${x[1]}(${x[2].toFixed(1)}%)`).join("、");
+    const rankAll=tab.findIndex(x=>x[0]===p.si&&x[1]===p.sj)+1;
+    const pSel=(tab.find(x=>x[0]===p.si&&x[1]===p.sj)||[0,0,0])[2];
+    const alt=inPick.slice(0,3).filter(x=>!(x[0]===p.si&&x[1]===p.sj)).slice(0,2).map(x=>`${x[0]}-${x[1]} ${x[2].toFixed(1)}%`).join("、");
+    const tot=(p.lh+p.la).toFixed(1);
+    const dirZh=pkK==="H"?`${hz} 勝`:pkK==="A"?`${az} 勝`:"和局";
+    const why=[];
+    why.push(`①方向:模型看好 ${dirZh}(主 ${p.H}% / 和 ${p.D}% / 客 ${p.A}%),比分只從這個方向裡挑`);
+    why.push(`②水位:兩隊預期進球合計 ${tot} 球(${hz} ${p.lh}、${az} ${p.la},由聯賽場均、兩隊攻防、主場優勢${p.mk?"、市場賠率":""}${p.xg?"、射正 xG":""}算出),決定比分是悶戰還是對攻`);
+    why.push(`③挑選:在「${dirZh}」的所有比分裡,${p.si}-${p.sj} 機率最高(${pSel.toFixed(1)}%,全部比分中排第 ${rankAll})${alt?`;同方向次選 ${alt}`:""}`);
+    why.push(`④全場最可能:${overall} —— 提醒:單一比分本質是低機率事件,最高也只有 ~10%,方向與水位比精準比分可靠`);
+    rows.push(["比分依據", why.join("\n")]);
+  }catch(e){}
   const top=Math.max(p.H,p.D,p.A);
   const pickZh=p.pick==="和局"?"和局":zhName(p.pick);
   rows.push(["結論", `${pickZh} 機率最高(${top.toFixed(1)}%),信心 ${p.conf}${p.conf==="低"?"(勢均力敵,參考性較低)":""}`]);
@@ -2322,7 +2352,7 @@ function renderTodaySection(){
       const pickZh=p.pick==="和局"?"和局":zhName(p.pick);
       const pickSide=p.pick==="和局"?"":(p.pick===g.hn?"主":"客");
       const conf=p.conf==="高"?"var(--hit)":p.conf==="中"?"var(--gold)":"var(--muted)";
-      const ana=analysisRows(g.hn,g.an,p,l.id,g.hid,g.aid).map(r=>`<div class="an-row"><span class="an-k">${r[0]}</span><span class="an-v">${r[1]}</span></div>`).join("");
+      const ana=analysisRows(g.hn,g.an,p,l.id,g.hid,g.aid).map(r=>`<div class="an-row"><span class="an-k">${r[0]}</span><span class="an-v">${String(r[1]).split("\n").map((x,i)=>i?`<div style="margin-top:4px">${x}</div>`:x).join("")}</span></div>`).join("");
       return `<div class="tg-row ${rowCls}" data-gid="${g.id}" data-golg="${l.id}">
         <span class="tg-time">${g.time}</span>
         <span class="tg-team">${zhName(g.an)} <span class="ha aw">客</span></span>
