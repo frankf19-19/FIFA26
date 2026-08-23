@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/23 14:59 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/23 14:59";
+/* 由 news_engine.py 自動產生於 2026/08/23 15:26 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/23 15:26";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"New season, new haircut: Erling Haaland ditches iconic long hair for new season", d:"2026-08-23", team:"", link:"https://www.espn.com/soccer/story/_/id/49700150/man-city-erling-haaland-ditches-iconic-long-hair-premier-league-season"},
