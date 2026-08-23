@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e141";
+const BUILD = "e142";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1283,7 +1283,19 @@ function tierAdj(t,srcLg,gameLg){                            // 跨級距資料�
 }
 function standEff(name,lg,tid){
   const s=standOf(name,lg,tid);
-  if(s&&+s.gp>=2) return {s,prior:false};
+  if(s&&+s.gp>=10) return {s,prior:false};
+  // e142:本季 2~9 場 → 與先驗依場數混合(本季 gp/10,先驗 1-gp/10);開季前幾輪不再只看 2 場就定生死
+  if(s&&+s.gp>=2){
+    const pr=standEffPrior(name,lg,tid);
+    if(pr&&pr.s&&+pr.s.gp>0){ const w=+s.gp/10, P=pr.s, g=+s.gp, gp2=+P.gp;
+      const rf=w*(+s.gf/g)+(1-w)*(+P.gf/gp2), ra=w*(+s.ga/g)+(1-w)*(+P.ga/gp2);
+      const gpB=g+(1-w)*Math.min(gp2,20);                    // 有效場數:本季 + 先驗(上限 20)
+      return {s:{gp:gpB,gf:rf*gpB,ga:ra*gpB,_blend:1,_w:+w.toFixed(2)},prior:true,blend:1,cloud:pr.cloud||0}; }
+    return {s,prior:false};
+  }
+  return standEffPrior(name,lg,tid)||{s:null,prior:false};
+}
+function standEffPrior(name,lg,tid){
   const k=norm(name);
   // 雲端球隊攻防(近 182 天實戰紀錄,跨裝置一致、比上季榜更新鮮)
   const C=(window.CLOUD&&window.CLOUD.leagues)||null;
@@ -1306,7 +1318,7 @@ function standEff(name,lg,tid){
     const p3=(tid!=null&&P["#"+tid])||P[k]||null;
     if(p3&&+p3.gp>=10) return {s:tierAdj(p3,x,lg),prior:true};
   }
-  return {s,prior:false};
+  return null;   // e142:無先驗
 }
 function standOf(name,lg,tid){
   const k=norm(name);
@@ -1433,9 +1445,10 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
   let sh=_eh.s, sa=_ea.s; const _prior=(_eh.prior||_ea.prior);
   const _hasData=!!(sh&&sa&&+sh.gp>=2&&+sa.gp>=2);
   const d=(rh-ra)*(_hasData?0.6:1.0);   // e133:0.4→0.6
-  const COEF=0.030, HA=(cl&&cl.ha!=null)?cl.ha:(0.24+HA_TUNE); // 主場優勢:雲端校準優先,否則本機自調
+  const COEF=0.08, HA=(cl&&cl.ha!=null)?cl.ha:(0.24+HA_TUNE); // 主場優勢:雲端校準優先,否則本機自調
   const BASE=Math.max(1.1,Math.min(1.9,(cl&&cl.lgAvg)||(lg&&LGAVG_BY_LG[lg])||1.32)); // e133:進球水位依聯賽實際
-  let lh=BASE*Math.exp(COEF*d/2 + HA/2), la=BASE*Math.exp(-COEF*d/2 - HA/2);
+  const _cd=Math.max(-1.4,Math.min(1.4,COEF*d));   // e142:評級臂 0.03→0.08(9 分差 ≈ 1.5 倍強弱),上限 4 倍
+  let lh=BASE*Math.exp(_cd/2 + HA/2), la=BASE*Math.exp(-_cd/2 - HA/2);
   // 主客分拆 + 休息日(雲端 v8;主隊採主場戰績、客隊採客場戰績)
   let _rest=null, _tdr=null, _psH=null, _psA=null, _tierN=null;
   try{
@@ -1657,7 +1670,7 @@ function analysisRows(hn,an,p,lg,hid,aid){
   const _e1=standEff(hn,lg,hid), _e2=standEff(an,lg,aid);
   const sh=_e1.s, sa=_e2.s, _pr=(_e1.prior||_e2.prior);
   if(sh&&sa&&+sh.gp>=2&&+sa.gp>=2)
-    rows.push([_pr?"上季攻防(推估)":"本季攻防", `${hz} 場均進 ${(+sh.gf/+sh.gp).toFixed(2)}、失 ${(+sh.ga/+sh.gp).toFixed(2)}(${+sh.gp} 場) · ${az} 場均進 ${(+sa.gf/+sa.gp).toFixed(2)}、失 ${(+sa.ga/+sa.gp).toFixed(2)}(${+sa.gp} 場)`]);
+    rows.push([(_e1.blend||_e2.blend)?"攻防(本季+先驗混合)":_pr?"上季攻防(推估)":"本季攻防", `${hz} 場均進 ${(+sh.gf/+sh.gp).toFixed(2)}、失 ${(+sh.ga/+sh.gp).toFixed(2)}(有效 ${(+sh.gp).toFixed(1)} 場${sh._w!=null?`,本季佔 ${Math.round(sh._w*100)}%`:""}) · ${az} 場均進 ${(+sa.gf/+sa.gp).toFixed(2)}、失 ${(+sa.ga/+sa.gp).toFixed(2)}(有效 ${(+sa.gp).toFixed(1)} 場${sa._w!=null?`,本季佔 ${Math.round(sa._w*100)}%`:""})`]);
   const fh=formSeq(hn), fa=formSeq(an);
   if(fh||fa) rows.push(["近況(新→舊)", `${hz} ${fh||"—"} · ${az} ${fa||"—"}${schedOf(hn)?"(真實賽程)":""}`]);
   const srh=schedOf(hn), sra=schedOf(an);
@@ -2740,8 +2753,10 @@ function parseEvents(data){
       odds:(function(){try{
         const o=(c.odds||[])[0]; if(!o)return null;
         const ml=x=>x&&x.moneyLine!=null?+x.moneyLine:null;
-        const conv=m=>m==null?null:(m>0?100/(m+100):(-m)/((-m)+100));
-        const hh=conv(ml(o.homeTeamOdds)), aa=conv(ml(o.awayTeamOdds)), dd=conv(ml(o.drawOdds));
+        const conv=m=>(m==null||isNaN(m))?null:(m>0?100/(m+100):(-m)/((-m)+100));
+        // e142:ESPN 2026 新格式 moneyline.{home,away,draw}.close.odds("-110"/"+285");舊格式 homeTeamOdds.moneyLine 仍相容
+        const nl=s=>{ const x=o.moneyline&&o.moneyline[s]; const v=x&&((x.close&&x.close.odds)||(x.open&&x.open.odds)); return v!=null?parseFloat(String(v).replace("+","")):null; };
+        const hh=conv(nl("home")!=null?nl("home"):ml(o.homeTeamOdds)), aa=conv(nl("away")!=null?nl("away"):ml(o.awayTeamOdds)), dd=conv(nl("draw")!=null?nl("draw"):ml(o.drawOdds));
         if(hh&&aa&&dd){const s=hh+aa+dd; return {h:hh/s,d:dd/s,a:aa/s};}
         return null;
       }catch(e){return null;}})(),
