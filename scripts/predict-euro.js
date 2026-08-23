@@ -10,6 +10,17 @@ const OUT = "cloud-pred.json";
 const html = fs.readFileSync("index.html", "utf8");
 let state = { updated: "", sc: {}, params: {} };
 try { state = JSON.parse(fs.readFileSync(OUT, "utf8")) || state; } catch (e) {}
+/* 種子:第一次啟用雲端時,把電腦上匯出的學習資料(seed-ledger.json)接過來,學習不用從零開始;只接一次 */
+try {
+  if (!state.seeded && fs.existsSync("seed-ledger.json")) {
+    const seed = JSON.parse(fs.readFileSync("seed-ledger.json", "utf8")); const D = (seed && seed.data) || {};
+    const sc = D.euroSC ? JSON.parse(D.euroSC) : {}; let n = 0;
+    state.sc = state.sc || {}; for (const id in sc) { if (!state.sc[id]) { state.sc[id] = sc[id]; n++; } }
+    state.params = state.params || {};
+    for (const k of ["euroADJ", "euroAD", "euroMKTW", "euroADv2", "euroLGD", "euroDYN"]) if (D[k] != null && state.params[k] == null) state.params[k] = D[k];
+    state.seeded = seed.t || true; console.log("已接入種子帳本:", n, "場");
+  }
+} catch (e) { console.log("種子讀取失敗:", e.message); }
 
 const dom = new JSDOM(html, { runScripts: "outside-only", pretendToBeVisual: true, url: "https://frankf19-19.github.io/FIFA26/" });
 const w = dom.window;
@@ -53,7 +64,7 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
         const kick = Date.parse(g.date) || g.ts || 0;
         const started = g.state !== "pre" || (kick > 0 && Date.now() >= kick);
         if (started) {
-          if (ex && ex.pred && !ex.fz) { ex.fz = { ...ex.pred }; ex.fzT = Date.now(); ex.lg = ex.lg || l.id; changed = true; nLock++; }
+          if (ex && ex.pred && !ex.fz) { ex.fz = { ...ex.pred }; ex.fzT = ex.tU || ex.t || Date.now(); ex.lg = ex.lg || l.id; changed = true; nLock++; }   // 鎖定時間 = 最後一次「賽前」預測時間
           continue;                                   // 已開賽:不再改預測(誠信)
         }
         const pp = m.predict(g.hn, g.an, g.odds, l.id, g.hid, g.aid);
@@ -83,7 +94,7 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
   for (const k of ["euroADJ", "euroAD", "euroMKTW", "euroADv2", "euroLGD", "euroDYN"]) { try { const v = w.localStorage.getItem(k); if (v != null) params[k] = v; } catch (e) {} }
   const graded = Object.values(sc).filter(s => s && s.pred && s.hs != null && !s.void);
   const hit = graded.filter(s => s.hit).length;
-  const out = { updated: new Date().toISOString(), n: Object.keys(sc).length, graded: graded.length, hit, sc, byKey, params };
+  const out = { updated: new Date().toISOString(), n: Object.keys(sc).length, graded: graded.length, hit, sc, byKey, params, seeded: state.seeded || 0 };
   fs.writeFileSync(OUT, JSON.stringify(out));
   console.log(`完成:新預測/更新 ${nPred} 場 · 鎖定 ${nLock} 場 · 評分檢查 ${nDone} 場 · 帳本 ${out.n} 筆 · 已評分 ${graded.length}(命中 ${hit})`);
   process.exit(0);
