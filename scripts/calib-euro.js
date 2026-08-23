@@ -147,7 +147,8 @@ function accProcess(T, hid, aid, hs, as, pr, w){
             try {
               const od=(c.odds||[])[0]; let ol=null;
               if (od) { const ml=x=>x&&x.moneyLine!=null?+x.moneyLine:null;
-                const mh=ml(od.homeTeamOdds), ma=ml(od.awayTeamOdds), md=ml(od.drawOdds);
+                const nl=s=>{ const x=od.moneyline&&od.moneyline[s]; const v=x&&((x.close&&x.close.odds)||(x.open&&x.open.odds)); return v!=null?parseFloat(String(v).replace("+","")):null; };
+                const mh=nl("home")!=null?nl("home"):ml(od.homeTeamOdds), ma=nl("away")!=null?nl("away"):ml(od.awayTeamOdds), md=nl("draw")!=null?nl("draw"):ml(od.drawOdds);
                 if (mh!=null&&ma!=null&&md!=null) ol=[mh,md,ma]; }
               const prevM=MATCHES[ev.id]||{};
               MATCHES[ev.id]={ lg, d:(ev.date||"").slice(0,10), hid:String((H.team||{}).id||""), hn:(H.team||{}).displayName||"",
@@ -163,7 +164,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
               if(hs>as) hw+=__wl; else if(hs===as) dr+=__wl; }
             // 時間衰減:半衰期 60 天(上週的比賽 ≈ 半年前的 8 倍話語權)
             const __age=Math.max(0,(Date.now()-(Date.parse(ev.date)||Date.now()))/86400000);
-            const __w=Math.exp(-Math.LN2*__age/60);
+            const __w=Math.max(0.25, Math.exp(-Math.LN2*__age/60));   // v11:衰減下限 0.25,上季戰績開季時仍保有話語權
             add((H.team||{}).id,(H.team||{}).displayName,hs,as,true, ev.date||"", __w);
             add((A.team||{}).id,(A.team||{}).displayName,as,hs,false,ev.date||"", __w);
             // 射正數(自產 xG 用):抓該場 summary 的 shotsOnTarget(v8:帳本已有射正 → 直接沿用,省請求)
