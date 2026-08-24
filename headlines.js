@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/24 21:21 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/24 21:21";
+/* 由 news_engine.py 自動產生於 2026/08/24 21:52 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/24 21:52";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"UEFA boss Aleksander Čeferin rules out FIFA presidency bid", d:"2026-08-24", team:"", link:"https://www.espn.com/soccer/story/_/id/49704497/aleksander-ceferin-uefa-boss-rules-fifa-presidency-bid"},
