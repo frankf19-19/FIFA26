@@ -1,5 +1,5 @@
-/* 由 update_matches.py 自動產生於 2026/08/24 18:14 — 請勿手改 */
-const RESULTS_UPDATED = "2026/08/24 18:14";
+/* 由 update_matches.py 自動產生於 2026/08/24 19:00 — 請勿手改 */
+const RESULTS_UPDATED = "2026/08/24 19:00";
 const MATCH_RESULTS = {
   "arg-cpv": {score:[3,2], advanced:"阿根廷"},
   "arg-egy": {score:[3,2], advanced:"阿根廷"},
