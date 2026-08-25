@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e148";
+const BUILD = "e149";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -3110,7 +3110,7 @@ function renderInsights(){
       lessons.push(`比分分佈對照:模型最愛猜 ${top(predDist)};實際最常出 ${top(realDist)} —— 兩者若差異大,即選格偏好需要修正的方向`);
     } }
   { const g2=S.filter(s=>s.hs!=null), hh=g2.filter(s=>s.hit), exx=g2.filter(s=>s.score===true).length;
-    if(g2.length>=20) lessons.push(`精準比分:${exx}/${g2.length}(${(100*exx/g2.length).toFixed(1)}%,理論天花板約 11%);方向命中的 ${hh.length} 場內全中 ${exx} 場(${hh.length?(100*exx/hh.length).toFixed(1):0}%)—— 提升途徑:先抬方向命中率,再靠淨勝差收斂選對格子`); }
+        if(g2.length>=20){ const CUT=Date.parse("2026-08-24T16:00:00Z"); const nw=g2.filter(s=>(s.fzT||s.tU||s.t||0)>=CUT), od=g2.filter(s=>(s.fzT||s.tU||s.t||0)<CUT); const ex2=a=>a.filter(s=>s.score===true).length; const pct=(x,n)=>n?`${x}/${n}(${(100*x/n).toFixed(1)}%)`:"0/0"; lessons.push(`精準比分:${exx}/${g2.length}(${(100*exx/g2.length).toFixed(1)}%,理論天花板約 11~12%)—— 新選格規則(e146 起,全矩陣單格最高):${pct(ex2(nw),nw.length)} ｜ 舊規則遺留:${pct(ex2(od),od.length)};新規則樣本累積中,以新制數字為準`); } }
   // 教訓0:未中歸因統計(每個失準的病歷 → 對症調參)
   { const mcs={}; S.forEach(s=>{ if(s.hit===false&&s.mc) mcs[s.mc]=(mcs[s.mc]||0)+1; });
     const mk2=Object.entries(mcs).sort((a,b)=>b[1]-a[1]);
