@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e147";
+const BUILD = "e148";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -3029,7 +3029,7 @@ function lgOfRec(s){
     if(_LG_MAP_SRC!==C){ _LG_MAP={}; _LG_MAP_SRC=C;
       for(const x in C){ const T=C[x].teams||{}; for(const k in T){ if(k.startsWith("#")) continue; const nk=norm(k); if(nk&&!_LG_MAP[nk]) _LG_MAP[nk]=x; } } }
     if(!_ZH_REV){ _ZH_REV={}; try{ for(const en in ZHN){ const z=ZHN[en]; if(z&&!_ZH_REV[z]) _ZH_REV[z]=en; } for(const en in TWSL_NAMES){ const z=TWSL_NAMES[en]; if(z&&!_ZH_REV[z]) _ZH_REV[z]=en; } }catch(e){} }
-    const look=(nk,zh)=>{ if(nk&&_LG_MAP[nk]) return _LG_MAP[nk]; if(zh&&_ZH_REV[zh]) return _LG_MAP[_ZH_REV[zh]]||null; return null; };   // e147:舊紀錄僅存中文隊名 → 反查
+        const look=(nk,zh)=>{ if(nk&&_LG_MAP[nk]) return _LG_MAP[nk]; if(zh&&_ZH_REV[zh]&&_LG_MAP[_ZH_REV[zh]]) return _LG_MAP[_ZH_REV[zh]]; const zn=zh?norm(zh):""; if(zn&&_LG_MAP[zn]) return _LG_MAP[zn]; return null; };   // e148:中文反查 + 舊紀錄英文原名直查
     const a=look(s.hnk||norm(s.hn||""), s.hz), b=look(s.ank||norm(s.an||""), s.az);
     return (a&&b&&a===b)?a:(a||b||null); }catch(e){ return null; }
 }
