@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/25 16:45 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/25 16:45";
+/* 由 news_engine.py 自動產生於 2026/08/25 17:24 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/25 17:24";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Would a combined UEFA, Concacaf Nations League benefit the USMNT?", d:"2026-08-25", team:"", link:"https://www.espn.com/video/clip/_/id/49720082/would-combined-uefa-concacaf-nations-league-benefit-usmnt"},
