@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e146";
+const BUILD = "e147";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -3022,13 +3022,15 @@ function renderTWSL(){
 }
 /* e134:分聯賽成績(舊紀錄無 lg 欄位 → 以雲端隊名回推聯賽) */
 const LG_CEIL={"usa.1":47,"jpn.1":48,"eng.2":46,"sco.1":54,"eng.1":56,"esp.1":55,"ita.1":54,"ger.1":53,"fra.1":54,"uefa.champions":58,"uefa.europa":53};
-let _LG_MAP=null, _LG_MAP_SRC=null;
+let _LG_MAP=null, _LG_MAP_SRC=null, _ZH_REV=null;
 function lgOfRec(s){
   if(s.lg) return s.lg;
   try{ const C=(window.CLOUD&&window.CLOUD.leagues)||null; if(!C) return null;
     if(_LG_MAP_SRC!==C){ _LG_MAP={}; _LG_MAP_SRC=C;
       for(const x in C){ const T=C[x].teams||{}; for(const k in T){ if(k.startsWith("#")) continue; const nk=norm(k); if(nk&&!_LG_MAP[nk]) _LG_MAP[nk]=x; } } }
-    const a=_LG_MAP[s.hnk]||_LG_MAP[norm(s.hn||"")], b=_LG_MAP[s.ank]||_LG_MAP[norm(s.an||"")];
+    if(!_ZH_REV){ _ZH_REV={}; try{ for(const en in ZHN){ const z=ZHN[en]; if(z&&!_ZH_REV[z]) _ZH_REV[z]=en; } for(const en in TWSL_NAMES){ const z=TWSL_NAMES[en]; if(z&&!_ZH_REV[z]) _ZH_REV[z]=en; } }catch(e){} }
+    const look=(nk,zh)=>{ if(nk&&_LG_MAP[nk]) return _LG_MAP[nk]; if(zh&&_ZH_REV[zh]) return _LG_MAP[_ZH_REV[zh]]||null; return null; };   // e147:舊紀錄僅存中文隊名 → 反查
+    const a=look(s.hnk||norm(s.hn||""), s.hz), b=look(s.ank||norm(s.an||""), s.az);
     return (a&&b&&a===b)?a:(a||b||null); }catch(e){ return null; }
 }
 function renderByLeague(){
@@ -4258,3 +4260,4 @@ init();
 </script>
 </body>
 </html>
+
