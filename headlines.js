@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/26 04:22 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/26 04:22";
+/* 由 news_engine.py 自動產生於 2026/08/26 05:02 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/26 05:02";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Chelsea's Lucy Bronze: Need to 'protect' football for fans", d:"2026-08-25", team:"", link:"https://www.espn.com/soccer/story/_/id/49723045/lucy-bronze-fifa-gianni-infantino-protect-football-chelsea-england"},
