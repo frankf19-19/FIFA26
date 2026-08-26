@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/26 13:14 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/26 13:14";
+/* 由 news_engine.py 自動產生於 2026/08/26 14:04 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/26 14:04";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"De Jong: Netherlands 'tried to get Guardiola and Slot before Xavi'", d:"2026-08-26", team:"", link:"https://www.espn.com/video/clip/_/id/49729916/netherlands-tried-get-guardiola-slot-xavi"},
