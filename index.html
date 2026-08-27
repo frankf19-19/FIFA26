@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e149";
+const BUILD = "e150";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1800,8 +1800,22 @@ async function jget(url,live){
     const r = await fetch(u, opt);
     if(!r.ok) throw new Error("HTTP "+r.status);
     return await r.json();
+  } catch(err){
+    // e150:ESPN 於 2026-08-27 移除瀏覽器跨域支援 → 直連失敗時改吃雲端 feed(每 30 分鐘由 GitHub Actions 更新)
+    const F=(CLOUD_PRED&&CLOUD_PRED.feed)||null;
+    if(F){ const s=String(url);
+      let m=s.match(/soccer\/([a-z0-9._]+)\/scoreboard\?dates=(\d{8})(?:-(\d{8}))?/);
+      if(m&&F.sb&&F.sb[m[1]]){ const a=m[2], b=m[3]||m[2];
+        const evs=F.sb[m[1]].filter(e=>{ const d=String(e.date||"").slice(0,10).replace(/-/g,""); return d>=a&&d<=b; });
+        _feedNote(); return {events:evs,__feed:1}; }
+      m=s.match(/soccer\/([a-z0-9._]+)\/standings/); if(m&&F.st&&F.st[m[1]]){ _feedNote(); return F.st[m[1]]; }
+      m=s.match(/soccer\/([a-z0-9._]+)\/injuries/); if(m&&F.inj&&F.inj[m[1]]){ _feedNote(); return F.inj[m[1]]; }
+    }
+    throw err;
   } finally { if(tm) clearTimeout(tm); }
 }
+function _feedNote(){ try{ window.__espnDown=1; const st=document.getElementById("status");
+  if(st&&!st.dataset.fd){ st.dataset.fd="1"; st.textContent="☁ ESPN 直連中斷 → 已改用雲端資料(每 30 分鐘更新,比分非即時)"; st.style.color="var(--gold)"; } }catch(e){} }
 function espnScore(league,date){return `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/scoreboard?dates=${date}`;}
 function espnInjuries(league){return `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/injuries`;}
 let INJURIES={};        // norm(team) -> [{name,status,out}]
