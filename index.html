@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e150";
+const BUILD = "e151";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1801,6 +1801,10 @@ async function jget(url,live){
     if(!r.ok) throw new Error("HTTP "+r.status);
     return await r.json();
   } catch(err){
+    // e151:ESPN 只砍了 site.api 的跨域,site.web.api 仍開放 → 先換備用主機重試(即時功能全部恢復)
+    if(/\/\/site\.api\.espn\.com\//.test(String(url)) && arguments[2]!==1){
+      try{ return await jget(String(url).replace("//site.api.espn.com/","//site.web.api.espn.com/"), live, 1); }catch(e2){}
+    }
     // e150:ESPN 於 2026-08-27 移除瀏覽器跨域支援 → 直連失敗時改吃雲端 feed(每 30 分鐘由 GitHub Actions 更新)
     const F=(CLOUD_PRED&&CLOUD_PRED.feed)||null;
     if(F){ const s=String(url);
@@ -4157,7 +4161,9 @@ async function loadCloudPred(){
     const P=j.params||{};
     for(const k of ["euroADJ","euroAD","euroMKTW","euroADv2","euroLGD","euroDYN"]){ if(P[k]!=null){ try{ localStorage.setItem(k,P[k]); }catch(e){} } }
     ADJ_CACHE=adjGet(); AD_CACHE=adGet(); MKT_W=mktWGet();
-    const el=document.getElementById("cloudPredTag"); if(el) el.textContent=`☁ 雲端統一預測 · 更新 ${String(j.updated||"").replace("T"," ").slice(5,16)} · 帳本 ${j.n||0} 筆`;
+        const el=document.getElementById("cloudPredTag"); if(el){ const ec=j.espnCors; const dt=s=>s?String(s).replace("T"," ").slice(5,16):"";
+      const espn=ec?` · ESPN:主站 ${ec.siteApi?"✔":`✖(自 ${dt(ec.siteApiDownSince)})`} / 備站 ${ec.webApi?"✔":"✖"}(每30分偵測${ec.siteApi&&ec.webApi?"":",斷供時自動走備站→雲端"})`:"";
+      el.textContent=`☁ 雲端統一預測 · 更新 ${String(j.updated||"").replace("T"," ").slice(5,16)} · 帳本 ${j.n||0} 筆${espn}`; }
     return true;
   }catch(e){ return false; }
 }
