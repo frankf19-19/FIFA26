@@ -1,4 +1,4 @@
-/* 雲端統一預測 v3(e150:ESPN 斷供備援)
+/* 雲端統一預測 v4(e151:CORS 偵測追蹤 + v3 斷供備援)
    v3:ESPN 於 2026-08-27 起移除瀏覽器跨域(CORS)支援,前端直連全滅。
    本腳本(Node 端不受 CORS 限制)照常抓取,並把賽程/積分榜/傷停打包進 cloud-pred.json 的 feed 欄位,
    前端 jget 失敗時自動改吃 feed → 網站功能維持,更新頻率降為每 30 分鐘。
@@ -124,7 +124,18 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
     const sb = {}; for (const lg in (F.sb || {})) { const arr = Object.values(F.sb[lg]).filter(e => (Date.parse(e.date) || 0) >= keep); if (arr.length) sb[lg] = arr; }
     feed = { t: Date.now(), sb, st: F.st || {}, inj: F.inj || {} };
   } catch (e) {}
-  const out = { updated: new Date().toISOString(), n: Object.keys(sc).length, graded: graded.length, hit, sc, byKey, params, seeded: state.seeded || 0, ...(feed?{feed}:{}) };
+  // v4:ESPN 跨域(CORS)狀態追蹤 —— 每輪對主站/備站發帶 Origin 的請求,檢查 access-control-allow-origin 是否存在;斷供起點跨輪保留
+  let espnCors = null;
+  try {
+    const probe = async host => { try { const r = await fetch(`https://${host}/apis/site/v2/sports/soccer/eng.1/scoreboard?dates=20260101`, { headers: { "Origin": "https://frankf19-19.github.io" } }); return r.headers.get("access-control-allow-origin") != null; } catch (e) { return false; } };
+    const a = await probe("site.api.espn.com"), b = await probe("site.web.api.espn.com");
+    const prev = state.espnCors || {};
+    espnCors = { siteApi: a, webApi: b, checked: new Date().toISOString(),
+      siteApiDownSince: a ? null : (prev.siteApiDownSince || new Date().toISOString()),
+      webApiDownSince: b ? null : (prev.webApiDownSince || new Date().toISOString()) };
+    console.log("ESPN CORS:", "主站", a ? "✔" : "✖", "備站", b ? "✔" : "✖");
+  } catch (e) {}
+  const out = { updated: new Date().toISOString(), n: Object.keys(sc).length, graded: graded.length, hit, sc, byKey, params, seeded: state.seeded || 0, ...(feed?{feed}:{}), ...(espnCors?{espnCors}:{}) };
   fs.writeFileSync(OUT, JSON.stringify(out));
   console.log(`完成:新預測/更新 ${nPred} 場 · 鎖定 ${nLock} 場 · 評分檢查 ${nDone} 場 · 帳本 ${out.n} 筆 · 已評分 ${graded.length}(命中 ${hit})`);
   process.exit(0);
