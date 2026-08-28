@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e151";
+const BUILD = "e153";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1413,19 +1413,25 @@ async function loadStandFor(lg){
   return false;
 }
 /* 陣容火力:雲端球員數據 → 每隊前 5 名進攻參與(進球+助攻/出場) */
-function cloudSquad(lg, tid){
+function cloudSquad(lg, tid, nm){
   try{
-    const C=(window.CLOUD&&window.CLOUD.leagues)||null; if(!C||tid==null) return null;
+    const C=(window.CLOUD&&window.CLOUD.leagues)||null; if(!C||(tid==null&&!nm)) return null;
     let team=null;
-    const pick=P=>{ if(P&&P.teams&&P.teams["#"+tid]) team=P.teams["#"+tid]; };
+    const nk=nm?String(nm).toLowerCase():null, nk2=nm?norm(nm):null;
+    const pick=P=>{ if(!P||!P.teams) return;
+      if(tid!=null&&P.teams["#"+tid]&&P.teams["#"+tid].r) team=P.teams["#"+tid];
+      else if(nk&&P.teams[nk]&&P.teams[nk].r) team=P.teams[nk];                       // e153:升班隊 #id 可能換號 → 以隊名備援
+      else if(nk2&&P.teams[nk2]&&P.teams[nk2].r) team=P.teams[nk2]; };
     pick(C[lg]); if(!team){ for(const x in C){ pick(C[x]); if(team) break; } }
     if(!team||!team.r) return null;
-    const ps=[], dfs=[]; let gk=null;
+    let ps=[], dfs=[], gk=null;
+    for(const minApp of [5,2]){                                  // e153:正常門檻 5 場;湊不滿(升班隊/換季初)放寬到 2 場
+    ps=[]; dfs=[]; gk=null;
     for(const a of team.r){
       if(!Array.isArray(a[4])||!a[4].length) continue;
-      const s0=a[4][0], app=+s0[1]||0, g=+s0[2]||0, as=+s0[3]||0;
+      const s0=a[4].reduce((m,row)=>((+row[1]||0)>(+m[1]||0)?row:m),a[4][0]), app=+s0[1]||0, g=+s0[2]||0, as=+s0[3]||0;   // e152:取出賽數最多的一季(換季初新季近乎全零 → 沿用上季)
       const sv=s0[5]||"", cs=s0[6]||"", gc=s0[7]||"", tk=+s0[8]||0, icp=+s0[9]||0;
-      if(app<5) continue;
+      if(app<minApp) continue;
       const pos=String(a[2]||"").toUpperCase();
       if(pos==="G"||pos==="GK"){ if(!gk||app>gk.app){
         const svn=+sv||0, gcn=+gc||0;
@@ -1435,9 +1441,11 @@ function cloudSquad(lg, tid){
       ps.push({id:a[0], n:a[1], pos:a[2]||"", app, g, as, c:+((g+as)/app).toFixed(2)});
       if(tk+icp>0) dfs.push({id:a[0], n:a[1], pos:a[2]||"", app, tk, icp, d:+((tk+icp)/app).toFixed(1)});
     }
-    if(ps.length<3) return null;
-    ps.sort((x,y)=>y.c-x.c); dfs.sort((x,y)=>y.d-x.d);
-    const atk=+ps.slice(0,5).reduce((s,x)=>s+x.c,0).toFixed(2);
+    if(ps.length>=3) break; }
+    if(ps.length<1) return null;
+    ps.sort((x,y)=>((y.g+y.as)-(x.g+x.as))||(y.app-x.app)); dfs.sort((x,y)=>y.d-x.d);   // e153:顯示依總貢獻排序(小樣本場均值不再置頂)
+    const ps5=ps.filter(x=>x.app>=5);                                                   // e153:模型用的火力值仍只採 ≥5 場(小樣本不進模型)
+    const atk=ps5.length>=3?+ps5.sort((x,y)=>y.c-x.c).slice(0,5).reduce((s,x)=>s+x.c,0).toFixed(2):null;
     return {atk, top:ps.slice(0,3), gk, defTop:dfs.slice(0,2)};
   }catch(e){ return null; }
 }
@@ -1558,8 +1566,8 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
   // 陣容火力微調:雲端球員數據,兩隊皆足才啟用,上限 ±6%(輔助訊號)
   // 跨級距對戰時停用:不同級別刷的球員數據不可直接比較
   let _sq=null;
-  if(!_tierN){ const qh=cloudSquad(lg,hid), qa=cloudSquad(lg,aid);
-    if(qh&&qa){ const f=Math.max(0.94,Math.min(1.06,Math.pow((qh.atk+0.5)/(qa.atk+0.5),0.25)));
+  if(!_tierN){ const qh=cloudSquad(lg,hid,homeName), qa=cloudSquad(lg,aid,awayName);
+    if(qh&&qa&&qh.atk!=null&&qa.atk!=null){ const f=Math.max(0.94,Math.min(1.06,Math.pow((qh.atk+0.5)/(qa.atk+0.5),0.25)));   // e153:任一方火力樣本不足 → 此因子跳過
       lh*=f; la/=f; _sq={h:qh.atk,a:qa.atk,f:+f.toFixed(3)};
       // 守門員零封率:好門將壓低「對方」的預期進球(上限 ±4%)
       const sH=qh.gk&&qh.gk.svr, sA=qa.gk&&qa.gk.svr;
@@ -3782,7 +3790,7 @@ async function showGame(g, fromPop){
   if(rv0) narrative+=` 檢討:${rv0.text}`;
   let kpHtml="";
   try{
-    const qh=cloudSquad(g.league||curLeague,g.hid), qa=cloudSquad(g.league||curLeague,g.aid);
+    const qh=cloudSquad(g.league||curLeague,g.hid,g.hn), qa=cloudSquad(g.league||curLeague,g.aid,g.an);
     if(qh||qa){
       const col=(qq,nm)=>`<div style="flex:1;min-width:230px"><div style="font-family:var(--cond);font-weight:700;letter-spacing:.06em;font-size:13px;color:var(--gold);margin-bottom:6px">${zhName(nm)}</div>`+
         (qq?(
