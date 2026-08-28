@@ -1,7 +1,7 @@
 name: euro-cloud-pred
 on:
   schedule:
-    - cron: "*/30 * * * *"        # 每 30 分鐘:預測未開賽、鎖定已開賽、評分已完賽
+    - cron: "9,39 * * * *"        # 每 30 分鐘(避開整點/半點:GitHub 尖峰時段會把 */N 排程延後數小時)。預測未開賽、鎖定已開賽、評分已完賽
   workflow_dispatch:
 permissions:
   contents: write

@@ -9,8 +9,9 @@
 name: 世界盃全自動更新
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"     # 每 15 分鐘(UTC)。想更即時可改 "*/5 * * * *"
+  # 2026-08-29:世界盃已於 7/19 結束,停用每 15 分鐘排程(它會擠掉 euro-cloud-pred / euro-calib 的排程配額)。需要時手動觸發。
+  # schedule:
+  #   - cron: "*/15 * * * *"
   workflow_dispatch:
 
 permissions:
