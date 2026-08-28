@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e153";
+const BUILD = "e154";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1048,7 +1048,7 @@ function injLearned(teamName, t){
 }   // e137:過程體質權重(先驗 0.06,依帳本回歸自動學習,範圍 0~0.25)
 /* e137:球隊過程體質 —— 領先守成率、落後不敗率、下半場淨進球、紅牌率,相對聯賽平均 → 分數 -1~+1 */
 function procScore(t,lg){
-  try{ const q=t&&t.pr; if(!q||!(+q.n>=8)) return null;
+  try{ const q=t&&t.pr; if(!q||!(+(q.nr!=null?q.nr:q.n)>=8)) return null;
     const P=(window.CLOUD&&window.CLOUD.leagues&&window.CLOUD.leagues[lg]&&window.CLOUD.leagues[lg].prAvg)||{hold:0.75,cb:0.35,rc:0.08};
     const n=+q.n;
     const hold=(+q.lt>=3)?(+q.ltw/+q.lt - P.hold):0;            // 領先守成率差(樣本<3 不算)
@@ -1071,6 +1071,8 @@ function migrateSnapshots(){
     const p=s.pred;
     const isTeamPick = p.pick && p.pick!=="和局";
     // 自相矛盾的舊預測(看好某隊卻平局/看好和局卻分勝負)→ 整筆作廢:不計命中/未中/Brier
+    // e154:只處理 e23 前的舊快照(v<2)。v2 起「看好某隊 + 比分 1-1」是全局 argmax 的合法結果(比分賭與勝負賭各自獨立計分),不再作廢
+    if(s.v>=2 || s.cl) continue;
     if(!s.void && ((isTeamPick && p.si===p.sj) || (p.pick==="和局" && p.si!==p.sj) || p.si==null)){
       p.si=null; p.sj=null; s.v=1; s.void=true; changed=true;
     }
@@ -1235,6 +1237,11 @@ function mktWTune(){
   else VS_BOOK=null;
 }
 const LEARN_ON_CLOUD=false;   // e134:雙方皆有雲端實戰紀錄時,是否仍套用逐場線上學習(評級±/攻防乘數)。預設關閉:雲端 182 天戰績已是該隊實力紀錄,逐場再學等於同一訊號算兩次
+/* e154:雲端 calib 的 gp/hgp/agp 是「時間衰減加權」總和(開季時只剩 3~5),樣本門檻一律改看原始場數 gn/hgn/agn(舊 calib 無此欄位時退回 gp) */
+function gN(t){ return t?+((t.gn!=null?t.gn:t.gp)||0):0; }
+function hN(t){ return t?+((t.hgn!=null?t.hgn:t.hgp)||0):0; }
+function aN(t){ return t?+((t.agn!=null?t.agn:t.agp)||0):0; }
+function eN(t){ if(!t) return 0; const g=+t.gp||0, w2=+t.w2||0; return (w2>0&&g>0)?Math.min(gN(t),g*g/w2):g; }   // 有效樣本數 ESS(資料權重用)
 function cloudTeamOf(lg,tid,name){
   try{ const C=(window.CLOUD&&window.CLOUD.leagues)||null; if(!C) return null;
     const scan=P=>{ if(!P||!P.teams) return null; const T=P.teams; return (tid!=null&&T["#"+tid])||T[String(name||"").toLowerCase()]||null; };
@@ -1242,7 +1249,7 @@ function cloudTeamOf(lg,tid,name){
     return t; }catch(e){ return null; }
 }
 function cloudRating(t){   // e134:無人工評級的隊(預設 68)→ 以雲端場均淨勝球推估(每 +0.5 球 ≈ +5 分,±10 封頂)
-  if(!t||!(+t.gp>=8)) return null;
+  if(!t||!(gN(t)>=8)) return null;
   const gd=(+t.gf-+t.ga)/+t.gp;
   return 68+Math.max(-10,Math.min(10,gd*10));
 }
@@ -1330,7 +1337,7 @@ function standEffPrior(name,lg,tid){
       return (tid!=null&&T["#"+tid])||T[String(name).toLowerCase()]||null; };
     let ct=scan(C[lg]), ctSrc=lg;
     if(!ct){ for(const x in C){ if(x===lg) continue; ct=scan(C[x]); if(ct){ ctSrc=x; break; } } }
-    if(ct&&+ct.gp>=6) return {s:tierAdj(ct,ctSrc,lg),prior:true,cloud:1};
+    if(ct&&gN(ct)>=6) return {s:tierAdj(ct,ctSrc,lg),prior:true,cloud:1};
   }
   if(lg&&PREV_BY_LG[lg]){
     const P=PREV_BY_LG[lg];
@@ -1472,7 +1479,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
   const cl=(window.CLOUD&&window.CLOUD.leagues&&window.CLOUD.leagues[lg])||null;
   // e134:雲端主導判定(雙方皆 ≥10 場雲端實戰)→ 關閉逐場學習器,評級缺省者改用雲端淨勝球推估
   const _ctH=cloudTeamOf(lg,hid,homeName), _ctA=cloudTeamOf(lg,aid,awayName);
-  const _cb=!!(_ctH&&_ctA&&+_ctH.gp>=10&&+_ctA.gp>=10)&&!LEARN_ON_CLOUD;
+  const _cb=!!(_ctH&&_ctA&&gN(_ctH)>=10&&gN(_ctA)>=10)&&!LEARN_ON_CLOUD;
   const rh=rating(homeName,{noAdj:_cb,cloud:_ctH}), ra=rating(awayName,{noAdj:_cb,cloud:_ctA});
   // 先查真實戰績(本季或上季先驗):有數據 → 評級只當輔助(影響力 ×0.4),數據主導
   const _eh=standEff(homeName,lg,hid), _ea=standEff(awayName,lg,aid);
@@ -1493,16 +1500,16 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
       return t?tierAdj(t,src,lg):null; };
     const th=pickT(hid), ta=pickT(aid);
     if((th&&th._tier)||(ta&&ta._tier)) _tierN={h:th&&th._tier,a:ta&&ta._tier};
-    if(th&&ta&&+th.gp>=10&&+ta.gp>=10&&th.dr!=null&&ta.dr!=null)
+    if(th&&ta&&gN(th)>=10&&gN(ta)>=10&&th.dr!=null&&ta.dr!=null)
       _tdr=100*((+th.dr)+(+ta.dr))/((+th.gp)+(+ta.gp));       // 兩隊合併和局率(隊層體質)
     if(th&&ta){ _psH=th.ps!=null?+th.ps:null; _psA=ta.ps!=null?+ta.ps:null; }  // 控球風格(顯示)
     // e132:主客分拆樣本太少(5~12 場)→ 與整體戰績 55/45 混合,場數採整體 gp(資料權重得以提高)
-    const mixT=(t,sg,sf,sa_)=>{ const g=+t.gp, s=+t[sg]; if(!(g>=8&&s>=5)) return null;
+    const mixT=(t,sg,sf,sa_)=>{ const g=+t.gp, s=+t[sg], gn=gN(t), sn=(sg==="hgp"?hN(t):aN(t)); if(!(gn>=8&&sn>=5&&g>0&&s>0)) return null;
       const rf=0.55*(+t[sf]/s)+0.45*(+t.gf/g), ra_=0.55*(+t[sa_]/s)+0.45*(+t.ga/g);
-      return {gp:g, gf:rf*g, ga:ra_*g, _cloud:1}; };
+      const en=eN(t); return {gp:en, gf:rf*en, ga:ra_*en, _cloud:1}; };   // e154:比率用衰減值、門檻看原始場數、資料權重看有效樣本數 ESS
     const mh=th&&mixT(th,"hgp","hgf","hga"), ma=ta&&mixT(ta,"agp","agf","aga");
-    if(mh) sh=mh; else if(th&&+th.hgp>=6) sh={gp:th.hgp,gf:th.hgf,ga:th.hga};
-    if(ma) sa=ma; else if(ta&&+ta.agp>=6) sa={gp:ta.agp,gf:ta.agf,ga:ta.aga};
+    if(mh) sh=mh; else if(th&&hN(th)>=6&&+th.hgp>0) sh={gp:hN(th),gf:+th.hgf/+th.hgp*hN(th),ga:+th.hga/+th.hgp*hN(th)};
+    if(ma) sa=ma; else if(ta&&aN(ta)>=6&&+ta.agp>0) sa={gp:aN(ta),gf:+ta.agf/+ta.agp*aN(ta),ga:+ta.aga/+ta.agp*aN(ta)};
     if(th&&ta&&th.lp&&ta.lp){
       const now=Date.now();
       const dh=Math.round((now-new Date(th.lp))/86400000), da=Math.round((now-new Date(ta.lp))/86400000);
@@ -1520,7 +1527,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
     const xgOf=(tid,nm)=>{ if(!CT2) return null;
       for(const x in CT2){ const T=CT2[x].teams||{};
         const t=(tid!=null&&T["#"+tid])||T[String(nm||"").toLowerCase()];
-        if(t&&t.xg&&t.xg.n>=8&&t.gp>=8) return {xg:t.xg, gf:t.gf/t.gp, ga:t.ga/t.gp}; }
+        if(t&&t.xg&&t.xg.n>=8&&gN(t)>=8&&t.gp>0) return {xg:t.xg, gf:t.gf/t.gp, ga:t.ga/t.gp}; }
       return null; };
     const xh=xgOf(hid,homeName), xa2=xgOf(aid,awayName);
     if(xh&&xa2){
@@ -2379,8 +2386,8 @@ function renderTodaySection(){
         st=`<span class="stx st-done">完場</span>`;
         if(snap&&snap.void){ st+=`<span class="stx r-void">不計</span>`; rowCls="done"; }
         else if(snap&&snap.hs!=null){
-          const exact=(snap.score===true||((snap.v>=2)&&snap.pred&&snap.pred.si===g.hs&&snap.pred.sj===g.as));
-          if(snap.hit&&exact){ st+=`<span class="stx r-exact">★ 全中</span>`; rowCls="exact"; }
+          const exact=(snap.score===true||((snap.v>=2)&&snap.pred&&snap.pred.si!=null&&snap.pred.si===g.hs&&snap.pred.sj===g.as));
+          if(exact){ st+=`<span class="stx r-exact">★ ${snap.hit?"全中":"比分中"}</span>`; rowCls="exact"; }
           else if(snap.hit){ st+=`<span class="stx r-hit">✓ 命中</span>`; rowCls="hit"; }
           else { st+=`<span class="stx r-miss">✗ 未中</span>`; rowCls="miss"; }
         } else if(snap){ st+=`<span class="stx st-soon">待評分</span>`; rowCls="done"; }
@@ -2918,7 +2925,7 @@ async function gradeFinished(games){
     const brier=(sp0.H/100-y.H)**2+(sp0.D/100-y.D)**2+(sp0.A/100-y.A)**2;
     sc[g.id]={hit:(ex&&ex.hit!=null)?ex.hit:(predOut===realOut),
       brier:(ex&&ex.brier!=null)?ex.brier:+brier.toFixed(3),
-      score:(ex&&ex.score!=null)?ex.score:(predOut===realOut&&sp0.si===g.hs&&sp0.sj===g.as),
+      score:(ex&&ex.score!=null)?ex.score:(sp0.si!=null&&sp0.si===g.hs&&sp0.sj===g.as),   // e154:比分賭獨立計分(與莊家波膽同制),不再綁勝負方向
       hs:g.hs, as:g.as, hz:zhName(g.hn), az:zhName(g.an),
       hnk:norm(g.hn), ank:norm(g.an), t:(ex&&ex.t)||Date.now(), v:ex?(ex.v||1):2,
       homePick:sp0.pick===g.hn, draw:g.hs===g.as, cal:!!(ex&&ex.cal),
@@ -3263,8 +3270,8 @@ function makeReview(g){
   if(s.void) return {text:"此場早期預測自相矛盾(顯示異常),整筆作廢——不計入命中率、驗證數與 Brier。之後的新預測依 v2 制度誠實計分。",good:false};
   const p=s.pred, hz=s.hz, az=s.az;
   const parts=[];
-  const exact=(s.hit&&(s.v>=2)&&p.si===s.hs&&p.sj===s.as);
-  if(s.score===true||exact){ parts.push("方向與比分全中,模型校準精準"); }
+  const exact=((s.v>=2)&&p.si!=null&&p.si===s.hs&&p.sj===s.as);
+  if(s.score===true||exact){ parts.push(s.hit?"方向與比分全中,模型校準精準":"比分命中(波膽),但勝負看好方向與比分不一致——比分取全局最可能分數,方向取三向機率最高者,兩者獨立計分"); }
   else if(s.hit){
     if(!(s.v>=2)&&p.si===s.hs&&p.sj===s.as)
       parts.push("勝負方向命中(早期版本的比分紀錄有顯示問題,不納入全中判定)");
@@ -3309,13 +3316,13 @@ function gameCard(g){
       pill=`<span class="pill wait" title="早期預測自相矛盾(顯示異常),整筆作廢,不計入命中率與 Brier">不計</span>`;
     }else if(snap0&&snap0.pred){
       hitFlag=!!snap0.hit;
-      exact=hitFlag&&(snap0.score===true||((snap0.v>=2)&&snap0.pred.si===g.hs&&snap0.pred.sj===g.as));
+      exact=(snap0.score===true||((snap0.v>=2)&&snap0.pred.si!=null&&snap0.pred.si===g.hs&&snap0.pred.sj===g.as));
     }else{
       const realOut=g.hs>g.as?"H":g.hs<g.as?"A":"D";
       const predOut=p.H>=p.D&&p.H>=p.A?"H":p.A>=p.D&&p.A>=p.H?"A":"D";
-      hitFlag=realOut===predOut; exact=hitFlag&&p.si===g.hs&&p.sj===g.as;
+      hitFlag=realOut===predOut; exact=p.si!=null&&p.si===g.hs&&p.sj===g.as;
     }
-    if(!pill) pill= exact?`<span class="pill hit" title="勝負方向與比分皆預測正確">全中</span>`
+    if(!pill) pill= exact?`<span class="pill hit" title="${hitFlag?"勝負方向與比分皆預測正確":"比分(波膽)預測正確"}">${hitFlag?"全中":"比分中"}</span>`
         : hitFlag?`<span class="pill hit" title="勝負方向(主勝/和/客勝)預測正確;比分未全中">命中</span>`
         : `<span class="pill miss" title="勝負方向預測錯誤">未中</span>`;
   } else pill=`<span class="pill wait">未開賽</span>`;
@@ -4171,7 +4178,10 @@ async function loadCloudPred(){
     ADJ_CACHE=adjGet(); AD_CACHE=adGet(); MKT_W=mktWGet();
         const el=document.getElementById("cloudPredTag"); if(el){ const ec=j.espnCors; const dt=s=>s?String(s).replace("T"," ").slice(5,16):"";
       const espn=ec?` · ESPN:主站 ${ec.siteApi?"✔":`✖(自 ${dt(ec.siteApiDownSince)})`} / 備站 ${ec.webApi?"✔":"✖"}(每30分偵測${ec.siteApi&&ec.webApi?"":",斷供時自動走備站→雲端"})`:"";
-      el.textContent=`☁ 雲端統一預測 · 更新 ${String(j.updated||"").replace("T"," ").slice(5,16)} · 帳本 ${j.n||0} 筆${espn}`; }
+      el.textContent=`☁ 雲端統一預測 · 更新 ${String(j.updated||"").replace("T"," ").slice(5,16)} · 帳本 ${j.n||0} 筆${espn}`;
+      // e154:雲端排程延遲偵測 —— GitHub 排程在尖峰時段會被延後數小時,超過 2 小時未更新即提醒(鎖定值可能偏舊)
+      try{ const ageMin=(Date.now()-Date.parse(j.updated||0))/60000;
+        if(ageMin>120){ el.textContent+=` ⚠ 雲端已 ${(ageMin/60).toFixed(1)} 小時未更新(GitHub 排程延遲,新賽事暫用本機計算)`; el.style.color="var(--gold)"; } }catch(e){} }
     return true;
   }catch(e){ return false; }
 }
