@@ -1,5 +1,5 @@
-/* 由 news_engine.py 自動產生於 2026/08/27 18:01 — 請勿手改 */
-const HEADLINES_UPDATED = "2026/08/27 18:01";
+/* 由 news_engine.py 自動產生於 2026/08/28 02:09 — 請勿手改 */
+const HEADLINES_UPDATED = "2026/08/28 02:09";
 const NEWS_DIAG = {real:6, note:"OK:site.web.api.espn.com/"};
 const AUTO_HEADLINES = [
   {tag:"news", t:"Sources: UEFA prepares criminal complaint against FIFA's Infantino over World Cup sell-off", d:"2026-08-27", team:"", link:"https://www.espn.com/soccer/story/_/id/49742098/uefa-prepares-criminal-complaint-fifa-boss-gianni-infantino-world-cup-selloff"},
