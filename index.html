@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e154";
+const BUILD = "e155";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1302,7 +1302,7 @@ function scoreTable(lh,la,rho){
 let STAND_BY_LG={}, LGAVG_BY_LG={}, PREV_BY_LG={};
 /* 有效戰績:本季不足 2 場時,回退上季最終積分榜(標記 prior) */
 const TIER_MAP={ "eng.1":1,"esp.1":1,"ita.1":1,"ger.1":1,"fra.1":1,"jpn.1":1,"usa.1":1,"sco.1":1,
-  "uefa.champions":1,"uefa.europa":1, "eng.2":2 };
+  "uefa.champions":1,"uefa.europa":1, "eng.2":2, "por.1":1,"ned.1":1,"tur.1":1,"bel.1":1 };   // e154:歐冠/歐霸對手資料來源聯賽
 function tierAdj(t,srcLg,gameLg){                            // 跨級距資料換匯:低級別攻擊×0.82、失球÷0.82
   const gT=TIER_MAP[gameLg], sT=TIER_MAP[srcLg];
   if(gT==null||sT==null||sT===gT||srcLg===gameLg) return t;
@@ -1596,7 +1596,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
     const LG=(cl&&cl.lgAvg)||(lg&&LGAVG_BY_LG[lg])||LG_AVG, gpH=+sh.gp, gpA=+sa.gp;
     const lh2=LG*((+sh.gf/gpH)/LG)*((+sa.ga/gpA)/LG)*Math.exp(HA/2);
     const la2=LG*((+sa.gf/gpA)/LG)*((+sh.ga/gpH)/LG)*Math.exp(-HA/2);
-    const wCap=(sh._cloud&&sa._cloud)?0.8:0.6;                 // e132:雙方皆雲端實戰 → 數據主導 80%
+    const wCap=(sh._cloud&&sa._cloud)?(Math.min(gpH,gpA)>=12?0.8:0.7):0.6;   // e132/e154:雙方皆雲端實戰 → 80%,但有效樣本 ESS<12 場時先上限 70%(開季防過度自信)
     const wS=Math.min(wCap, 0.3+0.03*Math.min(gpH,gpA));
     lh=lh*(1-wS)+Math.max(.2,Math.min(lh2,4.2))*wS;
     la=la*(1-wS)+Math.max(.2,Math.min(la2,4.2))*wS;
@@ -3975,8 +3975,9 @@ function hideTeam(){
     };
   }catch(e){}
   window.CLOUD=null;
+  const __resolveCalib=j=>{ try{ for(const lg in (j.leagues||{})){ const T=j.leagues[lg]&&j.leagues[lg].teams; if(!T) continue; for(const k in T){ const t=T[k]; if(t&&t.$&&T[t.$]) T[k]=T[t.$]; } } }catch(e){} return j; };   // e154:calib v12 別名 {$:"#id"} 還原
   const __applyCalib=j=>{
-    if(j&&j.leagues){ window.CLOUD=j;
+    if(j&&j.leagues){ window.CLOUD=__resolveCalib(j);
       try{ localStorage.setItem("euroCalibCache", JSON.stringify(j)); }catch(e){}
       const el=document.getElementById("cloudTag");
       if(el) el.textContent="☁ 雲端校準("+(j.days||28)+"天)· 更新 "+String(j.updated||"").replace("T"," ").slice(5,16)+" · 樣本 "+Math.round(+j.n||0)+" 場";
