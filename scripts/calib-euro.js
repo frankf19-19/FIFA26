@@ -4,7 +4,8 @@
    中斷重跑時,跳過「當天已完成」的聯賽,從斷點接續。 */
 const { execSync } = require("child_process");
 const fs = require("fs");
-const LEAGUES = ["eng.1","esp.1","ita.1","ger.1","fra.1","uefa.champions","uefa.europa","usa.1","jpn.1","eng.2","sco.1"];
+const LEAGUES = ["eng.1","esp.1","ita.1","ger.1","fra.1","uefa.champions","uefa.europa","usa.1","jpn.1","eng.2","sco.1",
+  "por.1","ned.1","tur.1","bel.1"];   // v12:葡超/荷甲/土超/比甲 —— 只為歐冠/歐霸對手提供球隊資料(前端不列賽程)
 const WEEKS = 26;
 const ymd = d => d.toISOString().slice(0,10).replace(/-/g,"");
 const sb = (lg,a,b) => `https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard?dates=${a}-${b}`;
@@ -24,9 +25,20 @@ function saveMatches(){
   const o={}; keys.forEach(k=>o[k]=MATCHES[k]);
   fs.writeFileSync("matches.json", JSON.stringify(o));
 }
+/* v12:輸出瘦身 —— 隊名別名鍵原本與 "#id" 指向同一物件,JSON 會寫兩份(檔案 ×2);改寫成 {$:"#id"},前端/雲端載入時還原 */
+function slimOut(out){
+  const o={...out, leagues:{}};
+  for(const lg in (out.leagues||{})){ const L=out.leagues[lg]; if(!L||!L.teams){ o.leagues[lg]=L; continue; }
+    const T=L.teams, T2={}, idOf=new Map();
+    for(const k in T) if(k[0]==="#") idOf.set(T[k],k);
+    for(const k in T){ const t=T[k]; T2[k]=(k[0]!=="#"&&t&&idOf.has(t))?{$:idOf.get(t)}:t; }
+    o.leagues[lg]={...L, teams:T2}; }
+  return o;
+}
+function unslim(out){ try{ for(const lg in (out.leagues||{})){ const T=out.leagues[lg]&&out.leagues[lg].teams; if(!T) continue; for(const k in T){ const t=T[k]; if(t&&t.$&&T[t.$]) T[k]=T[t.$]; } } }catch(e){} return out; }
 function save(out, lg){
   out.updated = new Date().toISOString();
-  fs.writeFileSync("calib.json", JSON.stringify(out));
+  fs.writeFileSync("calib.json", JSON.stringify(slimOut(out)));
   try { saveMatches(); } catch(e) {}
   if (process.env.GIT_PUSH === "1") {
     try {
@@ -117,7 +129,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
   let out = { updated:"", d:today, days:WEEKS*7, n:0, leagues:{} };
   try {
     const prev = JSON.parse(fs.readFileSync("calib.json","utf8"));
-    if (prev && prev.d === today && prev.leagues) { out = prev; console.log("接續今天的進度:已完成", Object.keys(prev.leagues).filter(k=>prev.leagues[k].done).join(", ")||"(無)"); }
+    if (prev && prev.d === today && prev.leagues) { out = unslim(prev); console.log("接續今天的進度:已完成", Object.keys(prev.leagues).filter(k=>prev.leagues[k].done).join(", ")||"(無)"); }
   } catch(e) {}
 
   for (const lg of LEAGUES) {
@@ -279,7 +291,9 @@ function accProcess(T, hid, aid, hs, as, pr, w){
                 const pv = PREV_STATS[String(a[0])];
                 if (bestApp < 5 && pv && (+pv[1]||0) >= 5) S.push(pv);
               } catch(e) {}
-              if (S.length) a.push(S);
+              // v12:球員數據瘦身 —— 只留本季列 + 出賽最多的一列(前端取 app 最大列;v5 換季保護亦相容)
+              if (S.length) { const cur=S.find(r=>r[0]===String(Y)); const best=S.reduce((m,r)=>((+r[1]||0)>(+m[1]||0)?r:m),S[0]);
+                const keep=[]; if(cur) keep.push(cur); if(best&&best!==cur) keep.push(best); a.push(keep); }
             }
             if (flat.length) { const key="#"+t.id;
               T[key]=T[key]||{gp:0,gf:0,ga:0}; T[key].r=flat; }
