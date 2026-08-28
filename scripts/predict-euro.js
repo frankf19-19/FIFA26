@@ -1,4 +1,5 @@
-/* 雲端統一預測 v4(e151:CORS 偵測追蹤 + v3 斷供備援)
+/* 雲端統一預測 v5(e154:評分視窗 -4~+3 天、孤兒預測清掃、積分榜 feed 瘦身)
+   v4(e151:CORS 偵測追蹤 + v3 斷供備援)
    v3:ESPN 於 2026-08-27 起移除瀏覽器跨域(CORS)支援,前端直連全滅。
    本腳本(Node 端不受 CORS 限制)照常抓取,並把賽程/積分榜/傷停打包進 cloud-pred.json 的 feed 欄位,
    前端 jget 失敗時自動改吃 feed → 網站功能維持,更新頻率降為每 30 分鐘。
@@ -70,8 +71,8 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
   try { await m.loadInjuries(); } catch (e) { console.log("傷停:", e.message); }
 
   const now = new Date();
-  const d0 = new Date(now); d0.setDate(d0.getDate() - 2);
-  const d1 = new Date(now); d1.setDate(d1.getDate() + 2);
+  const d0 = new Date(now); d0.setDate(d0.getDate() - 4);   // v5:GitHub 排程可能延後數小時~一天,視窗放寬避免漏評
+  const d1 = new Date(now); d1.setDate(d1.getDate() + 3);
   let nPred = 0, nLock = 0, nDone = 0;
   const allGames = [];
   for (const l of m.LEAGUES) {
@@ -104,6 +105,28 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
       await sleep(150);
     } catch (e) { console.log("聯賽失敗:", l.id, e.message); }
   }
+  // v5:孤兒清掃 —— 已鎖定但超出視窗仍未評分的預測:有 lg+date 的補抓該日賽程評分;對不上且超過 14 天的標作廢(不計命中/Brier)
+  try {
+    const sc1 = m.scGet(); const inWin = new Set(allGames.map(g => String(g.id)));
+    const orph = Object.keys(sc1).filter(id => { const s = sc1[id]; return s && s.pred && s.hs == null && !s.void && !inWin.has(String(id)); });
+    let nFix = 0, nVoid = 0, nReq = 0; const seen = {};
+    for (const id of orph) {
+      const s = sc1[id]; const kick = Date.parse(s.date || "") || 0; const made = s.tU || s.t || 0;
+      if (kick ? (Date.now() - kick < 3 * 3600000) : (Date.now() - made < 3 * 86400000)) continue;   // 還沒踢完/太新 → 不動
+      if (s.lg && kick && nReq < 12) {
+        const key = s.lg + "|" + ymd(new Date(kick));
+        try {
+          if (!seen[key]) { nReq++; seen[key] = m.parseEvents(await m.jget(m.espnScore(s.lg, ymd(new Date(kick))), true)) || []; await sleep(150); }
+          const g = seen[key].find(x => String(x.id) === String(id));
+          if (g) { g.league = s.lg; if (g.completed && g.hs != null) { allGames.push(g); nFix++; continue; } }
+        } catch (e) {}
+      }
+      const age = Date.now() - (kick || made);
+      if (age > 14 * 86400000) { s.void = true; s.vr = "orphan"; nVoid++; }
+    }
+    if (nVoid) m.scSet(sc1);
+    if (orph.length) console.log(`孤兒預測 ${orph.length} 筆:補評 ${nFix} · 作廢 ${nVoid}`);
+  } catch (e) { console.log("孤兒清掃:", e.message); }
   // 完賽評分(同一套 gradeFinished:含射正/過程資料,學習迴路全部照走)
   try { const sc0 = m.scGet();
     const done = allGames.filter(g => g.completed && g.hs != null && sc0[g.id] && sc0[g.id].pred);   // 只評「賽前已鎖定」的比賽(無前視)
@@ -122,7 +145,15 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
   try { const F = w.__FEED || {};
     const keep = Date.now() - 4 * 86400000;
     const sb = {}; for (const lg in (F.sb || {})) { const arr = Object.values(F.sb[lg]).filter(e => (Date.parse(e.date) || 0) >= keep); if (arr.length) sb[lg] = arr; }
-    feed = { t: Date.now(), sb, st: F.st || {}, inj: F.inj || {} };
+    // v5:積分榜瘦身 —— 只留前端 loadStandFor 會讀的欄位(1.2MB → 約 60KB)
+    const KEEP = new Set(["rank","gamesPlayed","wins","ties","losses","pointsFor","pointsAgainst","pointDifferential","points"]);
+    const slimSt = sd => { try { const grs = (sd.children || [sd]).map(gr => { const ents = (((gr.standings && gr.standings.entries) || gr.entries) || []).map(e => { const t = e.team || {};
+          return { team: { id: t.id, displayName: t.displayName, name: t.name, logos: (t.logos && t.logos[0]) ? [{ href: t.logos[0].href }] : [] },
+            stats: (e.stats || []).filter(x => KEEP.has(x.name) || KEEP.has(x.type)).map(x => ({ name: x.name, type: x.type, value: x.value, displayValue: x.displayValue })) }; });
+        return { standings: { entries: ents } }; });
+      return { children: grs }; } catch (e) { return sd; } };
+    const st = {}; for (const lg in (F.st || {})) st[lg] = slimSt(F.st[lg]);
+    feed = { t: Date.now(), sb, st, inj: F.inj || {} };
   } catch (e) {}
   // v4:ESPN 跨域(CORS)狀態追蹤 —— 每輪對主站/備站發帶 Origin 的請求,檢查 access-control-allow-origin 是否存在;斷供起點跨輪保留
   let espnCors = null;

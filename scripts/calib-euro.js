@@ -15,6 +15,7 @@ const flatWalk = d => { const f={}; (function w(o){ if(!o||typeof o!=="object")r
   if(k&&v!=null&&(typeof v==="string"||typeof v==="number")&&f[k]==null)f[k]=v;
   for(const q in o)w(o[q]); })(d); return f; };
 
+/* v12:原始場數(gn/hgn/agn/nr/stnr)與衰減加權分離 —— 衰減只影響「比率」,樣本門檻改看原始場數(開季前 2 個月各層不再被誤關)
 /* v8:逐場賽果帳本(以 ESPN event id 為鍵,跨日累積、永不刪除 → 歷史會越來越長,供離線回測) */
 let MATCHES = {};
 try { MATCHES = JSON.parse(fs.readFileSync("matches.json","utf8")) || {}; } catch(e) { MATCHES = {}; }
@@ -61,7 +62,10 @@ function parseProcess(sj, homeId){
 /* v10:先發陣容 → 球員「有他 / 沒他」影響力。PL[teamId][playerId]={n,gd,nm} ; TT[teamId]={n,gd} */
 const PL={}, TT={};
 let PREV_NM={};   // 上次 calib.json 裡的球員名(快取路徑沒有名字時補用)
-try { const pc=JSON.parse(fs.readFileSync("calib.json","utf8")); for(const lg in (pc.leagues||{})){ const Ts=pc.leagues[lg].teams||{}; for(const k in Ts){ (Ts[k].pi||[]).forEach(a=>{ if(a[1]) PREV_NM[a[0]]=a[1]; }); (Ts[k].r||[]).forEach(a=>{ if(a[1]) PREV_NM[String(a[0])]=a[1]; }); } } } catch(e) {}
+let PREV_STATS={};   // v5:上季球員數據(換季保護:新季 app<5 時沿用上季,避免開季初「暫無球員數據」)
+try { const rp=JSON.parse(fs.readFileSync("roster-prev.json","utf8")); for(const k in rp) PREV_STATS[k]=rp[k]; } catch(e) {}
+try { const pc=JSON.parse(fs.readFileSync("calib.json","utf8")); for(const lg in (pc.leagues||{})){ const Ts=pc.leagues[lg].teams||{}; for(const k in Ts){ (Ts[k].pi||[]).forEach(a=>{ if(a[1]) PREV_NM[a[0]]=a[1]; }); (Ts[k].r||[]).forEach(a=>{ if(a[1]) PREV_NM[String(a[0])]=a[1];
+  if(Array.isArray(a[4])&&a[4].length){ const best=a[4].reduce((m,row)=>((+row[1]||0)>(+m[1]||0)?row:m),a[4][0]); if((+best[1]||0)>=5) PREV_STATS[String(a[0])]=best; } }); } } } catch(e) {}
 function parseXI(sj, homeId){
   const rs=(sj&&sj.rosters)||[]; if(rs.length!==2) return null;
   const pick=r=>(r.roster||[]).filter(x=>x.starter).map(x=>{ const a=x.athlete||{}; return [String(a.id||""),(a.displayName||"").slice(0,40)]; }).filter(x=>x[0]);
@@ -103,7 +107,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
   const h1=pr.ht[0], a1=pr.ht[1], h2=hs-h1, a2=as-a1;
   if(h2<0||a2<0) return;                                   // 事件與終場比分對不上(烏龍球歸屬等)→ 不納入過程統計
   const H=o(hid), A=o(aid); if(!H||!A) return;
-  const side=(t,gf1,ga1,gf2,ga2,rcn,gf,ga)=>{ t.n+=w; t.g1+=gf1*w; t.c1+=ga1*w; t.g2+=gf2*w; t.c2+=ga2*w; t.rc+=rcn*w;
+  const side=(t,gf1,ga1,gf2,ga2,rcn,gf,ga)=>{ t.n+=w; t.nr=(t.nr||0)+1; t.g1+=gf1*w; t.c1+=ga1*w; t.g2+=gf2*w; t.c2+=ga2*w; t.rc+=rcn*w;
     if(gf1>ga1){ t.lt+=w; if(gf>ga) t.ltw+=w; else if(gf===ga) t.ltd+=w; }
     if(gf1<ga1){ t.tr+=w; if(gf>=ga) t.trx+=w; } };
   side(H,h1,a1,h2,a2,pr.rc[0],hs,as); side(A,a1,h1,a2,h2,pr.rc[1],as,hs);
@@ -120,10 +124,12 @@ function accProcess(T, hid, aid, hs, as, pr, w){
     if (out.leagues[lg] && out.leagues[lg].done) { console.log("跳過(今天已完成):", lg); continue; }
     console.log("處理中:", lg);
     const now = new Date();
-    let hw=0, dr=0, goals=0, n=0;
+    let hw=0, dr=0, goals=0, n=0, nr=0;
     const T={};
     const add=(id,nm,gf,ga,isHome,dt,w2)=>{ const w=(w2!=null?w2:1); const o=(T["#"+id]=T["#"+id]||{gp:0,gf:0,ga:0,hgp:0,hgf:0,hga:0,agp:0,agf:0,aga:0,lp:""});
       o.gp+=w; o.gf+=gf*w; o.ga+=ga*w; if(gf===ga) o.dr=(o.dr||0)+w;
+      o.gn=(o.gn||0)+1; if(isHome) o.hgn=(o.hgn||0)+1; else o.agn=(o.agn||0)+1;   // v12:原始場數(不衰減)
+      o.w2=(o.w2||0)+w*w;   // v12:權重平方和 → 前端算有效樣本數 ESS=gp²/w2(介於衰減值與原始場數之間,作資料權重用)
       if(isHome){ o.hgp+=w; o.hgf+=gf*w; o.hga+=ga*w; } else { o.agp+=w; o.agf+=gf*w; o.aga+=ga*w; }
       if(dt && dt>o.lp) o.lp=dt;                               // 最近一場日期(休息日計算用)
       if(nm) T[String(nm).toLowerCase()]=o; };
@@ -160,7 +166,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
             } catch(e) {}
             { const __ag=Math.max(0,(Date.now()-(Date.parse(ev.date)||Date.now()))/86400000);
               const __wl=Math.exp(-Math.LN2*__ag/60);
-              n+=__wl; goals+=(hs+as)*__wl;
+              n+=__wl; nr+=1; goals+=(hs+as)*__wl;
               if(hs>as) hw+=__wl; else if(hs===as) dr+=__wl; }
             // 時間衰減:半衰期 60 天(上週的比賽 ≈ 半年前的 8 倍話語權)
             const __age=Math.max(0,(Date.now()-(Date.parse(ev.date)||Date.now()))/86400000);
@@ -173,7 +179,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
               accProcess(T,(H.team||{}).id,(A.team||{}).id,hs,as,MATCHES[ev.id].ev,__w);
               try{ const x=MATCHES[ev.id].xi; if(x) accXI((H.team||{}).id,(A.team||{}).id,hs,as,{h:x[0].split(",").map(s=>[s,""]),a:x[1].split(",").map(s=>[s,""])},__w); }catch(e){}
               const acc0=(id,f,a2,ps,cf,cA)=>{ const o=T["#"+id]; if(o){
-                o.stn=(o.stn||0)+__w; o.stf=(o.stf||0)+f*__w; o.sta=(o.sta||0)+a2*__w;
+                o.stn=(o.stn||0)+__w; o.stnr=(o.stnr||0)+1; o.stf=(o.stf||0)+f*__w; o.sta=(o.sta||0)+a2*__w;
                 if(ps!=null){ o.psn=(o.psn||0)+1; o.psf=(o.psf||0)+ps; }
                 if(cf!=null){ o.crf=(o.crf||0)+cf; o.cra=(o.cra||0)+(cA||0); } } };
               acc0((H.team||{}).id,sh2,sa2,ph,ch,ca2); acc0((A.team||{}).id,sa2,sh2,pa,ca2,ch);
@@ -212,7 +218,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
                     const ch=hFirst?c0:c1, ca2=hFirst?c1:c0;
                     try { if (MATCHES[ev.id]) MATCHES[ev.id].sot=[sh2,sa2,ch??null,ca2??null,ph??null,pa??null]; } catch(e) {}
                     const acc=(id,f,a2,ps,cf,cA)=>{ const o=T["#"+id]; if(o){
-                      o.stn=(o.stn||0)+__w; o.stf=(o.stf||0)+f*__w; o.sta=(o.sta||0)+a2*__w;
+                      o.stn=(o.stn||0)+__w; o.stnr=(o.stnr||0)+1; o.stf=(o.stf||0)+f*__w; o.sta=(o.sta||0)+a2*__w;
                       if(ps!=null&&!isNaN(ps)){ o.psn=(o.psn||0)+1; o.psf=(o.psf||0)+ps; }
                       if(cf!=null&&!isNaN(cf)){ o.crf=(o.crf||0)+cf; o.cra=(o.cra||0)+(cA||0); } } };
                     acc((H.team||{}).id, sh2, sa2, ph, ch, ca2); acc((A.team||{}).id, sa2, sh2, pa, ca2, ch);
@@ -228,7 +234,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
       await sleep(200);
     }
     n=+n.toFixed(1);
-    if (n < 8) { out.leagues[lg]={done:1, n:0}; save(out, lg+" (樣本不足)"); continue; }
+    if (nr < 8) { out.leagues[lg]={done:1, n:0, nr}; save(out, lg+" (樣本不足)"); continue; }   // v12:門檻看原始場數
     const ha = Math.max(0.05, Math.min(0.45, 0.24 + (hw/n-0.46)*1.2));
     // v9:聯賽過程平均(領先守成率 / 落後不敗率 / 下半場淨進球 / 紅牌率),供前端算各隊相對體質
     let pA={n:0,lt:0,ltw:0,tr:0,trx:0,h2:0,rc:0};
@@ -236,7 +242,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
     const prAvg = pA.n>0 ? { hold:+(pA.lt?pA.ltw/pA.lt:0.75).toFixed(3), cb:+(pA.tr?pA.trx/pA.tr:0.35).toFixed(3), rc:+(pA.rc/pA.n).toFixed(3) } : null;
     for (const k in T) { const q=T[k]&&T[k].pr; if(q) for(const f in q) q[f]=+(+q[f]).toFixed(2); }
     out.leagues[lg] = { ha:+ha.toFixed(3), lgAvg:+Math.max(1,Math.min(2,goals/n/2)).toFixed(3),
-      draw:+(dr/n).toFixed(3), n, teams:T, ...(prAvg?{prAvg}:{}) };
+      draw:+(dr/n).toFixed(3), n, nr, teams:T, ...(prAvg?{prAvg}:{}) };
     out.n += n;
     // ── 名單 + 球員逐季數據(含守門/防守欄位)──
     try {
@@ -268,6 +274,11 @@ function accProcess(T, hid, aid, hs, as, pr, w){
                 } catch(e) {}
                 await sleep(80);
               }
+              // v5:換季保護 —— 新季所有列 app<5 且上季有 app>=5 的紀錄 → 附加上季列(前端會取 app 最大的一列)
+              try { const bestApp = S.reduce((m,row)=>Math.max(m,+row[1]||0),0);
+                const pv = PREV_STATS[String(a[0])];
+                if (bestApp < 5 && pv && (+pv[1]||0) >= 5) S.push(pv);
+              } catch(e) {}
               if (S.length) a.push(S);
             }
             if (flat.length) { const key="#"+t.id;
@@ -283,9 +294,9 @@ function accProcess(T, hid, aid, hs, as, pr, w){
       const conv=(SOT_G[lg]&&S2)?SOT_G[lg]/S2:0.30;
       for (const k in T) {
         const t2=T[k];
-        if (t2.stn>=8) {
+        if ((t2.stnr||t2.stn)>=8) {
           const sf2=t2.stf+CW*(t2.crf||0), sa3=t2.sta+CW*(t2.cra||0);
-          t2.xg={ n:t2.stn, xf:+(conv*sf2/t2.stn).toFixed(3), xa:+(conv*sa3/t2.stn).toFixed(3) };
+          t2.xg={ n:(t2.stnr||t2.stn), xf:+(conv*sf2/t2.stn).toFixed(3), xa:+(conv*sa3/t2.stn).toFixed(3) };
           if (t2.psn>=8) t2.ps=+(t2.psf/t2.psn).toFixed(1);   // 平均控球率(顯示用)
         }
       }
