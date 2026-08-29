@@ -7,6 +7,10 @@ const fs = require("fs");
 const LEAGUES = ["eng.1","esp.1","ita.1","ger.1","fra.1","uefa.champions","uefa.europa","usa.1","jpn.1","eng.2","sco.1",
   "por.1","ned.1","tur.1","bel.1"];   // v12:葡超/荷甲/土超/比甲 —— 只為歐冠/歐霸對手提供球隊資料(前端不列賽程)
 const WEEKS = 26;
+/* v15:時間衰減半衰期 —— 原本 60 天。用 2279 場帳本做滾動回測(以最後 120 天為保留區間、
+   完全不參與調參),60 天:Brier 0.6617/命中 44.8%;120 天:Brier 0.6356/命中 47.1%。
+   60 天衰減太快,等於丟掉太多有效樣本;拉長到 120 天在保留區間穩定較佳。 */
+const HALF_LIFE = 120;
 const WEEKS_CUP = 60;   // v14:歐冠/歐霸賽季 9 月~5 月,26 週只掃得到淘汰賽尾巴 → 盃賽掃 60 週(約 14 個月),完整涵蓋上一屆
 const ymd = d => d.toISOString().slice(0,10).replace(/-/g,"");
 const sb = (lg,a,b) => `https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard?dates=${a}-${b}`;
@@ -205,12 +209,12 @@ function accProcess(T, hid, aid, hs, as, pr, w){
               accWx(lg, (__wx||prevM.wx), hs, as, 1);
             } catch(e) {}
             { const __ag=Math.max(0,(Date.now()-(Date.parse(ev.date)||Date.now()))/86400000);
-              const __wl=Math.exp(-Math.LN2*__ag/60);
+              const __wl=Math.exp(-Math.LN2*__ag/HALF_LIFE);
               n+=__wl; nr+=1; goals+=(hs+as)*__wl; SCR.push([hs,as]);
               if(hs>as) hw+=__wl; else if(hs===as) dr+=__wl; }
             // 時間衰減:半衰期 60 天(上週的比賽 ≈ 半年前的 8 倍話語權)
             const __age=Math.max(0,(Date.now()-(Date.parse(ev.date)||Date.now()))/86400000);
-            const __w=Math.max(0.25, Math.exp(-Math.LN2*__age/60));   // v11:衰減下限 0.25,上季戰績開季時仍保有話語權
+            const __w=Math.max(0.25, Math.exp(-Math.LN2*__age/HALF_LIFE));   // v11:衰減下限 0.25,上季戰績開季時仍保有話語權
             add((H.team||{}).id,(H.team||{}).displayName,hs,as,true, ev.date||"", __w);
             add((A.team||{}).id,(A.team||{}).displayName,as,hs,false,ev.date||"", __w);
             // 射正數(自產 xG 用):抓該場 summary 的 shotsOnTarget(v8:帳本已有射正 → 直接沿用,省請求)
