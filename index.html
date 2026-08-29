@@ -182,6 +182,7 @@
   .tp-sc{font-family:var(--cond);font-weight:600;font-size:14px;color:var(--teal);text-align:center;align-self:center}
   .tp-conf{font-family:var(--mono);font-size:11px;text-align:right;align-self:center}
   .tp-alt{font-family:var(--cond);font-size:11px;color:var(--muted);letter-spacing:.02em}
+  .tp-old{font-family:var(--cond);font-size:10px;color:var(--muted);border:1px dashed var(--line);border-radius:5px;padding:0 4px;margin-left:5px;opacity:.8}
   .tp-h2h{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:4px;padding-top:5px;border-top:1px dashed var(--line);font-family:var(--cond);font-size:11.5px;color:var(--muted)}
   .tp-h2h .k{color:var(--muted);opacity:.75}
   .tp-h2h .rec{font-family:var(--mono);font-weight:600}
@@ -714,7 +715,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e168";
+const BUILD = "e169";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1085,6 +1086,26 @@ function goalTuneOf(lg){ return (lg&&GOAL_TUNE[lg]!=null)?GOAL_TUNE[lg]:GOAL_TUN
 function gdScaleOf(lg){ return (lg&&GD_SCALE[lg]!=null)?GD_SCALE[lg]:GD_SCALE._; }
 /* 一次性修復:e23 前的舊快照可能「看好某隊但比分平局」(當時的顯示 bug),
    修成與看好一致的比分;命中/Brier 為真實評分,原封不動 */
+/* e169:由凍結的 lh/la 反推「某個方向底下最可能的比分」(含該聯賽 Dixon-Coles rho),
+   用於修正 e168 之前留下的「比分與看好方向矛盾」的舊快照顯示。 */
+function bestCellFor(k,lh,la,lg){
+  try{
+    const cl=(window.CLOUD&&window.CLOUD.leagues&&lg)?window.CLOUD.leagues[lg]:null;
+    const RHO=(cl&&cl.rho!=null)?cl.rho:0;
+    const tau=(i,j)=> (i===0&&j===0)?Math.max(0.01,1-lh*la*RHO)
+      : (i===0&&j===1)?Math.max(0.01,1+lh*RHO)
+      : (i===1&&j===0)?Math.max(0.01,1+la*RHO)
+      : (i===1&&j===1)?Math.max(0.01,1-RHO) : 1;
+    const cells=[]; let tot=0;
+    for(let i=0;i<8;i++)for(let j=0;j<8;j++){
+      const pr=poisson(i,lh)*poisson(j,la)*tau(i,j); tot+=pr;
+      if((i>j?"H":i===j?"D":"A")===k) cells.push({p:pr,i,j});
+    }
+    if(!cells.length||!(tot>0)) return null;
+    cells.sort((x,y)=>y.p-x.p);
+    return {i:cells[0].i, j:cells[0].j, top3:cells.slice(0,3).map(c=>({i:c.i,j:c.j,p:+(c.p/tot*100).toFixed(1)}))};
+  }catch(e){ return null; }
+}
 function migrateSnapshots(){
   const sc=scGet(); let changed=false;
   for(const k in sc){
@@ -1095,6 +1116,19 @@ function migrateSnapshots(){
     // e154:只處理 e23 前的舊快照(v<2)。v2 起「看好某隊 + 比分 1-1」是全局 argmax 的合法結果(比分賭與勝負賭各自獨立計分),不再作廢
     if(s.v>=2 || s.cl){   // e156:一次性救回 —— e153 前被「看好某隊卻比分平局」規則誤作廢的 v2 快照,全部恢復計分(孤兒作廢除外)
       if(s.void && s.vr!=="orphan"){ delete s.void; s.v=2; changed=true; }
+      /* e169:舊制殘留 —— e168 前的比分是「全局最可能的一格」,可能與看好方向矛盾(看好主勝卻寫 1-1)。
+         尚未開賽的:用快照裡凍結的預期進球 lh/la 重算「看好方向底下最可能的比分」,方向與機率完全不動。
+         已完賽的:不改動任何已鎖定的值,只標記 oldSc,列表上會標「舊制」說明為何看起來矛盾。 */
+      if(p.si!=null&&p.sj!=null&&p.pick){
+        const scK=p.si>p.sj?"H":(p.si===p.sj?"D":"A");
+        const pkK=(p.pick==="和局")?"D":((p.H>=p.D&&p.H>=p.A)?"H":((p.A>=p.D&&p.A>=p.H)?"A":"D"));
+        if(scK!==pkK){
+          if(s.hs==null && +p.lh>0 && +p.la>0){
+            const b=bestCellFor(pkK,+p.lh,+p.la,s.lg);
+            if(b){ p.si=b.i; p.sj=b.j; p.sc3=b.top3; p.rebuilt=1; changed=true; }
+          } else if(!p.oldSc){ p.oldSc=1; changed=true; }
+        }
+      }
       continue; }
     if(!s.void && ((isTeamPick && p.si===p.sj) || (p.pick==="和局" && p.si!==p.sj) || p.si==null)){
       p.si=null; p.sj=null; s.v=1; s.void=true; changed=true;
@@ -2571,7 +2605,7 @@ function renderTodaySection(){
         <!-- 預測列:欄位與上方一一對齊(左客右主),不會錯位 -->
         <span class="tp-k">預測</span>
         <span class="tp-side aw">${Math.round(p.A)}%</span>
-        <span class="tp-sc" title="客 ${p.sj} - 主 ${p.si}${p.sc3&&p.sc3[0]?` · 機率 ${p.sc3[0].p}%`:""}">${p.sj} - ${p.si}</span>${p.sc3&&p.sc3.length>1?`<span class="tp-alt" title="Top-3 波膽:單一比分天花板約 12%,三格合計約 30%">${p.sc3[0].p}% · 次選 ${p.sc3.slice(1).map(c=>`${c.j}-${c.i} ${c.p}%`).join(" · ")}</span>`:""}
+        <span class="tp-sc" title="客 ${p.sj} - 主 ${p.si}${p.sc3&&p.sc3[0]?` · 機率 ${p.sc3[0].p}%`:""}">${p.sj} - ${p.si}</span>${(snap&&snap.pred&&snap.pred.oldSc)?`<span class="tp-old" title="e168 前的舊規則:比分取「全部比分中機率最高的一格」,可能與看好方向矛盾。已鎖定的預測不修改,僅標記。新制的比分一律與看好方向一致。">舊制</span>`:""}${p.sc3&&p.sc3.length>1?`<span class="tp-alt" title="Top-3 波膽:單一比分天花板約 12%,三格合計約 30%">${p.sc3[0].p}% · 次選 ${p.sc3.slice(1).map(c=>`${c.j}-${c.i} ${c.p}%`).join(" · ")}</span>`:""}
         <span class="tp-side hm">${Math.round(p.H)}%</span>
         <span class="tp-conf" style="color:${conf}">信心 ${p.conf}</span>${(()=>{try{
           if(!snap||!snap.odds0||!snap.odds) return "";
