@@ -188,6 +188,8 @@
   .tp-h2h .m{font-family:var(--mono);background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:5px;padding:1px 5px;white-space:nowrap}
   .tp-h2h .m.w{color:var(--hit);border-color:rgba(94,200,132,.35)}
   .tp-h2h .m.l{color:var(--miss);border-color:rgba(232,110,110,.35)}
+  .tp-h2h .m.d{color:var(--ink2)}
+  .tp-h2h .m b{font-family:var(--mono);font-weight:700;margin:0 1px}
   .tp-h2h .m .hm{opacity:.6;font-size:10px;margin-left:2px}
   @media (max-width:600px){   /* e163:手機 —— 交手列改成單行橫向滑動,不換行擠壓;字級放大好按 */
     .tp-h2h{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;font-size:12px;
@@ -712,7 +714,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e163";
+const BUILD = "e164";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1808,16 +1810,23 @@ function h2hList(snap, g){
 }
 function h2hStrip(snap, g){
   const L=h2hList(snap,g); if(!L||!L.length) return "";
+  const HZ=zhName(g&&g.hn)||"主隊", AZ=zhName(g&&g.an)||"客隊";
   let w=0,d=0,l=0;
+  // e164:每一場都寫出「誰贏、幾比幾」——勝方隊名在前、勝方分數在前,和局標「和」,不必再推敲主客
   const cells=L.slice(0,5).map(r=>{
     const dt=String(r[0]||""), my=+r[1], op=+r[2], home=+r[3]===1;
     if(my>op) w++; else if(my===op) d++; else l++;
-    const cls=my>op?"w":(my<op?"l":"");
     const md=dt.length>=10?(dt.slice(5,7)+"/"+dt.slice(8,10)):dt.slice(0,5);
     const yr=dt.slice(0,4);
-    return `<span class="m ${cls}" title="${yr}-${md.replace("/","-")} ${home?"本場主隊當時作主":"本場主隊當時作客"}">${md} ${my}-${op}<span class="hm">${home?"主":"客"}</span></span>`;
+    const venue=home?`${HZ} 主場`:`${AZ} 主場`;
+    const full=`${yr}-${md.replace("/","-")} · ${venue} · ${HZ} ${my}-${op} ${AZ}`;
+    let cls="", body="";
+    if(my>op){ cls="w"; body=`${HZ} <b>${my}-${op}</b>`; }
+    else if(my<op){ cls="l"; body=`${AZ} <b>${op}-${my}</b>`; }
+    else { cls="d"; body=`<b>${my}-${op}</b> 和`; }
+    return `<span class="m ${cls}" title="${full}">${md} ${body}<span class="hm">${home?"主":"客"}</span></span>`;
   }).join("");
-  return `<div class="tp-h2h"><span class="k">交手</span><span class="rec" title="以本場主隊的視角:近 ${L.length} 次交手戰績">${w}勝${d}平${l}負</span>${cells}</div>`;
+  return `<div class="tp-h2h"><span class="k">交手</span><span class="rec" title="${HZ}(本場主隊)近 ${L.length} 次對 ${AZ} 的戰績;每格右下角的主/客是當時 ${HZ} 踢主場還是客場">${HZ} ${w}勝${d}平${l}負</span>${cells}</div>`;
 }
 /* 詳細分析:逐項列出模型依據(無資料的項目自動略過,不編造) */
 function analysisRows(hn,an,p,lg,hid,aid){
