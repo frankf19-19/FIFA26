@@ -182,13 +182,20 @@
   .tp-sc{font-family:var(--cond);font-weight:600;font-size:14px;color:var(--teal);text-align:center;align-self:center}
   .tp-conf{font-family:var(--mono);font-size:11px;text-align:right;align-self:center}
   .tp-alt{font-family:var(--cond);font-size:11px;color:var(--muted);letter-spacing:.02em}
-  .tp-h2h{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:2px;font-family:var(--cond);font-size:11.5px;color:var(--muted)}
+  .tp-h2h{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:4px;padding-top:5px;border-top:1px dashed var(--line);font-family:var(--cond);font-size:11.5px;color:var(--muted)}
   .tp-h2h .k{color:var(--muted);opacity:.75}
   .tp-h2h .rec{font-family:var(--mono);font-weight:600}
   .tp-h2h .m{font-family:var(--mono);background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:5px;padding:1px 5px;white-space:nowrap}
   .tp-h2h .m.w{color:var(--hit);border-color:rgba(94,200,132,.35)}
   .tp-h2h .m.l{color:var(--miss);border-color:rgba(232,110,110,.35)}
   .tp-h2h .m .hm{opacity:.6;font-size:10px;margin-left:2px}
+  @media (max-width:600px){   /* e163:手機 —— 交手列改成單行橫向滑動,不換行擠壓;字級放大好按 */
+    .tp-h2h{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;font-size:12px;
+      -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 16px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 16px),transparent)}
+    .tp-h2h::-webkit-scrollbar{display:none}
+    .tp-h2h .k,.tp-h2h .rec,.tp-h2h .m{flex:0 0 auto}
+    .tp-h2h .m{padding:2px 7px;font-size:12px}
+  }
   .tg-pred{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:8px;
     font-size:12.5px;color:var(--ink2);padding:6px 2px 0}
   .tp-pick{color:var(--gold);font-weight:700;white-space:nowrap}
@@ -705,7 +712,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e162";
+const BUILD = "e163";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1759,6 +1766,33 @@ function scoreReasonLine(p,hz,az){
     return `為何 ${p.si}-${p.sj}:預期進球 ${hz} ${p.lh}、${az} ${p.la}(${lvl}),全部比分中 ${p.si}-${p.sj} 單格機率最高 ${pSel.toFixed(1)}%${alt?`,次選 ${alt[0]}-${alt[1]} ${alt[2].toFixed(1)}%`:""}${scK!==pkK?`;勝負仍看好 ${dirZh}(方向是總和、比分是單格,可不同)`:""}${p.mk?" · 已含市場賠率":""} —— 點「詳細分析」看完整依據`;
   }catch(e){ return ""; }
 }
+/* e163:列表上缺交手紀錄的比賽(雲端還沒抓到的)→ 前端逐一補抓,一次最多 8 場、每場間隔 250ms,
+   抓到後只把那一列的 HTML 塞進去,不重繪列表,所以不會打斷閱讀或跳動位置。 */
+let _H2H_BUSY=false;
+async function fillH2H(box){
+  if(_H2H_BUSY||!box) return;
+  const todo=[];
+  box.querySelectorAll(".tg-row[data-gid]").forEach(el=>{
+    if(el.querySelector(".tp-h2h")) return;
+    const g=GAMES_BY_ID[el.dataset.gid]; if(!g||g.hid==null||g.aid==null) return;
+    const lg=g.league||el.dataset.golg; if(!lg) return;
+    if(H2H_CACHE[lg+"|"+g.hid+"|"+g.aid]) return;      // 抓過了(可能真的沒交手紀錄)
+    todo.push({el,g,lg});
+  });
+  if(!todo.length) return;
+  _H2H_BUSY=true;
+  try{
+    for(const t of todo.slice(0,8)){
+      try{
+        await loadH2H(t.lg,t.g.hid,t.g.aid);
+        if(!document.body.contains(t.el)) continue;     // 期間已重繪 → 跳過
+        const html=h2hStrip(scGet()[t.g.id], {...t.g, league:t.lg});
+        if(html&&!t.el.querySelector(".tp-h2h")) t.el.insertAdjacentHTML("beforeend", html);
+      }catch(e){}
+      await new Promise(r=>setTimeout(r,250));
+    }
+  } finally { _H2H_BUSY=false; }
+}
 /* e162:列表上直接顯示歷史對戰(近 5 次交手與比分)
    資料來源:雲端快照的 h2l(賽前抓好、與預測一起凍結),沒有的話用本機 H2H_CACHE。
    比分一律以「本場主隊」的視角呈現(主隊進球在前),並標註當時主客。 */
@@ -2553,6 +2587,7 @@ function renderTodaySection(){
     const g=GAMES_BY_ID[el.dataset.gid];
     if(g && window.showGame) showGame(g);
   });
+  fillH2H(box);   // e163:補抓缺少的交手紀錄(不重繪整張列表,只塞進該列 → 不會跳動)
   document.querySelectorAll("#stFilter .sf").forEach(b=>b.onclick=()=>{ ST_FILTER=b.dataset.sf; renderTodaySection(); });
   box.querySelectorAll(".an-btn").forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();
     const bx=document.getElementById("an-"+b.dataset.an); if(!bx) return;
