@@ -714,7 +714,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e167";
+const BUILD = "e168";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1718,7 +1718,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
     _cells.push({p,i,j});
     if(p>best[k].p) best[k]={p,i,j};}
   const t=H+D+A; H=H/t*100;D=D/t*100;A=A/t*100;
-  const _sc3=_cells.sort((x,y)=>y.p-x.p).slice(0,3).map(c=>({i:c.i,j:c.j,p:+(c.p/t*100).toFixed(1)}));   // e158:機率最高的三個比分
+  _cells.sort((x,y)=>y.p-x.p);   // e158:依機率排序,Top-3 波膽於方向決定後再挑(e168)
   // 和局錨定:Poisson 結構性低估和局(診斷實證)→ 拉向該聯賽近182天真實和局率
   { const LD=(cl&&cl.draw)?cl.draw*100:25.5;
     const TGT=(_tdr!=null)?(0.6*LD+0.4*_tdr):LD;             // 兩層錨:聯賽 60% + 兩隊體質 40%
@@ -1749,9 +1749,14 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
   }
   // 預測結果與顯示比分保持一致:先定結果,再取該結果下最可能的比分
   const predOut = H>=D&&H>=A ? "H" : A>=D&&A>=H ? "A" : "D";
-  // e146:精準比分 = 全部比分中機率最高的一格(1469 場實證 1-1 佔 12.1% 是最常見比分,舊「限看好方向」規則永遠選不到它)
-  const _gb=(best.H.p>=best.D.p&&best.H.p>=best.A.p)?best.H:(best.D.p>=best.A.p?best.D:best.A);
+  /* e168:比分必須與看好方向一致 —— 計分制度改成
+       全中 = 方向對 + 比分對 ｜ 命中 = 方向對、比分錯 ｜ 未中 = 方向錯(含開出和局卻沒看好和局)
+     在這個制度下,「全局最可能的一格」若與看好方向矛盾(例如看好主勝卻選 1-1),
+     那一格永遠不可能拿到全中 —— 所以最佳選擇是「看好方向底下最可能的比分」。 */
+  const _gb=best[predOut];
   const si=_gb.i, sj=_gb.j;
+  // e168:Top-3 波膽同樣限定在看好方向底下(與全中制度一致)
+  const _sc3=_cells.filter(c=>(c.i>c.j?"H":c.i===c.j?"D":"A")===predOut).slice(0,3).map(c=>({i:c.i,j:c.j,p:+(c.p/t*100).toFixed(1)}));
   const top=Math.max(H,D,A);
   // 信心分級同時看機率高度與資料品質:資料不足時不給「高」
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
@@ -1772,7 +1777,7 @@ function scoreReasonLine(p,hz,az){
     const dirZh=pkK==="H"?`${hz} 勝`:pkK==="A"?`${az} 勝`:"和局";
     const tot=(p.lh+p.la).toFixed(1);
     const lvl=tot>=3.1?"對攻":tot<=2.3?"悶戰":"中等節奏";
-    return `為何 ${p.si}-${p.sj}:預期進球 ${hz} ${p.lh}、${az} ${p.la}(${lvl}),全部比分中 ${p.si}-${p.sj} 單格機率最高 ${pSel.toFixed(1)}%${alt?`,次選 ${alt[0]}-${alt[1]} ${alt[2].toFixed(1)}%`:""}${scK!==pkK?`;勝負仍看好 ${dirZh}(方向是總和、比分是單格,可不同)`:""}${p.mk?" · 已含市場賠率":""} —— 點「詳細分析」看完整依據`;
+    return `為何 ${p.si}-${p.sj}:預期進球 ${hz} ${p.lh}、${az} ${p.la}(${lvl});看好 ${dirZh},在該方向底下 ${p.si}-${p.sj} 是最可能的比分 ${pSel.toFixed(1)}%${alt?`,次選 ${alt[0]}-${alt[1]} ${alt[2].toFixed(1)}%`:""}${p.mk?" · 已含市場賠率":""} —— 點「詳細分析」看完整依據`;
   }catch(e){ return ""; }
 }
 /* e163:列表上缺交手紀錄的比賽(雲端還沒抓到的)→ 前端逐一補抓,一次最多 8 場、每場間隔 250ms,
@@ -1927,8 +1932,8 @@ function analysisRows(hn,an,p,lg,hid,aid){
     const why=[];
     why.push(`①方向:勝負機率 主 ${p.H}% / 和 ${p.D}% / 客 ${p.A}% → 看好 ${dirZh}(把同方向所有比分加總的結果)`);
     why.push(`②水位:兩隊預期進球合計 ${tot} 球(${hz} ${p.lh}、${az} ${p.la},由聯賽場均、兩隊攻防、主場優勢${p.mk?"、市場賠率":""}${p.xg?"、射正 xG":""}算出),決定比分是悶戰還是對攻`);
-    why.push(`③挑選:精準比分取全部比分中「單格」機率最高的 ${p.si}-${p.sj}(${pSel.toFixed(1)}%)${alt?`;次選 ${alt}`:""}${scK!==pkK?` —— 注意:比分方向可與看好不同,因為看好是機率總和、比分是單格機率(例:主勝 45% 但分散在多種比分,1-1 單格反而最高)`:""}`);
-    why.push(`④全場最可能:${overall} —— 提醒:單一比分是低機率事件,最高約 10~12%;雲端 1469 場實證 1-1 是足球最常見比分(12.1%)`);
+    why.push(`③挑選:比分一律取「看好方向底下」機率最高的一格 → ${p.si}-${p.sj}(${pSel.toFixed(1)}%)${alt?`;次選 ${alt}`:""} —— e168 起計分制度為「全中 = 方向對 + 比分對」,所以比分不會再與看好方向矛盾`);
+    why.push(`④提醒:單一比分是低機率事件,即使預期進球完全正確,最高的一格也只有約 8~12%;判斷模型好壞請看方向命中率與 Brier,比分全中屬於加分`);
     rows.push(["比分依據", why.join("\n")]);
   }catch(e){}
   const top=Math.max(p.H,p.D,p.A);
@@ -2537,8 +2542,8 @@ function renderTodaySection(){
         st=`<span class="stx st-done">完場</span>`;
         if(snap&&snap.void){ st+=`<span class="stx r-void">不計</span>`; rowCls="done"; }
         else if(snap&&snap.hs!=null){
-          const exact=(snap.score===true||((snap.v>=2)&&snap.pred&&snap.pred.si!=null&&snap.pred.si===g.hs&&snap.pred.sj===g.as));
-          if(exact){ st+=`<span class="stx r-exact">★ ${snap.hit?"全中":"比分中"}</span>`; rowCls="exact"; }
+          const exact=!!snap.hit&&(snap.score===true||((snap.v>=2)&&snap.pred&&snap.pred.si!=null&&snap.pred.si===g.hs&&snap.pred.sj===g.as));   // e168
+          if(exact){ st+=`<span class="stx r-exact">★ 全中</span>`; rowCls="exact"; }
           else if(snap.hit){ st+=`<span class="stx r-hit">✓ 命中</span>`; rowCls="hit"; }
           else { st+=`<span class="stx r-miss">✗ 未中</span>`; rowCls="miss"; }
         } else if(snap){ st+=`<span class="stx st-soon">待評分</span>`; rowCls="done"; }
@@ -3078,7 +3083,7 @@ async function gradeFinished(games){
     const brier=(sp0.H/100-y.H)**2+(sp0.D/100-y.D)**2+(sp0.A/100-y.A)**2;
     sc[g.id]={hit:(ex&&ex.hit!=null)?ex.hit:(predOut===realOut),
       brier:(ex&&ex.brier!=null)?ex.brier:+brier.toFixed(3),
-      score:(ex&&ex.score!=null)?ex.score:(sp0.si!=null&&sp0.si===g.hs&&sp0.sj===g.as),   // e154:比分賭獨立計分(與莊家波膽同制),不再綁勝負方向
+      score:(ex&&ex.score!=null)?ex.score:(predOut===realOut&&sp0.si!=null&&sp0.si===g.hs&&sp0.sj===g.as),   // e168:全中 = 方向對 + 比分對(方向錯就是未中,即使比分巧合相同)
       s3:(ex&&ex.s3!=null)?ex.s3:(Array.isArray(sp0.sc3)&&sp0.sc3.some(c=>c.i===g.hs&&c.j===g.as)),   // e158:Top-3 波膽命中
       hs:g.hs, as:g.as, hz:zhName(g.hn), az:zhName(g.an),
       hnk:norm(g.hn), ank:norm(g.an), t:(ex&&ex.t)||Date.now(), v:ex?(ex.v||1):2,
@@ -3426,8 +3431,8 @@ function makeReview(g){
   if(s.void) return {text:"此場早期預測自相矛盾(顯示異常),整筆作廢——不計入命中率、驗證數與 Brier。之後的新預測依 v2 制度誠實計分。",good:false};
   const p=s.pred, hz=s.hz, az=s.az;
   const parts=[];
-  const exact=((s.v>=2)&&p.si!=null&&p.si===s.hs&&p.sj===s.as);
-  if(s.score===true||exact){ parts.push(s.hit?"方向與比分全中,模型校準精準":"比分命中(波膽),但勝負看好方向與比分不一致——比分取全局最可能分數,方向取三向機率最高者,兩者獨立計分"); }
+  const exact=!!s.hit&&((s.v>=2)&&p.si!=null&&p.si===s.hs&&p.sj===s.as);   // e168:全中必須方向也對
+  if(s.score===true||exact){ parts.push("方向與比分全中,模型校準精準"); }
   else if(s.hit){
     if(!(s.v>=2)&&p.si===s.hs&&p.sj===s.as)
       parts.push("勝負方向命中(早期版本的比分紀錄有顯示問題,不納入全中判定)");
@@ -3472,13 +3477,13 @@ function gameCard(g){
       pill=`<span class="pill wait" title="早期預測自相矛盾(顯示異常),整筆作廢,不計入命中率與 Brier">不計</span>`;
     }else if(snap0&&snap0.pred){
       hitFlag=!!snap0.hit;
-      exact=(snap0.score===true||((snap0.v>=2)&&snap0.pred.si!=null&&snap0.pred.si===g.hs&&snap0.pred.sj===g.as));
+      exact=hitFlag&&(snap0.score===true||((snap0.v>=2)&&snap0.pred.si!=null&&snap0.pred.si===g.hs&&snap0.pred.sj===g.as));   // e168
     }else{
       const realOut=g.hs>g.as?"H":g.hs<g.as?"A":"D";
       const predOut=p.H>=p.D&&p.H>=p.A?"H":p.A>=p.D&&p.A>=p.H?"A":"D";
-      hitFlag=realOut===predOut; exact=p.si!=null&&p.si===g.hs&&p.sj===g.as;
+      hitFlag=realOut===predOut; exact=hitFlag&&p.si!=null&&p.si===g.hs&&p.sj===g.as;   // e168
     }
-    if(!pill) pill= exact?`<span class="pill hit" title="${hitFlag?"勝負方向與比分皆預測正確":"比分(波膽)預測正確"}">${hitFlag?"全中":"比分中"}</span>`
+    if(!pill) pill= exact?`<span class="pill hit" title="勝負方向與比分皆預測正確">全中</span>`
         : hitFlag?`<span class="pill hit" title="勝負方向(主勝/和/客勝)預測正確;比分未全中">命中</span>`
         : `<span class="pill miss" title="勝負方向預測錯誤">未中</span>`;
   } else pill=`<span class="pill wait">未開賽</span>`;
