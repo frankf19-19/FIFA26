@@ -715,7 +715,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e175";
+const BUILD = "e176";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1088,6 +1088,23 @@ function gdScaleOf(lg){ return (lg&&GD_SCALE[lg]!=null)?GD_SCALE[lg]:GD_SCALE._;
    修成與看好一致的比分;命中/Brier 為真實評分,原封不動 */
 /* e169:由凍結的 lh/la 反推「某個方向底下最可能的比分」(含該聯賽 Dixon-Coles rho),
    用於修正 e168 之前留下的「比分與看好方向矛盾」的舊快照顯示。 */
+/* e176:顯示用比分 —— e168 前鎖定的舊快照,比分是「全局最可能的一格」,可能與看好方向矛盾
+   (看好柏林聯主勝,比分卻寫 1-1),畫面上等於同時說了兩件相反的事。
+   這裡在「顯示時」用快照凍結的預期進球 lh/la 重算成與看好方向一致的比分,並標「舊制」。
+   判定完全不受影響:命中/未中一律看看好方向,全中仍用原始鎖定的 si/sj,不會事後加分。 */
+function dispSc(p,lg){
+  try{
+    if(!p||p.si==null||p.sj==null) return null;
+    const scK=p.si>p.sj?"H":(p.si===p.sj?"D":"A");
+    const pkK=(p.pick==="和局")?"D":((p.H>=p.D&&p.H>=p.A)?"H":((p.A>=p.D&&p.A>=p.H)?"A":"D"));
+    if(scK===pkK) return {i:p.si,j:p.sj,legacy:false};
+    if(+p.lh>0&&+p.la>0){
+      const b=bestCellFor(pkK,+p.lh,+p.la,lg);
+      if(b) return {i:b.i,j:b.j,legacy:true,oi:p.si,oj:p.sj,sc3:b.top3};
+    }
+    return {i:p.si,j:p.sj,legacy:true,oi:p.si,oj:p.sj};
+  }catch(e){ return null; }
+}
 function bestCellFor(k,lh,la,lg){
   try{
     const cl=(window.CLOUD&&window.CLOUD.leagues&&lg)?window.CLOUD.leagues[lg]:null;
@@ -2644,7 +2661,8 @@ function renderTodaySection(){
         <!-- 預測列:欄位與上方一一對齊(左客右主),不會錯位 -->
         <span class="tp-k">預測</span>
         <span class="tp-side aw">${Math.round(p.A)}%</span>
-        <span class="tp-sc" title="客 ${p.sj} - 主 ${p.si}${p.sc3&&p.sc3[0]?` · 機率 ${p.sc3[0].p}%`:""}">${p.sj} - ${p.si}</span>${(snap&&snap.pred&&snap.pred.oldSc)?`<span class="tp-old" title="e168 前的舊規則:比分取「全部比分中機率最高的一格」,可能與看好方向矛盾。已鎖定的預測不修改,僅標記。新制的比分一律與看好方向一致。">舊制比分</span>`:""}${p.sc3&&p.sc3.length>1?`<span class="tp-alt" title="Top-3 波膽:單一比分天花板約 12%,三格合計約 30%">${p.sc3[0].p}% · 次選 ${p.sc3.slice(1).map(c=>`${c.j}-${c.i} ${c.p}%`).join(" · ")}</span>`:""}
+        ${(()=>{ const D=dispSc(p,l.id)||{i:p.si,j:p.sj}; const S3=(D.legacy&&D.sc3)?D.sc3:p.sc3;
+          return `<span class="tp-sc" title="客 ${D.j} - 主 ${D.i}${S3&&S3[0]?` · 機率 ${S3[0].p}%`:""}">${D.j} - ${D.i}</span>${D.legacy?`<span class="tp-old" title="這是 e168 前鎖定的舊預測:當時的比分取「全部比分中最高的一格」(原為 ${p.sj} - ${p.si}),會與看好方向矛盾。此處已依凍結的預期進球換算成與看好方向一致的比分;命中/未中的判定完全不受影響,一律以「看好」為準。">舊制比分</span>`:""}${S3&&S3.length>1?`<span class="tp-alt" title="Top-3 波膽:單一比分天花板約 12%,三格合計約 30%">${S3[0].p}% · 次選 ${S3.slice(1).map(c=>`${c.j}-${c.i} ${c.p}%`).join(" · ")}</span>`:""}`; })()}
         <span class="tp-side hm">${Math.round(p.H)}%</span>
         <span class="tp-conf" style="color:${conf}">信心 ${p.conf}</span>${(()=>{try{
           if(!snap||!snap.odds0||!snap.odds) return "";
