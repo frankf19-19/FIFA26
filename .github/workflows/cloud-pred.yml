@@ -1,7 +1,7 @@
 name: euro-cloud-pred
 on:
   schedule:
-    - cron: "9,39 * * * *"        # 每 30 分鐘(避開整點/半點:GitHub 尖峰時段會把 */N 排程延後數小時)。預測未開賽、鎖定已開賽、評分已完賽
+    - cron: "9,39 * * * *"        # 排程只是「點火」:GitHub 尖峰時段會把排程延後數小時,所以每次點火後在同一個 job 裡自己跟 30 分鐘一輪、最長跑 5.5 小時
   workflow_dispatch:
 permissions:
   contents: write
@@ -11,17 +11,25 @@ concurrency:
 jobs:
   pred:
     runs-on: ubuntu-latest
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - run: npm i jsdom@24 --no-save --silent
-      - run: node scripts/predict-euro.js
-      - name: commit cloud-pred.json
+      - name: predict loop (every 30 min, up to ~5.5h)
         run: |
           git config user.name  "pred-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add cloud-pred.json
-          git diff --cached --quiet || git commit -m "cloud prediction"
-          git pull --rebase origin main || { git rebase --abort || true; git pull --no-rebase -X ours origin main; }
-          git push
+          END=$(( $(date +%s) + 330*60 ))
+          while true; do
+            git pull --rebase origin main || { git rebase --abort || true; git pull --no-rebase -X theirs origin main; }
+            node scripts/predict-euro.js || echo "predict failed (continue)"
+            git add cloud-pred.json
+            git diff --cached --quiet || git commit -m "cloud prediction"
+            git pull --rebase origin main || { git rebase --abort || true; git pull --no-rebase -X ours origin main; }
+            git push || { git pull --rebase origin main; git push; }
+            NOW=$(date +%s); [ $NOW -ge $END ] && break
+            LEFT=$(( END - NOW )); S=1800; [ $LEFT -lt $S ] && S=$LEFT
+            echo "sleep $S s"; sleep $S
+          done
