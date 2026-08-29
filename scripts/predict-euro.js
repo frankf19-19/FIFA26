@@ -1,4 +1,5 @@
-/* 雲端統一預測 v5(e154:評分視窗 -4~+3 天、孤兒預測清掃、積分榜 feed 瘦身)
+/* 雲端統一預測 v6(e159:賽前抓歷史對戰餵模型、快照存 sc3/h2)
+   v5(e154:評分視窗 -4~+3 天、孤兒預測清掃、積分榜 feed 瘦身)
    v4(e151:CORS 偵測追蹤 + v3 斷供備援)
    v3:ESPN 於 2026-08-27 起移除瀏覽器跨域(CORS)支援,前端直連全滅。
    本腳本(Node 端不受 CORS 限制)照常抓取,並把賽程/積分榜/傷停打包進 cloud-pred.json 的 feed 欄位,
@@ -57,7 +58,7 @@ js += `\n;window.__FEED={sb:{},st:{},inj:{}};
     }catch(e){}
     return j; };
 })();`;
-js += "\n;window.__m={predict,parseEvents,gradeFinished,computeTuning,loadInjuries,loadStandFor,espnScore,jget,scGet,scSet,noPredGate,LEAGUES,adjGet,adGet,mktWGet,ymd,isoDate};";
+js += "\n;window.__m={predict,parseEvents,gradeFinished,computeTuning,loadInjuries,loadStandFor,espnScore,jget,scGet,scSet,noPredGate,LEAGUES,adjGet,adGet,mktWGet,ymd,isoDate,loadH2H};";
 w.eval(js);
 const m = w.__m;
 
@@ -92,11 +93,13 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
           if (ex && ex.pred && !ex.fz) { ex.fz = { ...ex.pred }; ex.fzT = ex.tU || ex.t || Date.now(); ex.lg = ex.lg || l.id; changed = true; nLock++; }   // 鎖定時間 = 最後一次「賽前」預測時間
           continue;                                   // 已開賽:不再改預測(誠信)
         }
+        if (g.hid && g.aid && (kick - Date.now()) < 3 * 86400000) { try { await m.loadH2H(l.id, g.hid, g.aid); await sleep(120); } catch (e) {} }   // v6:3 天內的比賽先抓歷史對戰(快取)再預測
         const pp = m.predict(g.hn, g.an, g.odds, l.id, g.hid, g.aid);
         if (m.noPredGate(pp, l.id) || !((pp.dq || 0) >= 0.2)) continue;
         if (ex && ex.hs != null) continue;              // 已評分不動
         sc[g.id] = { ...(ex || {}),
           pred: { H: pp.H, D: pp.D, A: pp.A, si: pp.si, sj: pp.sj, conf: pp.conf, pick: pp.pick, lh: pp.lh, la: pp.la, prs: pp.prs, pw: pp.pw, pls: pp.pls, plw: pp.plw,
+            ...(pp.sc3?{sc3:pp.sc3}:{}), ...(pp.h2s!=null?{h2s:pp.h2s,h2w:pp.h2w}:{}), ...(pp.h2?{h2:pp.h2}:{}),   // v6:Top-3 波膽 + 歷史對戰訊號(供學習迴路)
             ...(pp.pure?{pure:pp.pure}:{}), ...(pp.mkp?{mkp:pp.mkp}:{}), ...(pp.mw!=null?{mw:pp.mw}:{}) },   // v2:對戰莊家原料(純模型/市場/權重)
           odds: (g.odds || (ex && ex.odds) || null), odds0: ((ex && ex.odds0) || g.odds || null),
           dq: pp.dq, t: (ex && ex.t) || Date.now(), tU: Date.now(), v: 2, locked: 1, lg: l.id,
