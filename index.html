@@ -183,6 +183,7 @@
   .tp-conf{font-family:var(--mono);font-size:11px;text-align:right;align-self:center}
   .tp-alt{font-family:var(--cond);font-size:11px;color:var(--muted);letter-spacing:.02em}
   .tp-old{font-family:var(--cond);font-size:10px;color:var(--muted);border:1px dashed var(--line);border-radius:5px;padding:0 4px;margin-left:5px;opacity:.8}
+  .game>.tp-h2h{margin-top:10px}
   .tp-h2h{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:4px;padding-top:5px;border-top:1px dashed var(--line);font-family:var(--cond);font-size:11.5px;color:var(--muted)}
   .tp-h2h .k{color:var(--muted);opacity:.75}
   .tp-h2h .rec{font-family:var(--mono);font-weight:600}
@@ -715,7 +716,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e177";
+const BUILD = "e178";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1882,11 +1883,39 @@ function scoreReasonLine(p,hz,az){
 }
 /* e163:列表上缺交手紀錄的比賽(雲端還沒抓到的)→ 前端逐一補抓,一次最多 8 場、每場間隔 250ms,
    抓到後只把那一列的 HTML 塞進去,不重繪列表,所以不會打斷閱讀或跳動位置。 */
+/* e178:兩小時內開賽(且尚未開賽)的比賽 → 抓當日先發名單(e175 的層需要它才會啟用)。
+   拿到後重繪該區塊,賽前鎖定就會用到真實陣容。 */
+let _XI_BUSY=false;
+async function fillLineups(box, sel){
+  if(_XI_BUSY||!box||!(window.CLOUD&&window.CLOUD.pr)) return;
+  const now=Date.now(), todo=[];
+  box.querySelectorAll(sel||".tg-row[data-gid]").forEach(el=>{
+    const g=GAMES_BY_ID[el.dataset.gid]; if(!g||g.hid==null||g.aid==null) return;
+    if(g.state!=="pre") return;
+    const ts=Date.parse(g.date||"")||0; if(!ts) return;
+    const mins=(ts-now)/60000; if(!(mins>-5&&mins<125)) return;
+    if(XI_CACHE[g.id]) return;
+    todo.push({g, lg:g.league||el.dataset.golg});
+  });
+  if(!todo.length) return;
+  _XI_BUSY=true;
+  try{
+    for(const t of todo.slice(0,10)){
+      try{ const r=await loadLineup(t.lg,t.g.id,t.g.hid,t.g.aid);
+        if(r&&!overlayOpen()){
+          if(VIEW==="today"&&typeof renderTodaySection==="function") renderTodaySection();
+          else if(typeof renderGames==="function"&&window.__lastGames) renderGames(window.__lastGames);
+        }
+      }catch(e){}
+      await new Promise(r=>setTimeout(r,300));
+    }
+  } finally { _XI_BUSY=false; }
+}
 let _H2H_BUSY=false;
-async function fillH2H(box){
+async function fillH2H(box, sel){
   if(_H2H_BUSY||!box) return;
   const todo=[];
-  box.querySelectorAll(".tg-row[data-gid]").forEach(el=>{
+  box.querySelectorAll(sel||".tg-row[data-gid]").forEach(el=>{
     if(el.querySelector(".tp-h2h")) return;
     const g=GAMES_BY_ID[el.dataset.gid]; if(!g||g.hid==null||g.aid==null) return;
     const lg=g.league||el.dataset.golg; if(!lg) return;
@@ -2719,6 +2748,7 @@ function renderTodaySection(){
     if(g && window.showGame) showGame(g);
   });
   fillH2H(box);   // e163:補抓缺少的交手紀錄(不重繪整張列表,只塞進該列 → 不會跳動)
+  fillLineups(box);   // e178:兩小時內開賽 → 抓先發名單
   document.querySelectorAll("#stFilter .sf").forEach(b=>b.onclick=()=>{ ST_FILTER=b.dataset.sf; renderTodaySection(); });
   box.querySelectorAll(".an-btn").forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();
     const bx=document.getElementById("an-"+b.dataset.an); if(!bx) return;
@@ -3613,7 +3643,9 @@ function gameCard(g){
       : probBar(p)+`<div class="predline"><span class="k">預測</span>看好 <span class="pick">${zhName(p.pick)}</span> · 比分 <b><span class="ha hm">主</span> ${p.si} - ${p.sj} <span class="ha aw">客</span></b> · 信心 ${p.conf}${p.mk?' · <span class="k" style="color:var(--teal)">含市場賠率</span>':''}</div>
       <div class="why"><span class="k">理由</span>${reasonText(g.hn,g.an,p)}</div>`;
   }
-  return `<div class="game ${done?'done':''}"><div class="g-top"><span class="g-time">${g.time}</span>${pill}<button class="detail-btn" data-gid="${g.id}">詳情 ›</button></div>${rows}${body}</div>`;
+  // e178:聯賽列表也顯示歷史對戰(與今日總覽同一套資料與格式)
+  const h2=h2hStrip(scGet()[g.id], g);
+  return `<div class="game ${done?'done':''}" data-gid="${g.id}" data-golg="${g.league||curLeague}"><div class="g-top"><span class="g-time">${g.time}</span>${pill}<button class="detail-btn" data-gid="${g.id}">詳情 ›</button></div>${rows}${body}${h2}</div>`;
 }
 
 function renderGames(games){
@@ -3622,9 +3654,12 @@ function renderGames(games){
   if(!games.length){ box.innerHTML=`<div class="empty">這天沒有${LEAGUES.find(l=>l.id===curLeague).zh}賽事。<br>歐洲聯賽賽季約 8 月至隔年 5 月,休賽期無比賽——用上方日期切換到有賽事的日子。</div>`; return; }
   games.sort((a,b)=>a.time.localeCompare(b.time));
   games.forEach(g=>{ g.league=g.league||curLeague; GAMES_BY_ID[g.id]=g; });   // 合併保留(今日總覽的場次不被清掉)
+  window.__lastGames=games;   // e178:先發名單抓到後可重繪
   box.innerHTML=games.map(gameCard).join("");
   box.querySelectorAll(".nm[data-team]").forEach(el=>el.onclick=()=>showTeam(el.dataset.team));
   box.querySelectorAll(".detail-btn").forEach(el=>el.onclick=()=>{const g=GAMES_BY_ID[el.dataset.gid]; if(g) showGame(g);});
+  fillH2H(box, ".game[data-gid]");      // e178:聯賽列表也自動補抓交手紀錄
+  fillLineups(box, ".game[data-gid]");
 }
 
 function computeLgAvg(){
