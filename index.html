@@ -715,7 +715,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e172";
+const BUILD = "e173";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1278,7 +1278,11 @@ function defOf(n){const k=norm(n);return (AD_CACHE[k]&&AD_CACHE[k].d)||1;}
    如需回到融合模式:localStorage.setItem("euroPURE","0") 後重新整理。 */
 function pureGet(){ try{ return localStorage.getItem("euroPURE")!=="0"; }catch(e){ return true; } }
 /* e171:比分優先模式(預設開啟) —— 一切判斷以預估比分為主,方向由比分決定 */
-function scoreFirstGet(){ try{ return localStorage.getItem("euroSCOREFIRST")!=="0"; }catch(e){ return true; } }
+/* e173:預設改回「方向優先」—— e171 的比分優先實測代價太大:
+   方向命中 64.7% → 52.9%,而且會出現「主 42% / 和 22%,卻看好和局」這種明顯不合理的畫面
+   (因為最可能的單格常是 1-1,但和局實際只佔 24%)。
+   比分仍然與看好方向綁定(e168),所以不會再有矛盾;想試比分優先:localStorage.setItem("euroSCOREFIRST","1") */
+function scoreFirstGet(){ try{ return localStorage.getItem("euroSCOREFIRST")==="1"; }catch(e){ return false; } }
 let SCORE_FIRST=scoreFirstGet();
 let PURE_MODE=pureGet();
 let MKT_W=0.55;
@@ -1822,9 +1826,12 @@ function scoreReasonLine(p,hz,az){
     if(p==null||p.lh==null||p.la==null) return "";
     const tab=scoreTable(p.lh,p.la);
     const kOf=(i,j)=>i>j?"H":i===j?"D":"A";
-    const pkK=p.H>=p.A&&p.H>=p.D?"H":(p.A>=p.D?"A":"D");
-    const pSel=(tab.find(x=>x[0]===p.si&&x[1]===p.sj)||[0,0,0])[2];
-    const alt=tab.filter(x=>!(x[0]===p.si&&x[1]===p.sj))[0];
+    const pkK=(p.si!=null&&p.sj!=null)?(p.si>p.sj?"H":(p.si===p.sj?"D":"A")):(p.H>=p.A&&p.H>=p.D?"H":(p.A>=p.D?"A":"D"));   // e173:方向一律由比分推得,說明文字不會再與「看好」矛盾
+    // e173:次選一律取「同方向」的比分(用預測時就存好的 sc3),不會再出現看好主勝卻推薦 1-1 當次選
+    const s3=Array.isArray(p.sc3)&&p.sc3.length?p.sc3:null;
+    const pSel=s3?s3[0].p:(tab.find(x=>x[0]===p.si&&x[1]===p.sj)||[0,0,0])[2];
+    const alt=s3?(s3[1]?[s3[1].i,s3[1].j,s3[1].p]:null)
+               :(tab.filter(x=>!(x[0]===p.si&&x[1]===p.sj)&&kOf(x[0],x[1])===pkK)[0]||null);
     const scK=kOf(p.si,p.sj);
     const dirZh=pkK==="H"?`${hz} 勝`:pkK==="A"?`${az} 勝`:"和局";
     const tot=(p.lh+p.la).toFixed(1);
@@ -1974,7 +1981,7 @@ function analysisRows(hn,an,p,lg,hid,aid){
   try{
     const tab=scoreTable(p.lh,p.la);
     const kOf=(i,j)=>i>j?"H":i===j?"D":"A";
-    const pkK=p.H>=p.A&&p.H>=p.D?"H":(p.A>=p.D?"A":"D");
+    const pkK=(p.si!=null&&p.sj!=null)?(p.si>p.sj?"H":(p.si===p.sj?"D":"A")):(p.H>=p.A&&p.H>=p.D?"H":(p.A>=p.D?"A":"D"));   // e173:方向一律由比分推得,說明文字不會再與「看好」矛盾
     const scK=kOf(p.si,p.sj);
     const overall=tab.slice(0,3).map(x=>`${x[0]}-${x[1]}(${x[2].toFixed(1)}%)`).join("、");
     const pSel=(tab.find(x=>x[0]===p.si&&x[1]===p.sj)||[0,0,0])[2];
