@@ -715,7 +715,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e174";
+const BUILD = "e175";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1564,8 +1564,8 @@ function noPredGate(p,lg){
   return p&&p.dq!=null&&p.dq<0.2;
 }
 let CLOUD_PRED=null;   // e140:雲端統一預測(cloud-pred.json):{sc, byKey}
-function predict(homeName,awayName,mkt,lg,hid,aid){
-  const loc=predictLocal(homeName,awayName,mkt,lg,hid,aid);
+function predict(homeName,awayName,mkt,lg,hid,aid,gid){
+  const loc=predictLocal(homeName,awayName,mkt,lg,hid,aid,gid);
   try{ if(CLOUD_PRED&&CLOUD_PRED.byKey&&hid!=null&&aid!=null){
     const id=CLOUD_PRED.byKey[lg+"|"+hid+"|"+aid]; const s=id&&CLOUD_PRED.sc[id];
     const cp=s&&(s.fz||s.pred);
@@ -1575,7 +1575,7 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
     } } }catch(e){}
   return loc;
 }
-function predictLocal(homeName,awayName,mkt,lg,hid,aid){
+function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用來查當日先發名單
   if(lg){ const L0=LEAGUES.find(x=>x.id===lg); if(L0&&L0.stand) lg=L0.stand; }   // 盃賽借用母聯賽的積分榜與進球環境
   const cl=(window.CLOUD&&window.CLOUD.leagues&&window.CLOUD.leagues[lg])||null;
   // e134:雲端主導判定(雙方皆 ≥10 場雲端實戰)→ 關閉逐場學習器,評級缺省者改用雲端淨勝球推估
@@ -1715,6 +1715,15 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
     if(ia.imp<0) lh*=Math.exp(-PL_W*ia.imp/2);
     if(ih.names.length||ia.names.length) _plc={h:ih.names,a:ia.names}; }
   // e159:歷史對戰 —— 近 3 年交手(場地中性化後)的加權淨勝球,與模型預期的差當訊號;上限 ±0.35 球,權重由帳本學習
+  /* e175:先發陣容影響 —— 只有拿到當日先發名單才啟用(通常開賽前一小時) */
+  let _xi=null;
+  try{ const L=(gid!=null)?XI_CACHE[gid]:null;
+    if(L&&(L.h!=null||L.a!=null)){
+      const ap=r=>(r==null)?0:Math.max(-0.18,Math.min(0.18, 0.38*Math.log(Math.max(0.4,Math.min(1.8,r)))));
+      const dh=ap(L.h), da=ap(L.a);
+      lh*=Math.exp(dh); la*=Math.exp(da);
+      _xi={h:L.h,a:L.a,dh:+dh.toFixed(3),da:+da.toFixed(3)};
+    } }catch(e){}
   let _h2s=0,_h2w=0,_h2=null;
   try{ const L=(hid!=null&&aid!=null)?H2H_CACHE[lg+"|"+hid+"|"+aid]:null;
     if(Array.isArray(L)&&L.length>=3){ const now=Date.now(); let sw=0,sgd=0,n=0;
@@ -1822,7 +1831,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
   // 信心分級同時看機率高度與資料品質:資料不足時不給「高」
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
   const pick = predOut==="H" ? homeName : predOut==="A" ? awayName : "和局";
-  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,sc3:_sc3,conf,pick,mk:(!!mkt&&!PURE_MODE),mkAvail:!!mkt,pure:_pure,mkp:_mkp,mw:(PURE_MODE?0:_mw),h2s:_h2s,h2w:_h2w,h2:_h2,
+  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,sc3:_sc3,conf,pick,xi:_xi,mk:(!!mkt&&!PURE_MODE),mkAvail:!!mkt,pure:_pure,mkp:_mkp,mw:(PURE_MODE?0:_mw),h2s:_h2s,h2w:_h2w,h2:_h2,
           lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr,tier:_tierN,prc:_prc,prs:+_prs.toFixed(3),pw:PROC_W,plc:_plc,pls:_pls,plw:PL_W,wx:_wxc,wxf:+_wxf.toFixed(3)};
 }
 /* e145:列表上的一行比分理由(未完賽顯示;完賽由檢討行取代) */
@@ -2485,7 +2494,7 @@ function renderFocus(){
   LEAGUES.forEach(l=>{ const t=TODAY_GAMES[l.id];
     (((t&&t._usable))||[]).forEach(g=>{
       if(g.completed||g.state==="in") return;
-      const p=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
+      const p=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid,g.id);
       const top=Math.max(p.H,p.D,p.A);
       if(p.conf==="高"||(top>=55&&(p.dq||0)>=0.35)) picks.push({g,p,top,lz:l.zh});
     });
@@ -2555,7 +2564,7 @@ function renderTodaySection(){
           }
           return true;
         }
-        const pp=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
+        const pp=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid,g.id);
         if(noPredGate(pp,l.id)){ dropped++; return false; }
         // 賽前拍照存證:預測一顯示就鎖定,完賽後不得再變(誠信保證)
         const __kick=Date.parse(g.date)||0;
@@ -2592,7 +2601,7 @@ function renderTodaySection(){
       const live=g.state==="in", done=g.completed;
       const sc = (live||done)?`<span class="tg-sc">${g.as} - ${g.hs}</span>`:`<span class="tg-vs">vs</span>`;
       const snap=scGet()[g.id];
-      const _pl=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
+      const _pl=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid,g.id);
       const __ko=(Date.parse(g.date)||0), __started=live||done||(__ko>0&&Date.now()>=__ko);
       const _sp=(snap&&(snap.fz||snap.pred))||null;
       const p=(__started&&_sp)?{..._pl, H:_sp.H, D:_sp.D, A:_sp.A,
@@ -3125,7 +3134,7 @@ async function gradeFinished(games){
     const ex=sc[g.id];
     if(ex&&ex.pred&&ex.hs!=null)return;         // 已完整評分才跳過;賽前鎖定待評的要照常評
     // ex 存在但無快照 = e12 前的舊記錄 → 升級:補快照與檢討所需欄位(保留原本的命中/Brier,誠實不竄改)
-    const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
+    const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid,g.id);
     if(noPredGate(p,g.league||curLeague)){ return; }   // 非核心低資料不評分
     const _locked=!!(ex&&ex.locked&&ex.pred);          // 鎖定過=正式顯示過的預測 → 一律結帳(誠信)
     if(!_locked && Math.max((ex&&ex.dq!=null)?ex.dq:0,(p.dq||0))<0.2){ return; }
@@ -3230,7 +3239,7 @@ function renderCoverage(){
   LEAGUES.forEach(l=>{
     const t=TODAY_GAMES[l.id]; if(!t||!t.n) return;
     let full=0,none=0;
-    (t.games||[]).forEach(g=>{ const p=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid);
+    (t.games||[]).forEach(g=>{ const p=predict(g.hn,g.an,g.odds,l.id,g.hid,g.aid,g.id);
       if(p.dq>=0.5) full++; else if(p.dq<0.2) none++; });
     const stN=Object.keys(STAND_BY_LG[l.stand||l.id]||{}).filter(k=>k.charAt(0)!=="#").length;
     const pvN=Object.keys(PREV_BY_LG[l.stand||l.id]||{}).filter(k=>k.charAt(0)!=="#").length;
@@ -3531,7 +3540,7 @@ function makeReview(g){
   return {text:parts.join(";")+"。", good:s.hit};
 }
 function gameCard(g){
-  const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
+  const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid,g.id);
   const done=g.completed, live=g.state==="in";
   let pill;
   if(live) pill=`<span class="pill live"><span class="dot"></span>${g.detail||'進行中'}</span>`;
@@ -3653,7 +3662,7 @@ function renderHeadlines(games){
   if(!done.length&&!REAL_NEWS.length){ box.innerHTML=`<div class="empty" style="text-align:left">尚無頭條。有賽果或 ESPN 新聞後自動顯示。</div>`; return; }
   if(!done.length){ box.innerHTML=realHTML; box.querySelectorAll("[data-link]").forEach(el=>el.onclick=()=>window.open(el.dataset.link,"_blank","noopener")); return; }
   const items=done.slice(0, Math.max(2, 6-REAL_NEWS.length)).map(g=>{
-    const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
+    const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid,g.id);
     const winner=g.hs>g.as?zhName(g.hn):g.hs<g.as?zhName(g.an):null;
     const margin=Math.abs(g.hs-g.as);
     const upset=winner && ((winner===zhName(g.hn)&&p.H<30)||(winner===zhName(g.an)&&p.A<30));
@@ -3755,6 +3764,43 @@ async function showTeam(name, fromPop){
     }
   })();
 }
+/* ===== e175:賽前先發陣容 =====
+   ESPN 大約在開賽前一小時公布先發名單。用雲端算好的球員每場產出表(CLOUD.pr)
+   算出「今天這套先發的攻擊產出」,再除以該隊平常的先發強度(calib 的 xiB),
+   得到輪換/休息/傷病的真實影響。
+   帳本 1078 場實測:強度比 0.6x → 場均 1.18 球、1.0x → 1.52、1.2x → 1.67;
+   迴歸 log(強度比) 每 +0.1 → +0.038 球。上限 ±18%。 */
+let XI_CACHE={};
+function xiStrength(ids){
+  try{
+    const PR=(window.CLOUD&&window.CLOUD.pr)||null; if(!PR) return null;
+    const v=[]; (ids||[]).forEach(x=>{ const r=PR[String(x)]; if(r!=null) v.push(+r); });
+    if(v.length<6) return null;
+    return v.sort((a,b)=>b-a).slice(0,11).reduce((s,x)=>s+x,0);
+  }catch(e){ return null; }
+}
+function xiRatioOf(lg,tid,ids){
+  const st=xiStrength(ids); if(st==null) return null;
+  const t=cloudTeamOf(lg,tid,null); const base=t&&+t.xiB;
+  if(!(base>0.05)||!(+t.xiN>=5)) return null;
+  return +(st/base).toFixed(3);
+}
+async function loadLineup(lg,gameId,hid,aid){
+  if(!gameId) return null;
+  if(XI_CACHE[gameId]) return XI_CACHE[gameId];
+  try{
+    const sum=await jget(espnSummary(lg,gameId));
+    const rs=(sum&&sum.rosters)||[]; if(rs.length<2) return null;
+    const pick=tid=>{ const r=rs.find(x=>String(((x.team||{}).id))===String(tid)); if(!r) return null;
+      const ids=(r.roster||[]).filter(x=>x.starter).map(x=>((x.athlete||{}).id)).filter(Boolean);
+      return ids.length>=8?ids:null; };
+    const ih=pick(hid), ia=pick(aid); if(!ih||!ia) return null;
+    const rh=xiRatioOf(lg,hid,ih), ra=xiRatioOf(lg,aid,ia);
+    if(rh==null&&ra==null) return null;
+    XI_CACHE[gameId]={h:rh,a:ra,t:Date.now()};
+    return XI_CACHE[gameId];
+  }catch(e){ return null; }
+}
 /* ===== 對戰往績:抓主隊近兩季賽程,找出對上客隊的比賽 ===== */
 let H2H_CACHE={};
 async function loadH2H(lg, hid, aid){
@@ -3789,7 +3835,7 @@ const GSTAT_ZH={possessionPct:"控球率 %",wonCorners:"角球",totalCrosses:"�
   foulsCommitted:"犯規",offsides:"越位",saves:"撲救",yellowCards:"黃牌",redCards:"紅牌",
   totalPasses:"傳球",accuratePasses:"準確傳球",assists:"助攻",totalTackles:"搶斷",interceptions:"攔截"};
 function gameNarrative(g,goals,statPairs){
-  const hz=zhName(g.hn),az=zhName(g.an),p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
+  const hz=zhName(g.hn),az=zhName(g.an),p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid,g.id);
   const parts=[];
   if(g.completed){
     const w=g.hs>g.as?hz:g.hs<g.as?az:null;
@@ -3879,7 +3925,7 @@ async function showGame(g, fromPop, opts){
   const hz=zhName(g.hn),az=zhName(g.an);
   document.getElementById("gameTitle").textContent=`${hz} ${g.completed||g.state==="in"?g.hs+" - "+g.as:"vs"} ${az}`;
   const box=document.getElementById("gameDetail");
-  const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
+  const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid,g.id);
   window.__gvId=g.id; window.__gvLg=g.league||curLeague;
   gvNavBtns();
   box.innerHTML=`<div class="empty">載入比賽數據中…</div>`;
