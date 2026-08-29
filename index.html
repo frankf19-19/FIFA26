@@ -715,7 +715,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e170";
+const BUILD = "e171";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1277,6 +1277,9 @@ function defOf(n){const k=norm(n);return (AD_CACHE[k]&&AD_CACHE[k].d)||1;}
    賠率仍然抓取與紀錄,但只作為「對戰莊家」的對照組與盤口變動提示,不影響任何預測數字。
    如需回到融合模式:localStorage.setItem("euroPURE","0") 後重新整理。 */
 function pureGet(){ try{ return localStorage.getItem("euroPURE")!=="0"; }catch(e){ return true; } }
+/* e171:比分優先模式(預設開啟) —— 一切判斷以預估比分為主,方向由比分決定 */
+function scoreFirstGet(){ try{ return localStorage.getItem("euroSCOREFIRST")!=="0"; }catch(e){ return true; } }
+let SCORE_FIRST=scoreFirstGet();
 let PURE_MODE=pureGet();
 let MKT_W=0.55;
 function mktWGet(){try{const v=parseFloat(localStorage.getItem("euroMKTW"));return isNaN(v)?0.55:Math.max(0.35,Math.min(0.85,v));}catch(e){return 0.55;}}
@@ -1782,15 +1785,21 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
     const t3=H+D+A; H=H/t3*100; D=D/t3*100; A=A/t3*100;
   }
   // 預測結果與顯示比分保持一致:先定結果,再取該結果下最可能的比分
-  const predOut = H>=D&&H>=A ? "H" : A>=D&&A>=H ? "A" : "D";
-  /* e168:比分必須與看好方向一致 —— 計分制度改成
-       全中 = 方向對 + 比分對 ｜ 命中 = 方向對、比分錯 ｜ 未中 = 方向錯(含開出和局卻沒看好和局)
-     在這個制度下,「全局最可能的一格」若與看好方向矛盾(例如看好主勝卻選 1-1),
-     那一格永遠不可能拿到全中 —— 所以最佳選擇是「看好方向底下最可能的比分」。 */
-  const _gb=best[predOut];
+  let predOut = H>=D&&H>=A ? "H" : A>=D&&A>=H ? "A" : "D";   // e171:比分優先時會被下方的比分方向覆寫
+  /* e171:比分優先 —— 一切判斷以「預估比分」為主。
+       先取全部比分中機率最高的一格,方向直接由那一格決定(比分是主隊贏 → 看好主隊)。
+       全中 = 比分完全正確 ｜ 命中 = 比分的方向正確 ｜ 未中 = 方向也錯。
+     實測代價(51 場已評分):方向命中 64.7% → 52.9%,比分全中 15.7% → 17.6%
+       —— 因為「最可能的單一比分」常常是平手,而平手實際只佔約 24%。
+     要切回「方向優先」(先看三向機率、再取該方向下最可能的比分):
+       localStorage.setItem("euroSCOREFIRST","0") 後重新整理。 */
+  const _gbAll=_cells[0];
+  const _sf=SCORE_FIRST&&_gbAll;
+  const _gb=_sf?_gbAll:best[predOut];
+  if(_sf) predOut=(_gb.i>_gb.j)?"H":((_gb.i===_gb.j)?"D":"A");
   const si=_gb.i, sj=_gb.j;
   // e168:Top-3 波膽同樣限定在看好方向底下(與全中制度一致)
-  const _sc3=_cells.filter(c=>(c.i>c.j?"H":c.i===c.j?"D":"A")===predOut).slice(0,3).map(c=>({i:c.i,j:c.j,p:+(c.p/t*100).toFixed(1)}));
+  const _sc3=_cells.filter(c=>(c.i>c.j?"H":c.i===c.j?"D":"A")===predOut).slice(0,3).map(c=>({i:c.i,j:c.j,p:+(c.p/t*100).toFixed(1)}));   // 與看好方向一致的 Top-3
   const top=Math.max(H,D,A);
   // 信心分級同時看機率高度與資料品質:資料不足時不給「高」
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
