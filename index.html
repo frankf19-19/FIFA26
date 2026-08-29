@@ -715,7 +715,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e176";
+const BUILD = "e177";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -732,6 +732,16 @@ const LEAGUES = [
   {id:"eng.charity", zh:"社區盾", full:"英格蘭社區盾", more:1, cup:1, stand:"eng.1"},
   {id:"uefa.super_cup", zh:"歐洲超級盃", full:"歐洲超級盃", more:1, cup:1, stand:"eng.1"},
   {id:"sco.cis", zh:"蘇聯賽盃", full:"蘇格蘭聯賽盃", more:1, cup:1, stand:"sco.1"},
+  /* ===== e177:擴充聯賽 =====
+     這四個聯賽從 e159 起就已經在雲端校準(當時是為了替歐冠/歐霸的對手補球隊資料),
+     calib 已累積 124~170 場、rho 與主場係數都已實測,資料成熟度與蘇超同級,
+     但前端一直沒有列出賽程 —— 等於算好了卻沒給你看。現在開放。
+     另外每多一個聯賽,帳本每天多幾十場,所有靠帳本學習的參數(rho、市場權重、
+     缺陣權重、對戰權重)都會更快收斂,對既有聯賽的準確度也有幫助。 */
+  {id:"por.1", zh:"葡超", full:"葡萄牙足球超級聯賽", more:1},
+  {id:"ned.1", zh:"荷甲", full:"荷蘭足球甲級聯賽", more:1},
+  {id:"tur.1", zh:"土超", full:"土耳其足球超級聯賽", more:1},
+  {id:"bel.1", zh:"比甲", full:"比利時足球甲級聯賽", more:1},
 ];
 let curLeague = "usa.1";     // 預設美職聯(現在是賽季中;歐洲 8 月開賽後可自行切換)
 let curDate = new Date();
@@ -3304,7 +3314,8 @@ function renderTWSL(){
     </div></div>`;
 }
 /* e134:分聯賽成績(舊紀錄無 lg 欄位 → 以雲端隊名回推聯賽) */
-const LG_CEIL={"usa.1":47,"jpn.1":48,"eng.2":46,"sco.1":54,"eng.1":56,"esp.1":55,"ita.1":54,"ger.1":53,"fra.1":54,"uefa.champions":58,"uefa.europa":53};
+const LG_CEIL={"usa.1":47,"jpn.1":48,"eng.2":46,"sco.1":54,"eng.1":56,"esp.1":55,"ita.1":54,"ger.1":53,"fra.1":54,"uefa.champions":58,"uefa.europa":53,
+  "por.1":50,"ned.1":53,"tur.1":55,"bel.1":52};   // e177:新開放的四個聯賽,依帳本 118~130 場實測的結果分散度估上限
 let _LG_MAP=null, _LG_MAP_SRC=null, _ZH_REV=null;
 function lgOfRec(s){
   if(s.lg) return s.lg;
