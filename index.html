@@ -182,6 +182,13 @@
   .tp-sc{font-family:var(--cond);font-weight:600;font-size:14px;color:var(--teal);text-align:center;align-self:center}
   .tp-conf{font-family:var(--mono);font-size:11px;text-align:right;align-self:center}
   .tp-alt{font-family:var(--cond);font-size:11px;color:var(--muted);letter-spacing:.02em}
+  .tp-h2h{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:2px;font-family:var(--cond);font-size:11.5px;color:var(--muted)}
+  .tp-h2h .k{color:var(--muted);opacity:.75}
+  .tp-h2h .rec{font-family:var(--mono);font-weight:600}
+  .tp-h2h .m{font-family:var(--mono);background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:5px;padding:1px 5px;white-space:nowrap}
+  .tp-h2h .m.w{color:var(--hit);border-color:rgba(94,200,132,.35)}
+  .tp-h2h .m.l{color:var(--miss);border-color:rgba(232,110,110,.35)}
+  .tp-h2h .m .hm{opacity:.6;font-size:10px;margin-left:2px}
   .tg-pred{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:8px;
     font-size:12.5px;color:var(--ink2);padding:6px 2px 0}
   .tp-pick{color:var(--gold);font-weight:700;white-space:nowrap}
@@ -698,7 +705,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e161";
+const BUILD = "e162";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1752,6 +1759,32 @@ function scoreReasonLine(p,hz,az){
     return `為何 ${p.si}-${p.sj}:預期進球 ${hz} ${p.lh}、${az} ${p.la}(${lvl}),全部比分中 ${p.si}-${p.sj} 單格機率最高 ${pSel.toFixed(1)}%${alt?`,次選 ${alt[0]}-${alt[1]} ${alt[2].toFixed(1)}%`:""}${scK!==pkK?`;勝負仍看好 ${dirZh}(方向是總和、比分是單格,可不同)`:""}${p.mk?" · 已含市場賠率":""} —— 點「詳細分析」看完整依據`;
   }catch(e){ return ""; }
 }
+/* e162:列表上直接顯示歷史對戰(近 5 次交手與比分)
+   資料來源:雲端快照的 h2l(賽前抓好、與預測一起凍結),沒有的話用本機 H2H_CACHE。
+   比分一律以「本場主隊」的視角呈現(主隊進球在前),並標註當時主客。 */
+function h2hList(snap, g){
+  try{
+    const L=(snap&&snap.pred&&snap.pred.h2l);
+    if(Array.isArray(L)&&L.length) return L;
+    const k=(g&&g.league!=null&&g.hid!=null&&g.aid!=null)?(g.league+"|"+g.hid+"|"+g.aid):null;
+    const C=k&&H2H_CACHE[k];
+    if(Array.isArray(C)&&C.length) return C.slice(0,5).map(m=>[String(m.dt||m.d).slice(0,10), m.my, m.op, m.home?1:0]);
+  }catch(e){}
+  return null;
+}
+function h2hStrip(snap, g){
+  const L=h2hList(snap,g); if(!L||!L.length) return "";
+  let w=0,d=0,l=0;
+  const cells=L.slice(0,5).map(r=>{
+    const dt=String(r[0]||""), my=+r[1], op=+r[2], home=+r[3]===1;
+    if(my>op) w++; else if(my===op) d++; else l++;
+    const cls=my>op?"w":(my<op?"l":"");
+    const md=dt.length>=10?(dt.slice(5,7)+"/"+dt.slice(8,10)):dt.slice(0,5);
+    const yr=dt.slice(0,4);
+    return `<span class="m ${cls}" title="${yr}-${md.replace("/","-")} ${home?"本場主隊當時作主":"本場主隊當時作客"}">${md} ${my}-${op}<span class="hm">${home?"主":"客"}</span></span>`;
+  }).join("");
+  return `<div class="tp-h2h"><span class="k">交手</span><span class="rec" title="以本場主隊的視角:近 ${L.length} 次交手戰績">${w}勝${d}平${l}負</span>${cells}</div>`;
+}
 /* 詳細分析:逐項列出模型依據(無資料的項目自動略過,不編造) */
 function analysisRows(hn,an,p,lg,hid,aid){
   if(lg){ const L0=LEAGUES.find(x=>x.id===lg); if(L0&&L0.stand) lg=L0.stand; }
@@ -2493,6 +2526,7 @@ function renderTodaySection(){
             return `<span class="tp-twsl" title="台灣運彩場中盤口${t.no?" · 場次 "+t.no:""}">運彩 ${t.odds?`${t.odds.a} / ${t.odds.d} / ${t.odds.h}`:"場中開盤"}</span>`;})()}
           <button class="an-btn" data-an="${g.id}">詳細分析 ▾</button>
         </div>
+        ${h2hStrip(snap, g)}
         ${(()=>{ if(!done){ const sr=scoreReasonLine(p,zhName(g.hn),zhName(g.an));   // e145:未完賽 → 顯示比分理由
             return sr?`<div class="tg-rv" style="color:var(--muted)">💡 ${sr}</div>`:""; }
           const rv=(typeof makeReview==="function")?makeReview(g):null;
