@@ -36,6 +36,32 @@ function slimOut(out){
   return o;
 }
 function unslim(out){ try{ for(const lg in (out.leagues||{})){ const T=out.leagues[lg]&&out.leagues[lg].teams; if(!T) continue; for(const k in T){ const t=T[k]; if(t&&t.$&&T[t.$]) T[k]=T[t.$]; } } }catch(e){} return out; }
+/* v13:Dixon-Coles 低分相關係數 rho 實測擬合(最大概似,格點搜尋)
+   —— 前端原本寫死 -0.13,實測 1975 場合併後約 -0.01,各聯賽 -0.37~+0.14 差異很大;
+      寫死的負值會把 1-1 的機率灌水約 13%,導致精準比分過度集中在 1-1。
+      樣本不足時往 0 收縮:rho_out = rho_fit × n/(n+150) */
+function fitRho(rows){
+  try{
+    if(!rows || rows.length<60) return null;
+    const N=rows.length;
+    const lh=rows.reduce((s,r)=>s+r[0],0)/N, la=rows.reduce((s,r)=>s+r[1],0)/N;
+    const fact=[1,1,2,6,24,120,720,5040,40320];
+    const pois=(l,k)=>k<9?Math.exp(-l)*Math.pow(l,k)/fact[k]:1e-9;
+    const tau=(i,j,r)=> (i===0&&j===0)?1-lh*la*r : (i===0&&j===1)?1+lh*r : (i===1&&j===0)?1+la*r : (i===1&&j===1)?1-r : 1;
+    let best=null;
+    for(let k=-40;k<=25;k++){
+      const r=k/100; let ll=0, bad=false;
+      for(const [i,j] of rows){
+        const t=tau(i,j,r); if(t<=0.01){ bad=true; break; }
+        ll+=Math.log(Math.max(pois(lh,i)*pois(la,j)*t,1e-12));
+      }
+      if(bad) continue;
+      if(!best || ll>best[1]) best=[r,ll];
+    }
+    if(!best) return null;
+    return +(best[0]*N/(N+150)).toFixed(3);   // 樣本收縮
+  }catch(e){ return null; }
+}
 function save(out, lg){
   out.updated = new Date().toISOString();
   fs.writeFileSync("calib.json", JSON.stringify(slimOut(out)));
@@ -136,7 +162,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
     if (out.leagues[lg] && out.leagues[lg].done) { console.log("跳過(今天已完成):", lg); continue; }
     console.log("處理中:", lg);
     const now = new Date();
-    let hw=0, dr=0, goals=0, n=0, nr=0;
+    let hw=0, dr=0, goals=0, n=0, nr=0; const SCR=[];   // v13:SCR 收集本聯賽所有比分,供 Dixon-Coles rho 實測擬合
     const T={};
     const add=(id,nm,gf,ga,isHome,dt,w2)=>{ const w=(w2!=null?w2:1); const o=(T["#"+id]=T["#"+id]||{gp:0,gf:0,ga:0,hgp:0,hgf:0,hga:0,agp:0,agf:0,aga:0,lp:""});
       o.gp+=w; o.gf+=gf*w; o.ga+=ga*w; if(gf===ga) o.dr=(o.dr||0)+w;
@@ -178,7 +204,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
             } catch(e) {}
             { const __ag=Math.max(0,(Date.now()-(Date.parse(ev.date)||Date.now()))/86400000);
               const __wl=Math.exp(-Math.LN2*__ag/60);
-              n+=__wl; nr+=1; goals+=(hs+as)*__wl;
+              n+=__wl; nr+=1; goals+=(hs+as)*__wl; SCR.push([hs,as]);
               if(hs>as) hw+=__wl; else if(hs===as) dr+=__wl; }
             // 時間衰減:半衰期 60 天(上週的比賽 ≈ 半年前的 8 倍話語權)
             const __age=Math.max(0,(Date.now()-(Date.parse(ev.date)||Date.now()))/86400000);
@@ -254,7 +280,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
     const prAvg = pA.n>0 ? { hold:+(pA.lt?pA.ltw/pA.lt:0.75).toFixed(3), cb:+(pA.tr?pA.trx/pA.tr:0.35).toFixed(3), rc:+(pA.rc/pA.n).toFixed(3) } : null;
     for (const k in T) { const q=T[k]&&T[k].pr; if(q) for(const f in q) q[f]=+(+q[f]).toFixed(2); }
     out.leagues[lg] = { ha:+ha.toFixed(3), lgAvg:+Math.max(1,Math.min(2,goals/n/2)).toFixed(3),
-      draw:+(dr/n).toFixed(3), n, nr, teams:T, ...(prAvg?{prAvg}:{}) };
+      draw:+(dr/n).toFixed(3), n, nr, rho:fitRho(SCR), teams:T, ...(prAvg?{prAvg}:{}) };
     out.n += n;
     // ── 名單 + 球員逐季數據(含守門/防守欄位)──
     try {
