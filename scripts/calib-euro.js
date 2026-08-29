@@ -129,7 +129,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
   let out = { updated:"", d:today, days:WEEKS*7, n:0, leagues:{} };
   try {
     const prev = JSON.parse(fs.readFileSync("calib.json","utf8"));
-    if (!process.env.CALIB_FULL && prev && prev.d === today && prev.leagues) { out = unslim(prev);   // v12c:手動觸發(CALIB_FULL=1)一律全量重跑,不接續 console.log("接續今天的進度:已完成", Object.keys(prev.leagues).filter(k=>prev.leagues[k].done).join(", ")||"(無)"); }
+    if (!process.env.CALIB_FULL && prev && prev.d === today && prev.leagues) { out = unslim(prev); console.log("接續今天的進度:已完成", Object.keys(prev.leagues).filter(k=>prev.leagues[k].done).join(", ")||"(無)"); }   // v12c:手動觸發(CALIB_FULL=1)一律全量重跑,不接續
   } catch(e) {}
 
   for (const lg of LEAGUES) {
