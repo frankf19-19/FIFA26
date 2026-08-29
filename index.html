@@ -698,7 +698,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e160";
+const BUILD = "e161";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1255,10 +1255,36 @@ function gN(t){ return t?+((t.gn!=null?t.gn:t.gp)||0):0; }
 function hN(t){ return t?+((t.hgn!=null?t.hgn:t.hgp)||0):0; }
 function aN(t){ return t?+((t.agn!=null?t.agn:t.agp)||0):0; }
 function eN(t){ if(!t) return 0; const g=+t.gp||0, w2=+t.w2||0; return (w2>0&&g>0)?Math.min(gN(t),g*g/w2):g; }   // 有效樣本數 ESS(資料權重用)
+/* e161:歐冠/歐霸的球隊資料合併 —— 盃賽 calib 掃的是「上一屆」(9 月~5 月),陣容早已換血;
+   同一支球隊的國內聯賽資料是最近的。兩邊的欄位都是「時間衰減加權累加值」,直接相加即可
+   (近期國內比賽權重高、去年盃賽已掉到下限 0.25),等於用同一支球隊的所有可得比賽做估計。 */
+const _MRG_SUM=["gp","gf","ga","hgp","hgf","hga","agp","agf","aga","dr","gn","hgn","agn","w2","stn","stnr","stf","sta","psn","psf","crf","cra"];
+function mergeTeamRec(a,b){
+  if(!a) return b; if(!b) return a;
+  const o={...a};
+  for(const k of _MRG_SUM){ const x=+a[k]||0, y=+b[k]||0; if(a[k]!=null||b[k]!=null) o[k]=x+y; }
+  if(a.pr&&b.pr){ o.pr={}; for(const k in a.pr) o.pr[k]=(+a.pr[k]||0)+(+b.pr[k]||0); }
+  else o.pr=a.pr||b.pr;
+  if(a.xg||b.xg){                                     // xg 已含雲端的射正→進球轉換係數,不能用 stf/stn 重算,改依樣本數加權平均
+    const A=a.xg,B=b.xg, na=A?(+A.n||0):0, nb=B?(+B.n||0):0, nt=na+nb;
+    o.xg = nt>0 ? { n:nt, xf:+(((A?+A.xf*na:0)+(B?+B.xf*nb:0))/nt).toFixed(3), xa:+(((A?+A.xa*na:0)+(B?+B.xa*nb:0))/nt).toFixed(3) } : (A||B);
+  }
+  if(o.psn>0&&(a.psf!=null||b.psf!=null)) o.ps=+((+o.psf)/o.psn).toFixed(1);
+  o.lp=(a.lp&&b.lp)?(a.lp>b.lp?a.lp:b.lp):(a.lp||b.lp);
+  o.r=(a.r&&a.r.length)?a.r:b.r;                     // 名單以有資料的一邊為準(盃賽 calib 不抓名單)
+  o._mrg=1;
+  return o;
+}
 function cloudTeamOf(lg,tid,name){
   try{ const C=(window.CLOUD&&window.CLOUD.leagues)||null; if(!C) return null;
     const scan=P=>{ if(!P||!P.teams) return null; const T=P.teams; return (tid!=null&&T["#"+tid])||T[String(name||"").toLowerCase()]||null; };
-    let t=scan(C[lg]); if(!t){ for(const x in C){ if(x===lg) continue; t=scan(C[x]); if(t) break; } }
+    let t=scan(C[lg]);
+    if(/^uefa\./.test(lg)){                            // e161:盃賽 → 併入該隊的國內聯賽資料
+      let d=null; for(const x in C){ if(x===lg||/^uefa\./.test(x)) continue; d=scan(C[x]); if(d) break; }
+      if(d) return mergeTeamRec(d,t);                  // 以國內為主體(含名單),盃賽為補充
+      if(t) return t;
+    }
+    if(!t){ for(const x in C){ if(x===lg) continue; t=scan(C[x]); if(t) break; } }
     return t; }catch(e){ return null; }
 }
 function cloudRating(t){   // e134:無人工評級的隊(預設 68)→ 以雲端場均淨勝球推估(每 +0.5 球 ≈ +5 分,±10 封頂)
