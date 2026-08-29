@@ -694,7 +694,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e155";
+const BUILD = "e156";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1072,7 +1072,9 @@ function migrateSnapshots(){
     const isTeamPick = p.pick && p.pick!=="和局";
     // 自相矛盾的舊預測(看好某隊卻平局/看好和局卻分勝負)→ 整筆作廢:不計命中/未中/Brier
     // e154:只處理 e23 前的舊快照(v<2)。v2 起「看好某隊 + 比分 1-1」是全局 argmax 的合法結果(比分賭與勝負賭各自獨立計分),不再作廢
-    if(s.v>=2 || s.cl) continue;
+    if(s.v>=2 || s.cl){   // e156:一次性救回 —— e153 前被「看好某隊卻比分平局」規則誤作廢的 v2 快照,全部恢復計分(孤兒作廢除外)
+      if(s.void && s.vr!=="orphan"){ delete s.void; s.v=2; changed=true; }
+      continue; }
     if(!s.void && ((isTeamPick && p.si===p.sj) || (p.pick==="和局" && p.si!==p.sj) || p.si==null)){
       p.si=null; p.sj=null; s.v=1; s.void=true; changed=true;
     }
@@ -4171,7 +4173,7 @@ async function loadCloudPred(){
     CLOUD_PRED=j;
     // 帳本合併:雲端有的以雲端為準(所有裝置一致);雲端沒有的保留本機
     const mine=scGet(); let n=0;
-    for(const id in j.sc){ const c=j.sc[id]; if(!c||!c.pred) continue; mine[id]={...(mine[id]||{}),...c}; n++; }
+    for(const id in j.sc){ const c=j.sc[id]; if(!c||!c.pred) continue; mine[id]={...(mine[id]||{}),...c}; if(!("void" in c)) delete mine[id].void; n++; }   // e156:作廢與否也以雲端為準
     scSet(mine);
     // 學習參數:雲端為準
     const P=j.params||{};
