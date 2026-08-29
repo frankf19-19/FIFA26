@@ -714,7 +714,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e164";
+const BUILD = "e165";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1239,6 +1239,11 @@ function adSet(o){try{localStorage.setItem("euroAD",JSON.stringify(o));}catch(e)
 function atkOf(n){const k=norm(n);return (AD_CACHE[k]&&AD_CACHE[k].a)||1;}
 function defOf(n){const k=norm(n);return (AD_CACHE[k]&&AD_CACHE[k].d)||1;}
 /* 市場權重:模型表現差時自動讓位給市場賠率(誠實的自我認知) */
+/* e165:純模型模式 —— 預測完全不融合市場賠率,只用球隊/球員/對戰/過程等本身的資料。
+   賠率仍然抓取與紀錄,但只作為「對戰莊家」的對照組與盤口變動提示,不影響任何預測數字。
+   如需回到融合模式:localStorage.setItem("euroPURE","0") 後重新整理。 */
+function pureGet(){ try{ return localStorage.getItem("euroPURE")!=="0"; }catch(e){ return true; } }
+let PURE_MODE=pureGet();
 let MKT_W=0.55;
 function mktWGet(){try{const v=parseFloat(localStorage.getItem("euroMKTW"));return isNaN(v)?0.55:Math.max(0.35,Math.min(0.85,v));}catch(e){return 0.55;}}
 let MKT_W_LG={};        // e143:分聯賽市場權重
@@ -1719,11 +1724,11 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
   const _pure={H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1)};   // e143:純模型(未融合市場)—— 對戰莊家的依據
   const _mkp=mkt?{H:+(mkt.h*100).toFixed(1),D:+(mkt.d*100).toFixed(1),A:+(mkt.a*100).toFixed(1)}:null;
   const _mw=mktWOf(lg);
-  if(mkt){ // 市場賠率融合:權重由帳本直接最佳化(哪個權重 Brier 最低就用哪個;分聯賽)
+  if(mkt && !PURE_MODE){ // 市場賠率融合:權重由帳本直接最佳化(哪個權重 Brier 最低就用哪個;分聯賽)
     const w=1-_mw;
     H=H*w+mkt.h*100*_mw; D=D*w+mkt.d*100*_mw; A=A*w+mkt.a*100*_mw;
     const t2=H+D+A; H=H/t2*100; D=D/t2*100; A=A/t2*100;
-  }else if(DRAW_NUDGE>0 && Math.abs(H-A)<14){ // 無市場資料才用歷史和局補正
+  }else if(DRAW_NUDGE>0 && Math.abs(H-A)<14){ // e165:純模型模式也走這條 —— 和局補正改由自家帳本學,不靠市場
     const shift=Math.min(DRAW_NUDGE, Math.max(H,A)-32);
     if(shift>0){ if(H>=A)H-=shift; else A-=shift; D+=shift; }
   }
@@ -1749,7 +1754,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
   // 信心分級同時看機率高度與資料品質:資料不足時不給「高」
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
   const pick = predOut==="H" ? homeName : predOut==="A" ? awayName : "和局";
-  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,sc3:_sc3,conf,pick,mk:!!mkt,pure:_pure,mkp:_mkp,mw:_mw,h2s:_h2s,h2w:_h2w,h2:_h2,
+  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,sc3:_sc3,conf,pick,mk:(!!mkt&&!PURE_MODE),mkAvail:!!mkt,pure:_pure,mkp:_mkp,mw:(PURE_MODE?0:_mw),h2s:_h2s,h2w:_h2w,h2:_h2,
           lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr,tier:_tierN,prc:_prc,prs:+_prs.toFixed(3),pw:PROC_W,plc:_plc,pls:_pls,plw:PL_W,wx:_wxc,wxf:+_wxf.toFixed(3)};
 }
 /* e145:列表上的一行比分理由(未完賽顯示;完賽由檢討行取代) */
@@ -1872,7 +1877,9 @@ function analysisRows(hn,an,p,lg,hid,aid){
   rows.push(["主場加成", `係數 ${(0.24+HA_TUNE).toFixed(2)}` + (Math.abs(HA_TUNE)>0.005
     ? `(依實際主勝率自動校準,基準 0.24)`
     : `<span style="color:var(--muted);font-size:11px">(全站通用基準值,尚未依此聯賽校準)</span>`)]);
-  if(p.mk&&p.mkp) rows.push(["市場賠率", `市場 主 ${p.mkp.H}% · 和 ${p.mkp.D}% · 客 ${p.mkp.A}% ｜ 純模型 主 ${p.pure.H}% · 和 ${p.pure.D}% · 客 ${p.pure.A}%(融合:模型 ${Math.round((1-(p.mw||MKT_W))*100)}% + 市場 ${Math.round((p.mw||MKT_W)*100)}%,該聯賽實測最佳)`]);
+  if(PURE_MODE&&p.mkp) rows.push(["市場賠率", `<span style="color:var(--gold)">純模型模式:預測完全不採用賠率</span> —— 本場市場報價 主 ${p.mkp.H}% · 和 ${p.mkp.D}% · 客 ${p.mkp.A}%,僅作為對照與「對戰莊家」計分,不影響預測`]);
+  else if(PURE_MODE) rows.push(["市場賠率", `<span style="color:var(--gold)">純模型模式:預測完全不採用賠率</span>`]);
+  else if(p.mk&&p.mkp) rows.push(["市場賠率", `市場 主 ${p.mkp.H}% · 和 ${p.mkp.D}% · 客 ${p.mkp.A}% ｜ 純模型 主 ${p.pure.H}% · 和 ${p.pure.D}% · 客 ${p.pure.A}%(融合:模型 ${Math.round((1-(p.mw||MKT_W))*100)}% + 市場 ${Math.round((p.mw||MKT_W)*100)}%,該聯賽實測最佳)`]);
   else if(p.mk) rows.push(["市場賠率", `已融合 ESPN 賠率(模型 ${Math.round((1-MKT_W)*100)}% + 市場 ${Math.round(MKT_W*100)}%)`]);
   else if(DRAW_NUDGE>0) rows.push(["和局補正", `+${DRAW_NUDGE.toFixed(1)}%(歷史顯示模型低估和局)`]);
   if(p.tier){ const tt=x=>x?`${zhName(x===p.tier.h?hz:az)||""}`:"";
@@ -3334,7 +3341,7 @@ function renderInsights(){
     const edge=v.bm-v.bp;   // >0 代表純模型已優於市場
     lessons.push(`🥊 對戰莊家(${v.n} 場有賠率):純模型 命中 ${pc(v.hp)}、Brier ${v.bp.toFixed(3)} ｜ 市場 命中 ${pc(v.hm)}、Brier ${v.bm.toFixed(3)} ｜ 融合後 命中 ${pc(v.hf)}、Brier ${v.bf.toFixed(3)} —— ${edge>0.005?`純模型已領先市場 ${edge.toFixed(3)},市場權重會自動下降`:edge<-0.005?`純模型落後市場 ${(-edge).toFixed(3)},目標:靠過程/缺陣/體質等市場沒算到的訊號追上`:"純模型與市場打平"}`);
     if(v.dis>=5) lessons.push(`🥊 意見相左的 ${v.dis} 場(模型與市場看好不同方):模型對 ${v.dp} 場、市場對 ${v.dm} 場、都錯 ${v.dis-v.dp-v.dm} 場 —— ${v.dp>v.dm?"模型在爭議場佔上風,這就是超越莊家的訊號":v.dp<v.dm?"市場仍較準,模型的獨立判斷還需累積":"平手"}`); }
-  tune.push(`市場權重 ${(MKT_W*100).toFixed(0)}%(帳本直接最佳化:掃描 0~100% 取 Brier 最低${Object.keys(MKT_W_LG).length?`;分聯賽 ${Object.entries(MKT_W_LG).map(([k,v])=>{const L=LEAGUES.find(x=>x.id===k);return (L?L.zh:k)+" "+(v*100).toFixed(0)+"%";}).join("、")}`:""})`);
+  tune.push(PURE_MODE?`市場權重 0%(純模型模式:預測不融合賠率;帳本最佳解為 ${(MKT_W*100).toFixed(0)}%,僅供參考)`:`市場權重 ${(MKT_W*100).toFixed(0)}%(帳本直接最佳化:掃描 0~100% 取 Brier 最低${Object.keys(MKT_W_LG).length?`;分聯賽 ${Object.entries(MKT_W_LG).map(([k,v])=>{const L=LEAGUES.find(x=>x.id===k);return (L?L.zh:k)+" "+(v*100).toFixed(0)+"%";}).join("、")}`:""})`);
   tune.push(PL_N>=25?`缺陣影響權重 ${PL_W.toFixed(2)}(先驗 0.5,樣本 ${PL_N} 場自動回歸)`:`缺陣影響權重 ${PL_W.toFixed(2)}(先驗;有缺陣紀錄的樣本 ${PL_N}/25 累積中)`);
   tune.push(PROC_N>=30?`過程體質權重 ${PROC_W.toFixed(3)}(先驗 0.06,樣本 ${PROC_N} 場自動回歸)`:`過程體質權重 ${PROC_W.toFixed(2)}(先驗;樣本 ${PROC_N}/30 累積中)`);
   if(SCORE_TUNE_N>=30) tune.push(`比分學習:進球水位 ×${GOAL_TUNE._.toFixed(2)} · 淨勝差尺度 ×${GD_SCALE._.toFixed(2)}(樣本 ${SCORE_TUNE_N} 場,分聯賽另有微調)`);
