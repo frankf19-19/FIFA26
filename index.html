@@ -715,7 +715,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e169";
+const BUILD = "e170";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2605,7 +2605,7 @@ function renderTodaySection(){
         <!-- 預測列:欄位與上方一一對齊(左客右主),不會錯位 -->
         <span class="tp-k">預測</span>
         <span class="tp-side aw">${Math.round(p.A)}%</span>
-        <span class="tp-sc" title="客 ${p.sj} - 主 ${p.si}${p.sc3&&p.sc3[0]?` · 機率 ${p.sc3[0].p}%`:""}">${p.sj} - ${p.si}</span>${(snap&&snap.pred&&snap.pred.oldSc)?`<span class="tp-old" title="e168 前的舊規則:比分取「全部比分中機率最高的一格」,可能與看好方向矛盾。已鎖定的預測不修改,僅標記。新制的比分一律與看好方向一致。">舊制</span>`:""}${p.sc3&&p.sc3.length>1?`<span class="tp-alt" title="Top-3 波膽:單一比分天花板約 12%,三格合計約 30%">${p.sc3[0].p}% · 次選 ${p.sc3.slice(1).map(c=>`${c.j}-${c.i} ${c.p}%`).join(" · ")}</span>`:""}
+        <span class="tp-sc" title="客 ${p.sj} - 主 ${p.si}${p.sc3&&p.sc3[0]?` · 機率 ${p.sc3[0].p}%`:""}">${p.sj} - ${p.si}</span>${(snap&&snap.pred&&snap.pred.oldSc)?`<span class="tp-old" title="e168 前的舊規則:比分取「全部比分中機率最高的一格」,可能與看好方向矛盾。已鎖定的預測不修改,僅標記。新制的比分一律與看好方向一致。">舊制比分</span>`:""}${p.sc3&&p.sc3.length>1?`<span class="tp-alt" title="Top-3 波膽:單一比分天花板約 12%,三格合計約 30%">${p.sc3[0].p}% · 次選 ${p.sc3.slice(1).map(c=>`${c.j}-${c.i} ${c.p}%`).join(" · ")}</span>`:""}
         <span class="tp-side hm">${Math.round(p.H)}%</span>
         <span class="tp-conf" style="color:${conf}">信心 ${p.conf}</span>${(()=>{try{
           if(!snap||!snap.odds0||!snap.odds) return "";
@@ -3479,10 +3479,12 @@ function makeReview(g){
     if(p.si!=null&&s.hs+s.as>p.si+p.sj+1) parts.push("雙方防線比預期鬆散");
     else if(p.si!=null&&s.hs+s.as+1<p.si+p.sj) parts.push("進球數低於模型預期");
   }else if(s.draw){
-    parts.push(`和局未在預期內(賽前和局機率僅 ${p.D}%),兩隊實際更均勢`);
+    parts.push(`開出和局,但賽前看好 ${zhName(p.pick)}(和局機率僅 ${p.D}%)→ 依「方向錯即未中」規則判未中`);
+    if(p.oldSc&&p.si===p.sj) parts.push(`注意:上方顯示的 ${p.si}-${p.sj} 是 e168 前的舊制比分(取全部比分中最高的一格),當時可能與看好方向不一致,判定一律以「看好」為準;新制的比分已與看好方向綁定`);
   }else{
     const w=(s.hs!=null&&s.as!=null)?(s.hs>s.as?hz:az):null;
     if(w) parts.push(`預測失準:看好 ${zhName(p.pick)},實際 ${w} 勝出${s.mc?`(歸因:${s.mc})`:""}`);
+    if(p.oldSc) parts.push(`注意:上方 ${p.si}-${p.sj} 是舊制比分,與看好方向不一致;判定以「看好」為準`);
   }
   if(s.perf&&s.perf.hsot!=null){
     let line=`場面:射正 ${s.perf.hsot}-${s.perf.asot}`;
