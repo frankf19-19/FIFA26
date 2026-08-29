@@ -11,6 +11,47 @@ const WEEKS = 26;
    完全不參與調參),60 天:Brier 0.6617/命中 44.8%;120 天:Brier 0.6356/命中 47.1%。
    60 天衰減太快,等於丟掉太多有效樣本;拉長到 120 天在保留區間穩定較佳。 */
 const HALF_LIFE = 120;
+/* v16:先發陣容強度基準 —— 用帳本裡每場的先發名單(xi)與球隊名冊的球員產出,
+   算出每隊「平常派出的先發強度」。賽前拿到當日先發名單後,就能算出
+   「今天的陣容 ÷ 平常的陣容」,反映輪換、休息、傷病的真實影響。
+   實測(1078 場):強度比 0.6x → 場均 1.18 球、1.0x → 1.52 球、1.2x → 1.67 球。 */
+function buildXiBase(out){
+  try{
+    const PR={};
+    for(const lg in (out.leagues||{})){
+      const T=(out.leagues[lg]||{}).teams||{};
+      for(const k in T){ const t=T[k];
+        if(k[0]!=="#"||!t||!Array.isArray(t.r)) continue;
+        for(const a of t.r){
+          if(!Array.isArray(a[4])||!a[4].length) continue;
+          const b=a[4].reduce((m,x)=>((+x[1]||0)>(+m[1]||0)?x:m),a[4][0]);
+          const app=+b[1]||0; if(app<3) continue;
+          PR[String(a[0])]=((+b[2]||0)+0.7*(+b[3]||0))/app;
+        }
+      }
+    }
+    const strOf=str=>{ const ids=String(str||"").split(",").filter(Boolean);
+      const v=ids.map(x=>PR[x]).filter(x=>x!=null);
+      if(v.length<6) return null;
+      return v.sort((a,b)=>b-a).slice(0,11).reduce((s,x)=>s+x,0); };
+    const acc={};
+    for(const id in MATCHES){ const M=MATCHES[id];
+      if(!M||!Array.isArray(M.xi)||M.xi.length!==2) continue;
+      const sh=strOf(M.xi[0]), sa=strOf(M.xi[1]);
+      const kh=M.lg+"|"+M.hid, ka=M.lg+"|"+M.aid;
+      if(sh!=null){ (acc[kh]=acc[kh]||[0,0])[0]+=sh; acc[kh][1]++; }
+      if(sa!=null){ (acc[ka]=acc[ka]||[0,0])[0]+=sa; acc[ka][1]++; }
+    }
+    let wrote=0;
+    for(const key in acc){ const [sum,n2]=acc[key]; if(n2<5) continue;
+      const [lg,tid]=key.split("|"); const T=(out.leagues[lg]||{}).teams;
+      if(T&&T["#"+tid]){ T["#"+tid].xiB=+(sum/n2).toFixed(4); T["#"+tid].xiN=n2; wrote++; }
+    }
+    out.pr=PR;
+    console.log("xiBase teams="+wrote+" players="+Object.keys(PR).length);
+  }catch(e){ console.log("buildXiBase failed:", e.message); }
+}
+
 const WEEKS_CUP = 60;   // v14:歐冠/歐霸賽季 9 月~5 月,26 週只掃得到淘汰賽尾巴 → 盃賽掃 60 週(約 14 個月),完整涵蓋上一屆
 const ymd = d => d.toISOString().slice(0,10).replace(/-/g,"");
 const sb = (lg,a,b) => `https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard?dates=${a}-${b}`;
@@ -366,5 +407,6 @@ function accProcess(T, hid, aid, hs, as, pr, w){
     console.log("完成:", lg, "(", n, "場 )");
   }
   // xG 已改為自產(SOT-xG,於各聯賽 checkpoint 內完成;外部源 Understat/FBref 均擋機房 IP)
+  buildXiBase(out); save(out, null);   // v16
   console.log("全部完成:", out.n, "場,", Object.keys(out.leagues).length, "個聯賽");
 })();
