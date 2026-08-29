@@ -181,6 +181,7 @@
   .tp-side.aw{text-align:right} .tp-side.hm{text-align:left}
   .tp-sc{font-family:var(--cond);font-weight:600;font-size:14px;color:var(--teal);text-align:center;align-self:center}
   .tp-conf{font-family:var(--mono);font-size:11px;text-align:right;align-self:center}
+  .tp-alt{font-family:var(--cond);font-size:11px;color:var(--muted);letter-spacing:.02em}
   .tg-pred{grid-column:1/-1;display:flex;align-items:center;flex-wrap:wrap;gap:8px;
     font-size:12.5px;color:var(--ink2);padding:6px 2px 0}
   .tp-pick{color:var(--gold);font-weight:700;white-space:nowrap}
@@ -697,7 +698,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e157";
+const BUILD = "e158";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1474,7 +1475,7 @@ function predict(homeName,awayName,mkt,lg,hid,aid){
     const id=CLOUD_PRED.byKey[lg+"|"+hid+"|"+aid]; const s=id&&CLOUD_PRED.sc[id];
     const cp=s&&(s.fz||s.pred);
     if(cp&&cp.H!=null&&Math.abs(Date.now()-(s.tU||s.t||0))<4*86400000){   // 4 天內的雲端預測才採用
-      return {...loc, H:cp.H, D:cp.D, A:cp.A, si:cp.si, sj:cp.sj, conf:cp.conf, pick:cp.pick, lh:cp.lh!=null?cp.lh:loc.lh, la:cp.la!=null?cp.la:loc.la,
+      return {...loc, H:cp.H, D:cp.D, A:cp.A, si:cp.si, sj:cp.sj, sc3:(cp.sc3||((loc.sc3&&loc.sc3[0]&&loc.sc3[0].i===cp.si&&loc.sc3[0].j===cp.sj)?loc.sc3:null)), conf:cp.conf, pick:cp.pick, lh:cp.lh!=null?cp.lh:loc.lh, la:cp.la!=null?cp.la:loc.la,
         prs:cp.prs!=null?cp.prs:loc.prs, pw:cp.pw!=null?cp.pw:loc.pw, pls:cp.pls!=null?cp.pls:loc.pls, plw:cp.plw!=null?cp.plw:loc.plw, dq:s.dq!=null?s.dq:loc.dq, cloud:1};
     } } }catch(e){}
   return loc;
@@ -1645,11 +1646,14 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
     if(i===1&&j===1) return Math.max(0.01, 1-RHO);
     return 1;
   };
+  const _cells=[];                                          // e158:全部比分格,供 Top-3 波膽
   for(let i=0;i<8;i++)for(let j=0;j<8;j++){const p=poisson(i,lh)*poisson(j,la)*tau(i,j);
     const k=i>j?"H":i===j?"D":"A";
     if(k==="H")H+=p;else if(k==="D")D+=p;else A+=p;
+    _cells.push({p,i,j});
     if(p>best[k].p) best[k]={p,i,j};}
   const t=H+D+A; H=H/t*100;D=D/t*100;A=A/t*100;
+  const _sc3=_cells.sort((x,y)=>y.p-x.p).slice(0,3).map(c=>({i:c.i,j:c.j,p:+(c.p/t*100).toFixed(1)}));   // e158:機率最高的三個比分
   // 和局錨定:Poisson 結構性低估和局(診斷實證)→ 拉向該聯賽近182天真實和局率
   { const LD=(cl&&cl.draw)?cl.draw*100:25.5;
     const TGT=(_tdr!=null)?(0.6*LD+0.4*_tdr):LD;             // 兩層錨:聯賽 60% + 兩隊體質 40%
@@ -1687,7 +1691,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
   // 信心分級同時看機率高度與資料品質:資料不足時不給「高」
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
   const pick = predOut==="H" ? homeName : predOut==="A" ? awayName : "和局";
-  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,conf,pick,mk:!!mkt,pure:_pure,mkp:_mkp,mw:_mw,
+  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,sc3:_sc3,conf,pick,mk:!!mkt,pure:_pure,mkp:_mkp,mw:_mw,
           lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr,tier:_tierN,prc:_prc,prs:+_prs.toFixed(3),pw:PROC_W,plc:_plc,pls:_pls,plw:PL_W,wx:_wxc,wxf:+_wxf.toFixed(3)};
 }
 /* e145:列表上的一行比分理由(未完賽顯示;完賽由檢討行取代) */
@@ -2427,7 +2431,7 @@ function renderTodaySection(){
         <!-- 預測列:欄位與上方一一對齊(左客右主),不會錯位 -->
         <span class="tp-k">預測</span>
         <span class="tp-side aw">${Math.round(p.A)}%</span>
-        <span class="tp-sc" title="客 ${p.sj} - 主 ${p.si}">${p.sj} - ${p.si}</span>
+        <span class="tp-sc" title="客 ${p.sj} - 主 ${p.si}${p.sc3&&p.sc3[0]?` · 機率 ${p.sc3[0].p}%`:""}">${p.sj} - ${p.si}</span>${p.sc3&&p.sc3.length>1?`<span class="tp-alt" title="Top-3 波膽:單一比分天花板約 12%,三格合計約 30%">${p.sc3[0].p}% · 次選 ${p.sc3.slice(1).map(c=>`${c.j}-${c.i} ${c.p}%`).join(" · ")}</span>`:""}
         <span class="tp-side hm">${Math.round(p.H)}%</span>
         <span class="tp-conf" style="color:${conf}">信心 ${p.conf}</span>${(()=>{try{
           if(!snap||!snap.odds0||!snap.odds) return "";
@@ -2938,6 +2942,7 @@ async function gradeFinished(games){
     sc[g.id]={hit:(ex&&ex.hit!=null)?ex.hit:(predOut===realOut),
       brier:(ex&&ex.brier!=null)?ex.brier:+brier.toFixed(3),
       score:(ex&&ex.score!=null)?ex.score:(sp0.si!=null&&sp0.si===g.hs&&sp0.sj===g.as),   // e154:比分賭獨立計分(與莊家波膽同制),不再綁勝負方向
+      s3:(ex&&ex.s3!=null)?ex.s3:(Array.isArray(sp0.sc3)&&sp0.sc3.some(c=>c.i===g.hs&&c.j===g.as)),   // e158:Top-3 波膽命中
       hs:g.hs, as:g.as, hz:zhName(g.hn), az:zhName(g.an),
       hnk:norm(g.hn), ank:norm(g.an), t:(ex&&ex.t)||Date.now(), v:ex?(ex.v||1):2,
       homePick:sp0.pick===g.hn, draw:g.hs===g.as, cal:!!(ex&&ex.cal),
@@ -3155,7 +3160,9 @@ function renderInsights(){
       lessons.push(`比分分佈對照:模型最愛猜 ${top(predDist)};實際最常出 ${top(realDist)} —— 兩者若差異大,即選格偏好需要修正的方向`);
     } }
   { const g2=S.filter(s=>s.hs!=null), hh=g2.filter(s=>s.hit), exx=g2.filter(s=>s.score===true).length;
-        if(g2.length>=20){ const CUT=Date.parse("2026-08-24T16:00:00Z"); const nw=g2.filter(s=>(s.fzT||s.tU||s.t||0)>=CUT), od=g2.filter(s=>(s.fzT||s.tU||s.t||0)<CUT); const ex2=a=>a.filter(s=>s.score===true).length; const pct=(x,n)=>n?`${x}/${n}(${(100*x/n).toFixed(1)}%)`:"0/0"; lessons.push(`精準比分:${exx}/${g2.length}(${(100*exx/g2.length).toFixed(1)}%,理論天花板約 11~12%)—— 新選格規則(e146 起,全矩陣單格最高):${pct(ex2(nw),nw.length)} ｜ 舊規則遺留:${pct(ex2(od),od.length)};新規則樣本累積中,以新制數字為準`); } }
+        if(g2.length>=20){ const CUT=Date.parse("2026-08-24T16:00:00Z"); const nw=g2.filter(s=>(s.fzT||s.tU||s.t||0)>=CUT), od=g2.filter(s=>(s.fzT||s.tU||s.t||0)<CUT); const ex2=a=>a.filter(s=>s.score===true).length; const pct=(x,n)=>n?`${x}/${n}(${(100*x/n).toFixed(1)}%)`:"0/0"; lessons.push(`精準比分:${exx}/${g2.length}(${(100*exx/g2.length).toFixed(1)}%,理論天花板約 11~12%)—— 新選格規則(e146 起,全矩陣單格最高):${pct(ex2(nw),nw.length)} ｜ 舊規則遺留:${pct(ex2(od),od.length)};新規則樣本累積中,以新制數字為準`);
+          const s3n=g2.filter(s=>s.pred&&Array.isArray(s.pred.sc3)&&s.pred.sc3.length), s3h=s3n.filter(s=>s.s3===true).length;
+          if(s3n.length>=10) lessons.push(`Top-3 波膽(三個最可能比分任一命中):${pct(s3h,s3n.length)}(理論約 28~32%)—— 波膽下注建議看三格合計而非單格`); } }
   // 教訓0:未中歸因統計(每個失準的病歷 → 對症調參)
   { const mcs={}; S.forEach(s=>{ if(s.hit===false&&s.mc) mcs[s.mc]=(mcs[s.mc]||0)+1; });
     const mk2=Object.entries(mcs).sort((a,b)=>b[1]-a[1]);
