@@ -715,7 +715,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e173";
+const BUILD = "e174";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1043,7 +1043,7 @@ let ADJ_CACHE=adjGet();
 /* ===== 準度引擎:近況(近5場) + 和局/主場自動調參(全由累積賽果推算) ===== */
 let FORM_CACHE={};      // norm(team) -> {pts,seq:"WWDLW"}
 let LG_AVG=1.40;        // 本聯賽平均每隊每場進球(由積分榜自動計算)
-let DRAW_NUDGE=0;       // 和局機率補正(百分點)
+let DRAW_NUDGE=0;       // 和局機率補正(百分點);e174:上限由 7 收到 4,避免與和局錨定重複補正
 let HA_TUNE=0;          // 主場係數微調
 let LEDGER_BASE=null;   // e133:帳本實測 H/D/A 基準率(樣本≥40 啟用),收縮時取代全球通用基準
 let GOAL_TUNE={_:1};    // e135:進球水位倍率(實際總進球 ÷ 預期 λh+λa),全域 + 分聯賽,帶收縮
@@ -1158,7 +1158,7 @@ function computeTuning(){
   if(n>=8){
     const avgD=all.reduce((a,s)=>a+s.pred.D,0)/n;
     const drawRate=all.filter(s=>s.draw).length/n*100;
-    DRAW_NUDGE=Math.max(0,Math.min(7, (drawRate-avgD)*0.5));
+    DRAW_NUDGE=Math.max(0,Math.min(4, (drawRate-avgD)*0.5));   // e174:7→4
     const avgH=all.reduce((a,s)=>a+s.pred.H,0)/n;
     const homeRate=all.filter(s=>s.hs>s.as).length/n*100;
     HA_TUNE=Math.max(-0.08,Math.min(0.08,(homeRate-avgH)/100*0.35));
@@ -1772,7 +1772,12 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
   // 和局錨定:Poisson 結構性低估和局(診斷實證)→ 拉向該聯賽近182天真實和局率
   { const LD=(cl&&cl.draw)?cl.draw*100:25.5;
     const TGT=(_tdr!=null)?(0.6*LD+0.4*_tdr):LD;             // 兩層錨:聯賽 60% + 兩隊體質 40%
-    if(D<TGT){ const d2=D+0.3*(TGT-D), sc2=(100-d2)/((H+A)||1); H*=sc2; A*=sc2; D=d2; } }   // e133:0.5→0.3
+    /* e174:和局錨定強度 0.3 → 0.12。754 場保留區間回測,錨定越強越差(單調):
+         0.00 → Brier 0.6344 ｜ 0.30 → 0.6347 ｜ 0.70 → 0.6357,且完全不影響方向命中率。
+       原因:rho 改成逐聯賽實測(e160)後,卜瓦松已不再結構性低估和局;而線上實測
+       和局預測 25.8% vs 實際 25.0%,是「略為高估」,再往上錨定是推錯方向。
+       另外 DRAW_NUDGE 也在補正和局,兩層疊加會重複計算,故把這層降到很小。 */
+    if(D<TGT){ const d2=D+0.12*(TGT-D), sc2=(100-d2)/((H+A)||1); H*=sc2; A*=sc2; D=d2; } }
   const _pure={H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1)};   // e143:純模型(未融合市場)—— 對戰莊家的依據
   const _mkp=mkt?{H:+(mkt.h*100).toFixed(1),D:+(mkt.d*100).toFixed(1),A:+(mkt.a*100).toFixed(1)}:null;
   const _mw=mktWOf(lg);
