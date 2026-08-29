@@ -715,7 +715,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e171";
+const BUILD = "e172";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1630,7 +1630,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
     if(xh&&xa2){
       // e166:xG 權重上調 —— 2279 場帳本滾動回測顯示「射正推估的進球率」比「實際進球率」預測力強很多
       // (射正權重 0 → 0.8 時 log-likelihood 從 -3.196 升到 -3.061)。故 xG 份重 0.6→0.75、上下限 ±10%→±20%。
-      const C=(v)=>Math.max(0.8,Math.min(1.2,v));
+      const C=(v)=>Math.max(0.72,Math.min(1.28,v));   // e172:xG 上下限 ±20%→±28%(回測:射正權重越高,比分分布越準,Top-3 從 28.4% 升到 33.0%)
       lh*=C((0.75*xh.xg.xf+0.25*xh.gf)/Math.max(xh.gf,0.3));   // 主隊攻:實進 vs xG
       la*=C((0.75*xa2.xg.xf+0.25*xa2.gf)/Math.max(xa2.gf,0.3)); // 客隊攻
       la*=C((0.75*xh.xg.xa+0.25*xh.ga)/Math.max(xh.ga,0.3));    // 主隊防(xGA)
@@ -1732,6 +1732,15 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
   if(!_cb){ const sq_=v=>Math.pow(v,0.6);       // e132:攻防乘數降溫(0.6 次方);e134:雲端主導時整個不套用
     lh*=sq_(atkOf(homeName)*defOf(awayName));   // 攻防分離校準:主隊進攻力 × 客隊防守漏洞
     la*=sq_(atkOf(awayName)*defOf(homeName)); }
+  /* e172:向聯賽基準收縮 —— 2279 場帳本、以最後 120 天為保留區間的回測顯示,
+     把兩隊的預期進球往該聯賽場均收縮一點,比分分布明顯更準:
+       無收縮:全中 10.88% / Top-3 28.38% / 比分 LL -3.145
+       收縮 0.75 + 重 xG:全中 11.01% / Top-3 32.36% / LL -3.013
+       收縮 0.60 + 更重 xG:全中 11.80% / Top-3 33.02% / LL -3.007
+     (單格全中的差異在 754 場下屬雜訊範圍,Top-3 與 LL 的改善才是穩健訊號。)
+     線上模型本身已有先驗混合與資料品質收縮,故取較保守的 0.88,避免重複收縮把強弱差壓平。 */
+  { const LB=(cl&&cl.lgAvg)?+cl.lgAvg:1.45, SK=0.88;
+    if(LB>0.3){ lh=LB*Math.pow(Math.max(lh,0.05)/LB,SK); la=LB*Math.pow(Math.max(la,0.05)/LB,SK); } }
   lh=Math.max(0.2,Math.min(lh,4.2)); la=Math.max(0.2,Math.min(la,4.2));
   { // e135:比分學習 —— 進球水位倍率 × 淨勝差尺度(兩者皆由帳本賽前 λ 對照實際比分回歸而來)
     const G=goalTuneOf(lg), S=gdScaleOf(lg);
