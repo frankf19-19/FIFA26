@@ -698,7 +698,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e159";
+const BUILD = "e160";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1654,7 +1654,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
   let H=0,D=0,A=0;
   const best={H:{p:-1,i:1,j:0}, D:{p:-1,i:1,j:1}, A:{p:-1,i:0,j:1}};   // 各結果下最可能的單一比分
   // Dixon-Coles 低分修正:獨立卜瓦松會低估 0-0/1-1(和局),高估 1-0/0-1
-  const RHO=(cl&&cl.rho!=null)?cl.rho:-0.13;   // e146:分聯賽實測 rho(雲端由該聯賽 0-0/1-1 真實頻率擬合)
+  const RHO=(cl&&cl.rho!=null)?cl.rho:0;   // e160:calib v13 起雲端逐聯賽最大概似擬合 rho(樣本收縮);過去寫死 -0.13 是猜的,實測 1975 場合併僅約 -0.01,寫死的負值把 1-1 灌水約 13%,造成精準比分過度集中 1-1 → 無實測值時改用 0(標準卜瓦松)
   const tau=(i,j)=>{
     if(i===0&&j===0) return Math.max(0.01, 1-lh*la*RHO);
     if(i===0&&j===1) return Math.max(0.01, 1+lh*RHO);
