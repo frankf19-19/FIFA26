@@ -288,6 +288,9 @@
   .sec-head::after{content:"";flex:1;height:1px;
     background:linear-gradient(90deg,var(--gold),transparent)}
   .sec-head .tag{font-family:var(--mono);font-size:11.5px;color:var(--muted);white-space:nowrap}
+  .gvnav{display:flex;align-items:center;gap:6px}
+  .gvnav .back:disabled{opacity:.3;cursor:default}
+  .gvnav .gvpos{font-family:var(--cond);font-size:12px;color:var(--muted);min-width:44px;text-align:center}
   .sec-head .back{font-family:var(--cond);font-weight:600;font-size:13px;letter-spacing:.06em;color:var(--muted);
     background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 17px;cursor:pointer;transition:.2s}
   .sec-head .back:hover{color:var(--gold);border-color:var(--gold)}
@@ -677,7 +680,7 @@
 
   <!-- 球隊頁 -->
   <section id="gameView" class="hidden">
-    <div class="sec-head"><h2 id="gameTitle">比賽詳情</h2><button class="back" id="gameBackBtn">‹ 返回</button></div>
+    <div class="sec-head"><h2 id="gameTitle">比賽詳情</h2><div class="gvnav"><button class="back" id="gvPrev" title="上一場(←)">‹ 上一場</button><span class="gvpos" id="gvPos"></span><button class="back" id="gvNext" title="下一場(→)">下一場 ›</button></div><button class="back" id="gameBackBtn">‹ 返回</button></div>
     <div id="gameDetail"></div>
   </section>
 
@@ -694,7 +697,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e156";
+const BUILD = "e157";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2047,9 +2050,16 @@ async function mergeLeagueIndex(league){
 }
 let TODAY_GAMES={}, TODAY_ISO=null, ST_FILTER="all";
 let VIEW="today";   // "today"=全聯賽今日總覽(預設) / "league"=單一聯盟視圖
-function applyView(){
+/* e157:導覽不跳掉 —— 看比賽/球隊/球員頁時,背景自動更新不得關掉這些頁、也不得把列表區塊拉出來 */
+function overlayOpen(){ try{ return ["gameView","teamView"].some(id=>{ const el=document.getElementById(id); return el&&!el.classList.contains("hidden"); }); }catch(e){ return false; } }
+function applyView(force){
   const secs=["hlSec","fixturesSec","insightSec","standSec"];
   const t=document.getElementById("todaySec");
+  if(!force && overlayOpen()){                       // 背景呼叫:只更新分頁高亮,不動畫面
+    document.querySelectorAll("#leagueTabs .lg[data-lg]").forEach(x=>x.classList.toggle("on", VIEW==="league"&&x.dataset.lg===curLeague));
+    const tb0=document.getElementById("todayTab"); if(tb0) tb0.classList.toggle("on", VIEW==="today");
+    return;
+  }
   if(VIEW==="today"){
     secs.forEach(id=>{const el=document.getElementById(id); if(el) el.classList.add("hidden");});
     if(t && t.dataset.has==="1") t.classList.remove("hidden");
@@ -2294,7 +2304,7 @@ function renderTodaySection(){
   if(!has.length){
     if(TODAY_ISO && TODAY_ISO!==isoDate(new Date())){
       sec.dataset.has="1";
-      if(VIEW==="today") sec.classList.remove("hidden");
+      if(VIEW==="today"&&!overlayOpen()) sec.classList.remove("hidden");
       const h2b=document.querySelector("#todaySec h2"); if(h2b) h2b.textContent="當日賽事";
       if(tag) tag.textContent=TODAY_ISO;
       box.innerHTML=`<div class="empty">${TODAY_ISO} 全 66 聯賽皆無賽事</div>`;
@@ -2309,7 +2319,7 @@ function renderTodaySection(){
     return;
   }
   sec.dataset.has="1";
-  if(VIEW==="today") sec.classList.remove("hidden"); else sec.classList.add("hidden");
+  if(VIEW==="today"&&!overlayOpen()) sec.classList.remove("hidden"); else sec.classList.add("hidden");
   const total=has.reduce((s,l)=>s+TODAY_GAMES[l.id].n,0);
   const liveN=has.reduce((s,l)=>s+(TODAY_GAMES[l.id].games||[]).filter(g=>g.state==="in").length,0);
   const isToday=TODAY_ISO===isoDate(new Date());
@@ -2709,7 +2719,7 @@ function openPlayerEl(el){
 let VIEW_SEQ=0;
 function showPlayer(p, fromPop){
   VIEW_SEQ++;                                  // 開球員頁 → 使所有進行中的球隊頁晚到渲染作廢
-  if(!fromPop){ try{history.pushState({v:"player",p:p},"");}catch(e){} }
+  if(!fromPop){ if(!overlayOpen()) window.__listScroll=window.scrollY; try{history.pushState({v:"player",p:p},"");}catch(e){} }
   document.getElementById("teamView").classList.remove("hidden");
   ["fixturesSec","insightSec","standSec","hlSec","gameView","todaySec"].forEach(id=>{const el=document.getElementById(id); if(el) el.classList.add("hidden");});
   document.getElementById("teamTitle").textContent = p.name;
@@ -3445,7 +3455,7 @@ function renderHeadlines(games){
 
 async function showTeam(name, fromPop){
   const __seq=++VIEW_SEQ;                      // 本次渲染的序號
-  if(!fromPop){ try{history.pushState({v:"team",name:name},"");}catch(e){} }
+  if(!fromPop){ if(!overlayOpen()) window.__listScroll=window.scrollY; try{history.pushState({v:"team",name:name},"");}catch(e){} }
   document.getElementById("teamView").classList.remove("hidden");
   ["fixturesSec","insightSec","standSec","hlSec","gameView","todaySec"].forEach(id=>{const el=document.getElementById(id); if(el) el.classList.add("hidden");});
   document.getElementById("teamTitle").textContent=zhName(name);
@@ -3619,8 +3629,36 @@ function shotSVG(e){
     <text x="50" y="98.5" text-anchor="middle" font-size="3.4" fill="var(--muted)" font-family="var(--mono)">${real?"位置依 ESPN 座標":"示意圖(ESPN 未提供實際射門座標)"}</text>
   </svg>`;
 }
-async function showGame(g, fromPop){
-  if(!fromPop){ try{history.pushState({v:"game",id:g.id,g:g},"");}catch(e){} }
+/* e157:比賽頁上一場/下一場 —— 順序 = 目前列表(今日總覽 or 聯賽列表)的畫面順序;用 replaceState,按返回仍直接回列表 */
+function gvOrder(){
+  const sel=(VIEW==="today")?".tg-row[data-gid]":".game .detail-btn[data-gid],.fx[data-gid]";
+  const ids=[], seen=new Set();
+  document.querySelectorAll(sel).forEach(el=>{ const id=String(el.dataset.gid||""); if(id&&!seen.has(id)&&GAMES_BY_ID[id]){ seen.add(id); ids.push(id); } });
+  if(!ids.length) Object.keys(GAMES_BY_ID).forEach(id=>ids.push(id));
+  return ids;
+}
+function gvNav(dir){
+  const ids=gvOrder(), i=ids.indexOf(String(window.__gvId)); if(i<0) return;
+  const j=i+dir; if(j<0||j>=ids.length) return;
+  const g=GAMES_BY_ID[ids[j]]; if(g) showGame(g,false,{replace:true});
+}
+function gvNavBtns(){
+  try{
+    const ids=gvOrder(), i=ids.indexOf(String(window.__gvId));
+    const lab=k=>{ const g=GAMES_BY_ID[ids[k]]; return g?`${zhName(g.hn)} vs ${zhName(g.an)}`:""; };
+    const pb=document.getElementById("gvPrev"), nb=document.getElementById("gvNext"), ps=document.getElementById("gvPos");
+    const hasP=i>0, hasN=i>=0&&i<ids.length-1;
+    if(pb){ pb.disabled=!hasP; pb.title=hasP?("上一場:"+lab(i-1)):""; }
+    if(nb){ nb.disabled=!hasN; nb.title=hasN?("下一場:"+lab(i+1)):""; }
+    if(ps) ps.textContent=i>=0?`${i+1} / ${ids.length}`:"";
+  }catch(e){}
+}
+async function showGame(g, fromPop, opts){
+  opts=opts||{};
+  if(!fromPop){
+    if(!opts.replace && !overlayOpen()) window.__listScroll=window.scrollY;   // 記住列表位置,返回時放回原處
+    try{ if(opts.replace) history.replaceState({v:"game",id:g.id,g:g},""); else history.pushState({v:"game",id:g.id,g:g},""); }catch(e){}
+  }
   ["fixturesSec","insightSec","standSec","hlSec","teamView","todaySec"].forEach(id=>{const el=document.getElementById(id); if(el) el.classList.add("hidden");});
   document.getElementById("gameView").classList.remove("hidden");
   const hz=zhName(g.hn),az=zhName(g.an);
@@ -3628,6 +3666,7 @@ async function showGame(g, fromPop){
   const box=document.getElementById("gameDetail");
   const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid);
   window.__gvId=g.id; window.__gvLg=g.league||curLeague;
+  gvNavBtns();
   box.innerHTML=`<div class="empty">載入比賽數據中…</div>`;
   document.querySelectorAll("#gameView .gv-team").forEach(el=>el.onclick=()=>showTeam(el.dataset.team));
   // 對戰往績(背景載入)
@@ -3677,11 +3716,11 @@ async function showGame(g, fromPop){
         const eb=bx.querySelector(".empty");
         if(eb){ eb.innerHTML=`資料載入逾時(ESPN 回應緩慢)。<a href="#" id="gvRetry" style="color:var(--teal)">點此重試</a>`;
           const a=document.getElementById("gvRetry");
-          if(a) a.onclick=(ev)=>{ ev.preventDefault(); showGame(__g, true); };
+          if(a) a.onclick=(ev)=>{ ev.preventDefault(); showGame(__g, true, {keep:1}); };
         }
       }
     }catch(e){} }, 9000); }
-  window.scrollTo(0,0);
+  if(!opts.keep) window.scrollTo(0,0);                  // e157:即時比分更新重繪時不再跳回頂端
   if(window.__gvTimer){ clearInterval(window.__gvTimer); window.__gvTimer=null; }
   if(g.state==="in"){
     window.__gvTimer=setInterval(async()=>{
@@ -3691,7 +3730,7 @@ async function showGame(g, fromPop){
         const sb=await jget(espnScore(g.league||curLeague, ymd(new Date(g.date))), true);
         const fresh=parseEvents(sb).find(x=>x.id===g.id);
         if(fresh){ GAMES_BY_ID[fresh.id]=fresh; fresh.league=g.league||curLeague;
-          if(fresh.state!=="in"||fresh.hs!==g.hs||fresh.as!==g.as) showGame(fresh,true); }
+          if(fresh.state!=="in"||fresh.hs!==g.hs||fresh.as!==g.as) showGame(fresh,true,{keep:1}); }
       }catch(e){}
     }, 30000);
   }
@@ -3907,8 +3946,14 @@ async function showGame(g, fromPop){
   });
 }
 function hideTeam(){
+  const wasOpen=overlayOpen();
   document.getElementById("teamView").classList.add("hidden");
   document.getElementById("gameView").classList.add("hidden");
+  if(wasOpen){                                          // e157:返回列表 → 依目前檢視把列表放回來,並回到離開時的捲動位置
+    try{ applyView(true); }catch(e){}
+    const sy=window.__listScroll; window.__listScroll=null;
+    if(sy!=null){ window.scrollTo(0,sy); setTimeout(()=>{ try{ window.scrollTo(0,sy); }catch(e){} },60); }
+  }
   AD_CACHE=adGet(); MKT_W=mktWGet(); mktWTune();
   try{ if(!localStorage.getItem("euroADv2")){                   // e132 一次性:舊累積的攻防/評級修正壓回一半
     for(const k in AD_CACHE){ const o=AD_CACHE[k]; if(o){ o.a=Math.max(0.85,Math.min(1.18,1+((+o.a||1)-1)*0.5)); o.d=Math.max(0.85,Math.min(1.18,1+((+o.d||1)-1)*0.5)); } }
@@ -4011,7 +4056,7 @@ async function load(){
   LOADING=true;
   const btn=document.getElementById("loadBtn"), st=document.getElementById("status");
   btn.classList.add("spin"); btn.disabled=true; st.className="status"; st.textContent="載入中…";
-  hideTeam();
+  if(!overlayOpen()) hideTeam();                       // e157:看比賽/球隊頁時,自動刷新不關頁
   const dateStr=ymd(curDate);
   document.getElementById("upd").textContent=isoDate(curDate)+" "+new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
   try{
@@ -4118,12 +4163,12 @@ function buildLeagueTabs(){
     buildPlayerIndex(curLeague);
     const sel=document.getElementById("moreLg");
     if(sel) sel.value=(LEAGUES.find(l=>l.id===id)||{}).more?id:"";
-    applyView();
+    applyView(true);
   }
   window.switchLeague=switchLeague;
   box.querySelectorAll(".lg[data-lg]").forEach(el=>el.onclick=()=>switchLeague(el.dataset.lg));
   const tb=document.getElementById("todayTab");
-  if(tb) tb.onclick=()=>{ VIEW="today"; try{ const s=history.state; if(!(s&&s.v==="today")) history.pushState({v:"today"},""); }catch(e){} applyView(); const sel0=document.getElementById("moreLg"); if(sel0) sel0.value="";
+  if(tb) tb.onclick=()=>{ VIEW="today"; try{ const s=history.state; if(!(s&&s.v==="today")) history.pushState({v:"today"},""); }catch(e){} applyView(true); const sel0=document.getElementById("moreLg"); if(sel0) sel0.value="";
     if(TODAY_ISO!==isoDate(curDate)) checkTodayGames(isoDate(curDate)); };
   const sel=document.getElementById("moreLg");
   if(sel) sel.onchange=()=>{ if(sel.value) switchLeague(sel.value); };
@@ -4241,6 +4286,15 @@ function init(){
     else if(s.v==="game"&&s.g) showGame(s.g,true);
   });
   document.getElementById("gameBackBtn").onclick=()=>{ if(history.state&&history.state.v){history.back();} else { VIEW="today"; hideTeam(); } };
+  document.getElementById("gvPrev").onclick=()=>gvNav(-1);
+  document.getElementById("gvNext").onclick=()=>gvNav(1);
+  document.addEventListener("keydown",ev=>{                     // e157:比賽頁鍵盤 ← → 切換、Esc 返回
+    try{ const gv=document.getElementById("gameView"); if(!gv||gv.classList.contains("hidden")) return;
+      const tg=ev.target; if(tg&&/^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName)) return;
+      if(ev.key==="ArrowLeft"){ gvNav(-1); ev.preventDefault(); }
+      else if(ev.key==="ArrowRight"){ gvNav(1); ev.preventDefault(); }
+      else if(ev.key==="Escape"){ document.getElementById("gameBackBtn").click(); } }catch(e){}
+  });
   const sb=document.getElementById("searchBox");
   let sTimer=null;
   sb.addEventListener("input",e=>{ clearTimeout(sTimer); sTimer=setTimeout(()=>searchPlayers(e.target.value),180); });
@@ -4293,8 +4347,8 @@ function init(){
     if(!document.hidden && Date.now()-SWEEP_AT>30000) checkTodayGames(isoDate(curDate), true);
   });            // 開站 2 秒後抓傷兵
   setInterval(()=>{ if(!document.hidden) loadInjuries(); }, 600000);   // 每 10 分鐘更新傷兵
-  setInterval(()=>{ const tv=document.getElementById("teamView");
-    if(!document.hidden && (!tv||tv.classList.contains("hidden"))) load();   // 看球隊/球員頁時不自動刷新(不打斷閱讀)
+  setInterval(()=>{
+    if(!document.hidden && !overlayOpen()) load();   // 看比賽/球隊/球員頁時不自動刷新(不打斷閱讀)
   }, 90000);
 }
 init();
