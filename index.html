@@ -714,7 +714,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e165";
+const BUILD = "e166";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1591,11 +1591,13 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
       return null; };
     const xh=xgOf(hid,homeName), xa2=xgOf(aid,awayName);
     if(xh&&xa2){
-      const C=(v)=>Math.max(0.9,Math.min(1.1,v));
-      lh*=C((0.6*xh.xg.xf+0.4*xh.gf)/Math.max(xh.gf,0.3));   // 主隊攻:實進 vs xG
-      la*=C((0.6*xa2.xg.xf+0.4*xa2.gf)/Math.max(xa2.gf,0.3)); // 客隊攻
-      la*=C((0.6*xh.xg.xa+0.4*xh.ga)/Math.max(xh.ga,0.3));    // 主隊防(xGA)
-      lh*=C((0.6*xa2.xg.xa+0.4*xa2.ga)/Math.max(xa2.ga,0.3)); // 客隊防
+      // e166:xG 權重上調 —— 2279 場帳本滾動回測顯示「射正推估的進球率」比「實際進球率」預測力強很多
+      // (射正權重 0 → 0.8 時 log-likelihood 從 -3.196 升到 -3.061)。故 xG 份重 0.6→0.75、上下限 ±10%→±20%。
+      const C=(v)=>Math.max(0.8,Math.min(1.2,v));
+      lh*=C((0.75*xh.xg.xf+0.25*xh.gf)/Math.max(xh.gf,0.3));   // 主隊攻:實進 vs xG
+      la*=C((0.75*xa2.xg.xf+0.25*xa2.gf)/Math.max(xa2.gf,0.3)); // 客隊攻
+      la*=C((0.75*xh.xg.xa+0.25*xh.ga)/Math.max(xh.ga,0.3));    // 主隊防(xGA)
+      lh*=C((0.75*xa2.xg.xa+0.25*xa2.ga)/Math.max(xa2.ga,0.3)); // 客隊防
       _xg={h:xh.xg.xf,a:xa2.xg.xf};
     }
   }catch(e){}
