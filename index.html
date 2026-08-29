@@ -714,7 +714,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e166";
+const BUILD = "e167";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1677,7 +1677,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid){
   let _h2s=0,_h2w=0,_h2=null;
   try{ const L=(hid!=null&&aid!=null)?H2H_CACHE[lg+"|"+hid+"|"+aid]:null;
     if(Array.isArray(L)&&L.length>=3){ const now=Date.now(); let sw=0,sgd=0,n=0;
-      L.forEach(m=>{ const age=(now-+new Date(m.dt||m.d))/86400000; if(!(age>=0)||age>1100) return;
+      L.forEach(m=>{ const age=(now-+new Date(m.dt||m.d))/86400000; if(!(age>=0.5)||age>1100) return;   // e167:12 小時內的交手不算(避免把本場自己算進去)
         const w=Math.exp(-age/540); sw+=w; sgd+=w*((m.my-m.op)-(m.home?0.35:-0.35)); n++; });
       if(n>=3&&sw>0){ const h2gd=sgd/sw+0.35, sig=(h2gd-(lh-la))*Math.min(1,n/6);
         _h2w=+(0.5*H2H_W).toFixed(3); const adj=Math.max(-0.35,Math.min(0.35,_h2w*sig));
@@ -1807,11 +1807,18 @@ async function fillH2H(box){
    比分一律以「本場主隊」的視角呈現(主隊進球在前),並標註當時主客。 */
 function h2hList(snap, g){
   try{
+    // e167:剔除「本場自己」—— 前端補抓時 ESPN 會把當天已完賽的這一場也算進交手紀錄,
+    //      結果變成把答案當成歷史顯示(也可能回頭汙染模型)。一律排除本場日期(含)之後的比賽。
+    const self=String((g&&g.date)||(snap&&snap.date)||"").slice(0,10);
+    const cut=arr=>self?arr.filter(r=>String(r[0]||"")<self):arr;
     const L=(snap&&snap.pred&&snap.pred.h2l);
-    if(Array.isArray(L)&&L.length) return L;
+    if(Array.isArray(L)&&L.length){ const F=cut(L); if(F.length) return F; if(self) return null; return L; }
     const k=(g&&g.league!=null&&g.hid!=null&&g.aid!=null)?(g.league+"|"+g.hid+"|"+g.aid):null;
     const C=k&&H2H_CACHE[k];
-    if(Array.isArray(C)&&C.length) return C.slice(0,5).map(m=>[String(m.dt||m.d).slice(0,10), m.my, m.op, m.home?1:0]);
+    if(Array.isArray(C)&&C.length){
+      const F=cut(C.map(m=>[String(m.dt||m.d).slice(0,10), m.my, m.op, m.home?1:0]));
+      if(F.length) return F.slice(0,5);
+    }
   }catch(e){}
   return null;
 }
