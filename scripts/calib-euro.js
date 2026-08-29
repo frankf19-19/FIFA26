@@ -7,6 +7,7 @@ const fs = require("fs");
 const LEAGUES = ["eng.1","esp.1","ita.1","ger.1","fra.1","uefa.champions","uefa.europa","usa.1","jpn.1","eng.2","sco.1",
   "por.1","ned.1","tur.1","bel.1"];   // v12:葡超/荷甲/土超/比甲 —— 只為歐冠/歐霸對手提供球隊資料(前端不列賽程)
 const WEEKS = 26;
+const WEEKS_CUP = 60;   // v14:歐冠/歐霸賽季 9 月~5 月,26 週只掃得到淘汰賽尾巴 → 盃賽掃 60 週(約 14 個月),完整涵蓋上一屆
 const ymd = d => d.toISOString().slice(0,10).replace(/-/g,"");
 const sb = (lg,a,b) => `https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard?dates=${a}-${b}`;
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
@@ -172,7 +173,8 @@ function accProcess(T, hid, aid, hs, as, pr, w){
       if(dt && dt>o.lp) o.lp=dt;                               // 最近一場日期(休息日計算用)
       if(nm) T[String(nm).toLowerCase()]=o; };
     // ── 賽果(近 182 天)──
-    for (let seg=0; seg<WEEKS; seg++) {
+    const WK = /^uefa\./.test(lg) ? WEEKS_CUP : WEEKS;   // v14:盃賽掃更長區間
+    for (let seg=0; seg<WK; seg++) {
       const b=new Date(now); b.setDate(b.getDate()-seg*7);
       const a=new Date(now); a.setDate(a.getDate()-(seg+1)*7);
       try {
@@ -317,9 +319,14 @@ function accProcess(T, hid, aid, hs, as, pr, w){
                 const pv = PREV_STATS[String(a[0])];
                 if (bestApp < 5 && pv && (+pv[1]||0) >= 5) S.push(pv);
               } catch(e) {}
-              // v12:球員數據瘦身 —— 只留本季列 + 出賽最多的一列(前端取 app 最大列;v5 換季保護亦相容)
+              // v14:球員數據 —— 本季 + 出賽最多的一季 + 其餘由新到舊補到 4 季(球員頁逐季表更完整);
+              //     每列去掉尾端空欄(外野球員的撲救/零封/失球欄多半是空的,省約 18% 體積;前端讀不到會顯示「—」)
               if (S.length) { const cur=S.find(r=>r[0]===String(Y)); const best=S.reduce((m,r)=>((+r[1]||0)>(+m[1]||0)?r:m),S[0]);
-                const keep=[]; if(cur) keep.push(cur); if(best&&best!==cur) keep.push(best); a.push(keep); }
+                const keep=[]; const add=r=>{ if(r&&!keep.some(x=>x[0]===r[0])) keep.push(r); };
+                add(cur); add(best);
+                S.slice().sort((x,y)=>(+y[0])-(+x[0])).forEach(r=>{ if(keep.length<4 && (+r[1]||0)>0) add(r); });
+                keep.sort((x,y)=>(+y[0])-(+x[0]));
+                a.push(keep.map(r=>{ const q=r.slice(); while(q.length>2 && (q[q.length-1]===""||q[q.length-1]==="0")) q.pop(); return q; })); }
             }
             if (flat.length) { const key="#"+t.id;
               T[key]=T[key]||{gp:0,gf:0,ga:0}; T[key].r=flat; }
