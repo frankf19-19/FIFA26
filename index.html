@@ -716,7 +716,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e178";
+const BUILD = "e179";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -3360,17 +3360,21 @@ function lgOfRec(s){
 function renderByLeague(){
   const rows=Object.values(scGet()).filter(s=>s&&!s.void&&s.hs!=null&&s.pred);
   const by={};
-  rows.forEach(s=>{ const lg=lgOfRec(s)||"?"; const o=(by[lg]=by[lg]||{n:0,hit:0,b:0,hp:0,hw:0});
-    o.n++; if(s.hit) o.hit++; o.b+=(s.brier||0); if(s.homePick) o.hp++; if(s.hs>s.as) o.hw++; });
+  rows.forEach(s=>{ const lg=lgOfRec(s)||"?"; const o=(by[lg]=by[lg]||{n:0,hit:0,b:0,hp:0,hw:0,ph:0,pn:0});
+    o.n++; if(s.hit) o.hit++; o.b+=(s.brier||0); if(s.homePick) o.hp++; if(s.hs>s.as) o.hw++;
+    if(s.pred&&s.pred.H!=null){ o.ph+=+s.pred.H; o.pn++; } });   // e179:累計「主勝機率」而非「看好主的次數」
   const ents=Object.entries(by).filter(([k,v])=>v.n>=5).sort((a,b)=>b[1].n-a[1].n);
   if(!ents.length) return "";
   const zh=k=>{ const L=LEAGUES.find(x=>x.id===k); return L?L.zh:(k==="?"?"未知":k); };
   const tr=ents.map(([k,v])=>{ const hr=v.hit/v.n*100, br=v.b/v.n, ceil=LG_CEIL[k];
     const col=ceil==null?"var(--ink2)":hr>=ceil-3?"var(--hit)":hr>=ceil-8?"var(--gold)":"var(--miss)";
-    return `<tr><td>${zh(k)}</td><td style="text-align:right">${v.n}</td><td style="text-align:right;color:${col}">${hr.toFixed(0)}%</td><td style="text-align:right;color:var(--muted)">${ceil!=null?ceil+"%":"—"}</td><td style="text-align:right">${br.toFixed(3)}</td><td style="text-align:right">${(v.hp/v.n*100).toFixed(0)}% / ${(v.hw/v.n*100).toFixed(0)}%</td></tr>`; }).join("");
+    const pH=v.pn?(v.ph/v.pn):null, aH=v.hw/v.n*100;
+    const gap=(pH!=null)?Math.abs(pH-aH):0;
+    const ccol=(pH==null)?"var(--muted)":(gap<=5?"var(--hit)":(gap<=10?"var(--gold)":"var(--miss)"));
+    return `<tr><td>${zh(k)}</td><td style="text-align:right">${v.n}</td><td style="text-align:right;color:${col}">${hr.toFixed(0)}%</td><td style="text-align:right;color:var(--muted)">${ceil!=null?ceil+"%":"—"}</td><td style="text-align:right">${br.toFixed(3)}</td><td style="text-align:right;color:${ccol}" title="模型平均給主勝多少機率 vs 實際主勝率。這兩個數字才是可以直接比較的;「看好主的比例」不能拿來跟主勝率比,因為看好=三向中最高者,主勝機率 45% 也可能在多數場次都是最高的那一項。">${pH!=null?pH.toFixed(0)+"% / "+aH.toFixed(0)+"%":"—"}</td></tr>`; }).join("");
   return `<div class="ins cal-card"><div class="ins-h">🏟 分聯賽成績</div><div class="ins-b">
     <table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;line-height:1.9">
-      <thead><tr style="color:var(--muted)"><th style="text-align:left;font-weight:normal">聯賽</th><th style="text-align:right;font-weight:normal">場</th><th style="text-align:right;font-weight:normal">命中</th><th style="text-align:right;font-weight:normal">參考天花板</th><th style="text-align:right;font-weight:normal">Brier</th><th style="text-align:right;font-weight:normal">看好主 / 實際主勝</th></tr></thead>
+      <thead><tr style="color:var(--muted)"><th style="text-align:left;font-weight:normal">聯賽</th><th style="text-align:right;font-weight:normal">場</th><th style="text-align:right;font-weight:normal">命中</th><th style="text-align:right;font-weight:normal">參考天花板</th><th style="text-align:right;font-weight:normal">Brier</th><th style="text-align:right;font-weight:normal">主勝機率 / 實際</th></tr></thead>
       <tbody>${tr}</tbody></table>
     <div style="margin-top:6px;font-size:11px;color:var(--muted)">參考天花板 = 博彩公司熱門的長期命中率;均勢聯賽(美職聯、日職、英冠)天生較低,請分聯賽看,不要只看總平均</div>
   </div></div>`;
@@ -3402,7 +3406,7 @@ function renderCalib(){
       ${rowsHtml||'<div style="color:var(--muted)">樣本不足</div>'}
       <div style="margin-top:11px;font-size:12.5px">依信心分級命中率:${confHtml}</div>
       <div style="margin-top:6px;font-size:12.5px;line-height:1.7">依資料品質:<br>${dqHtml}</div>
-      <div style="margin-top:4px;font-size:11.5px;color:var(--muted)">目前市場賠率權重 ${(MKT_W*100).toFixed(0)}%(自動調整:模型表現差時提高)· 樣本 ${r.n} 場</div>
+      <div style="margin-top:4px;font-size:11.5px;color:var(--muted)">${PURE_MODE?`純模型模式:預測不採用市場賠率(帳本最佳權重 ${(MKT_W*100).toFixed(0)}%,僅列為對照)`:`目前市場賠率權重 ${(MKT_W*100).toFixed(0)}%(自動調整:模型表現差時提高)`}· 樣本 ${r.n} 場</div>
     </div></div>`;
 }
 function renderInsights(){
@@ -3455,12 +3459,19 @@ function renderInsights(){
         if(ht!==0){ lead++; if(fin===ht) held++; if(fin===-ht) back++; } });
       if(lead>=10) lessons.push(`比賽過程:半場領先的 ${lead} 場中,最後守住 ${held} 場(${(held/lead*100).toFixed(0)}%)、被翻盤 ${back} 場 —— 守成率已進各隊「過程體質」,守不住領先的隊預期進球會被下修`); } }
   // 教訓2:主場優勢
-  const hp=S.filter(s=>s.homePick).length, hw=S.filter(s=>s.hs>s.as).length;
-  const hpr=hp/n*100, hwr=hw/n*100;
-  if(n>=6&&Math.abs(hpr-hwr)>=15){
-    lessons.push(hpr>hwr?`主隊被看好 ${hpr.toFixed(0)}%,實際主勝僅 ${hwr.toFixed(0)}% → 主場加成可能偏高,已透過逐場校準修正中`
-      :`主隊被看好 ${hpr.toFixed(0)}%,實際主勝達 ${hwr.toFixed(0)}% → 主場加成可能偏低`);
-  }
+  /* e179:主場優勢的正確檢驗 —— 比「模型平均給主勝多少機率」與「實際主勝率」。
+     舊版拿「看好主的比例」跟主勝率比是錯的:看好=三向機率最高者,主勝機率只有 45%
+     也可能在七成場次裡都是最高的那一項,兩個數字本來就不該相等,會一直誤報「主場加成偏高」。 */
+  { const PS=S.filter(s=>s.pred&&s.pred.H!=null);
+    const hw=S.filter(s=>s.hs>s.as).length, hwr=hw/n*100;
+    const hpk=S.filter(s=>s.homePick).length/n*100;
+    if(PS.length>=15){
+      const pH=PS.reduce((a,s)=>a+ +s.pred.H,0)/PS.length;
+      const gap=pH-hwr;
+      if(Math.abs(gap)>=6) lessons.push(gap>0?`主勝機率平均給 ${pH.toFixed(0)}%,實際主勝 ${hwr.toFixed(0)}% → 主場加成偏高 ${gap.toFixed(0)} 個百分點,逐場校準修正中`
+        :`主勝機率平均給 ${pH.toFixed(0)}%,實際主勝 ${hwr.toFixed(0)}% → 主場加成偏低 ${(-gap).toFixed(0)} 個百分點`);
+      else lessons.push(`主場校準正常:模型平均給主勝 ${pH.toFixed(0)}%,實際 ${hwr.toFixed(0)}%(差 ${Math.abs(gap).toFixed(1)} 個百分點)—— 另外「看好主」佔 ${hpk.toFixed(0)}% 是正常的,那代表主勝在多數場次是三向中最高的一項,不等於預期主勝率`);
+    } }
   // 教訓3:比分誤差
   const gdErr=S.reduce((a,s)=>a+Math.abs((s.hs-s.as)-(s.pred.si-s.pred.sj)),0)/n;
   if(gdErr>1.3) lessons.push(`平均淨勝球誤差 ${gdErr.toFixed(1)} 球,偏大 → 強弱差距判讀持續收斂中`);
