@@ -1,4 +1,6 @@
-/* 雲端統一預測 v7(e162:快照存 h2l —— 近 5 次交手日期與比分,供列表直接顯示)
+/* 雲端統一預測 v8(e180:開賽前 2 小時抓先發名單餵模型 —— 先發陣容層原本只在前端跑,
+   但「鎖定值」是雲端產生的,等於這層從來沒有進到正式預測裡。)
+   v7(e162:快照存 h2l —— 近 5 次交手日期與比分,供列表直接顯示)
    v6(e159:賽前抓歷史對戰餵模型、快照存 sc3/h2)
    v5(e154:評分視窗 -4~+3 天、孤兒預測清掃、積分榜 feed 瘦身)
    v4(e151:CORS 偵測追蹤 + v3 斷供備援)
@@ -59,7 +61,7 @@ js += `\n;window.__FEED={sb:{},st:{},inj:{}};
     }catch(e){}
     return j; };
 })();`;
-js += "\n;window.__m={predict,parseEvents,gradeFinished,computeTuning,loadInjuries,loadStandFor,espnScore,jget,scGet,scSet,noPredGate,LEAGUES,adjGet,adGet,mktWGet,ymd,isoDate,loadH2H};";
+js += "\n;window.__m={predict,parseEvents,gradeFinished,computeTuning,loadInjuries,loadStandFor,espnScore,jget,scGet,scSet,noPredGate,LEAGUES,adjGet,adGet,mktWGet,ymd,isoDate,loadH2H,loadLineup,XI_CACHE};";
 w.eval(js);
 const m = w.__m;
 
@@ -100,12 +102,17 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
             if (Array.isArray(L) && L.length) h2l = L.slice(0, 5).map(x => [String(x.dt || x.d).slice(0, 10), +x.my, +x.op, x.home ? 1 : 0]);
           } catch (e) {}
         }
-        const pp = m.predict(g.hn, g.an, g.odds, l.id, g.hid, g.aid);
+        // v8:開賽前 2 小時內 → 抓當日先發名單,讓陣容層真正進到鎖定值
+        const mins = (kick - Date.now()) / 60000;
+        if (g.hid && g.aid && kick > 0 && mins > -5 && mins < 125) {
+          try { await m.loadLineup(l.id, g.id, g.hid, g.aid); await sleep(150); } catch (e) {}
+        }
+        const pp = m.predict(g.hn, g.an, g.odds, l.id, g.hid, g.aid, g.id);
         if (m.noPredGate(pp, l.id) || !((pp.dq || 0) >= 0.2)) continue;
         if (ex && ex.hs != null) continue;              // 已評分不動
         sc[g.id] = { ...(ex || {}),
           pred: { H: pp.H, D: pp.D, A: pp.A, si: pp.si, sj: pp.sj, conf: pp.conf, pick: pp.pick, lh: pp.lh, la: pp.la, prs: pp.prs, pw: pp.pw, pls: pp.pls, plw: pp.plw,
-            ...(pp.sc3?{sc3:pp.sc3}:{}), ...(pp.h2s!=null?{h2s:pp.h2s,h2w:pp.h2w}:{}), ...(pp.h2?{h2:pp.h2}:{}), ...(h2l?{h2l}:{}),   // v6/v7:Top-3 波膽 + 歷史對戰訊號(學習迴路)+ 逐場交手比分(顯示)
+            ...(pp.sc3?{sc3:pp.sc3}:{}), ...(pp.h2s!=null?{h2s:pp.h2s,h2w:pp.h2w}:{}), ...(pp.h2?{h2:pp.h2}:{}), ...(h2l?{h2l}:{}), ...(pp.xi?{xi:pp.xi}:{}),
             ...(pp.pure?{pure:pp.pure}:{}), ...(pp.mkp?{mkp:pp.mkp}:{}), ...(pp.mw!=null?{mw:pp.mw}:{}) },   // v2:對戰莊家原料(純模型/市場/權重)
           odds: (g.odds || (ex && ex.odds) || null), odds0: ((ex && ex.odds0) || g.odds || null),
           dq: pp.dq, t: (ex && ex.t) || Date.now(), tU: Date.now(), v: 2, locked: 1, lg: l.id,
