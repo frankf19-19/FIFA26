@@ -716,7 +716,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e179";
+const BUILD = "e180";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1598,7 +1598,7 @@ function predict(homeName,awayName,mkt,lg,hid,aid,gid){
     const id=CLOUD_PRED.byKey[lg+"|"+hid+"|"+aid]; const s=id&&CLOUD_PRED.sc[id];
     const cp=s&&(s.fz||s.pred);
     if(cp&&cp.H!=null&&Math.abs(Date.now()-(s.tU||s.t||0))<4*86400000){   // 4 天內的雲端預測才採用
-      return {...loc, H:cp.H, D:cp.D, A:cp.A, si:cp.si, sj:cp.sj, sc3:(cp.sc3||((loc.sc3&&loc.sc3[0]&&loc.sc3[0].i===cp.si&&loc.sc3[0].j===cp.sj)?loc.sc3:null)), h2:(cp.h2!==undefined?cp.h2:loc.h2), h2s:(cp.h2s!=null?cp.h2s:loc.h2s), conf:cp.conf, pick:cp.pick, lh:cp.lh!=null?cp.lh:loc.lh, la:cp.la!=null?cp.la:loc.la,
+      return {...loc, H:cp.H, D:cp.D, A:cp.A, si:cp.si, sj:cp.sj, sc3:(cp.sc3||((loc.sc3&&loc.sc3[0]&&loc.sc3[0].i===cp.si&&loc.sc3[0].j===cp.sj)?loc.sc3:null)), xi:(cp.xi!==undefined?cp.xi:loc.xi), h2:(cp.h2!==undefined?cp.h2:loc.h2), h2s:(cp.h2s!=null?cp.h2s:loc.h2s), conf:cp.conf, pick:cp.pick, lh:cp.lh!=null?cp.lh:loc.lh, la:cp.la!=null?cp.la:loc.la,
         prs:cp.prs!=null?cp.prs:loc.prs, pw:cp.pw!=null?cp.pw:loc.pw, pls:cp.pls!=null?cp.pls:loc.pls, plw:cp.plw!=null?cp.plw:loc.plw, dq:s.dq!=null?s.dq:loc.dq, cloud:1};
     } } }catch(e){}
   return loc;
