@@ -716,7 +716,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e180";
+const BUILD = "e181";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1747,7 +1747,8 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
   let _xi=null;
   try{ const L=(gid!=null)?XI_CACHE[gid]:null;
     if(L&&(L.h!=null||L.a!=null)){
-      const ap=r=>(r==null)?0:Math.max(-0.18,Math.min(0.18, 0.38*Math.log(Math.max(0.4,Math.min(1.8,r)))));
+      // e181:係數 0.38→0.30 —— 帳本 2769 個隊場實測:log(陣容強度比) 每 +0.1 → +0.042 球,除以場均 1.54 球 = 每單位 log 約 27%
+      const ap=r=>(r==null)?0:Math.max(-0.18,Math.min(0.18, 0.30*Math.log(Math.max(0.4,Math.min(1.8,r)))));
       const dh=ap(L.h), da=ap(L.a);
       lh*=Math.exp(dh); la*=Math.exp(da);
       _xi={h:L.h,a:L.a,dh:+dh.toFixed(3),da:+da.toFixed(3)};
