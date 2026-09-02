@@ -1,4 +1,5 @@
-/* 雲端統一預測 v8(e180:開賽前 2 小時抓先發名單餵模型 —— 先發陣容層原本只在前端跑,
+/* 雲端統一預測 v9(停抓空的傷停 API、對戰視窗 5→9 天)
+   v8(e180:開賽前 2 小時抓先發名單餵模型 —— 先發陣容層原本只在前端跑,
    但「鎖定值」是雲端產生的,等於這層從來沒有進到正式預測裡。)
    v7(e162:快照存 h2l —— 近 5 次交手日期與比分,供列表直接顯示)
    v6(e159:賽前抓歷史對戰餵模型、快照存 sc3/h2)
@@ -74,7 +75,8 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
     w.CLOUD = C; } catch (e) { console.log("calib.json 讀取失敗:", e.message); }
   // 雲端模式:關閉本機線上學習器以外的東西都照常;先用上次帳本算出學習參數
   try { m.computeTuning(); } catch (e) { console.log("computeTuning:", e.message); }
-  try { await m.loadInjuries(); } catch (e) { console.log("傷停:", e.message); }
+  // v9:傷停 API 對 18 個聯賽全部回傳 0 隊 0 人(實測 415 場鎖定快照無一場有傷停資料),每輪白打 18 次請求 → 停抓;先發名單層取代它
+  // try { await m.loadInjuries(); } catch (e) {}
 
   const now = new Date();
   const d0 = new Date(now); d0.setDate(d0.getDate() - 4);   // v5:GitHub 排程可能延後數小時~一天,視窗放寬避免漏評
@@ -97,7 +99,7 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
           continue;                                   // 已開賽:不再改預測(誠信)
         }
         let h2l = null;
-        if (g.hid && g.aid && (kick - Date.now()) < 5 * 86400000) {   // v7:5 天內的比賽先抓歷史對戰(快取)再預測,並存下逐場比分
+        if (g.hid && g.aid && (kick - Date.now()) < 9 * 86400000) {   // v9:5→9 天,對戰層覆蓋率 13/62 太低,學習迴路沒樣本   // v7:5 天內的比賽先抓歷史對戰(快取)再預測,並存下逐場比分
           try { const L = await m.loadH2H(l.id, g.hid, g.aid); await sleep(120);
             if (Array.isArray(L) && L.length) h2l = L.slice(0, 5).map(x => [String(x.dt || x.d).slice(0, 10), +x.my, +x.op, x.home ? 1 : 0]);
           } catch (e) {}
