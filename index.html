@@ -716,7 +716,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e181";
+const BUILD = "e182";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -3358,6 +3358,44 @@ function lgOfRec(s){
     const a=look(s.hnk||norm(s.hn||""), s.hz), b=look(s.ank||norm(s.an||""), s.az);
     return (a&&b&&a===b)?a:(a||b||null); }catch(e){ return null; }
 }
+/* e182:模型演進 —— 依「鎖定時間」把已評分的比賽切成各版本時期,並列同一批比賽的莊家表現當基準。
+   這是回答「有沒有進步」最誠實的方式:每一期都只看那一期鎖定的預測,不混舊資料;
+   對莊家的比較用同一批有賠率的比賽,兩邊看的是完全相同的賽事。 */
+const ERAS=[
+  {t:Date.parse("2026-08-24T16:00:00Z"), zh:"鎖定制"},
+  {t:Date.parse("2026-08-29T19:00:00Z"), zh:"純模型+rho/xG/收縮"},
+  {t:Date.parse("2026-09-02T00:00:00Z"), zh:"+先發陣容"},
+];
+function renderEras(){
+  const S=Object.values(scGet()).filter(s=>s&&!s.void&&s.hs!=null&&s.pred&&s.pred.H!=null&&s.fzT);
+  if(S.length<20) return "";
+  const realOf=s=>s.hs>s.as?"H":(s.hs<s.as?"A":"D");
+  const bkPick=o=>{ const m=Math.max(o.h,o.d,o.a); return m===o.h?"H":(m===o.d?"D":"A"); };
+  const rows=[];
+  for(let i=0;i<ERAS.length;i++){
+    const lo=ERAS[i].t, hi=(i+1<ERAS.length)?ERAS[i+1].t:Infinity;
+    const E=S.filter(s=>s.fzT>=lo&&s.fzT<hi); const n=E.length; if(n<5) continue;
+    const hit=E.filter(s=>s.hit).length/n, ex=E.filter(s=>s.score===true).length/n;
+    const s3n=E.filter(s=>Array.isArray(s.pred.sc3)&&s.pred.sc3.length), t3=s3n.length?s3n.filter(s=>s.s3===true).length/s3n.length:null;
+    const br=E.reduce((a,s)=>a+(s.brier||0),0)/n;
+    const B=E.filter(s=>s.odds&&s.odds.h!=null);
+    let bk="—";
+    if(B.length>=5){
+      const mh=B.filter(s=>s.hit).length/B.length, mb=B.reduce((a,s)=>a+(s.brier||0),0)/B.length;
+      const bh=B.filter(s=>bkPick(s.odds)===realOf(s)).length/B.length;
+      const bb=B.reduce((a,s)=>{ const r=realOf(s); return a+["H","D","A"].reduce((q,k)=>q+Math.pow(s.odds[k.toLowerCase()]-(r===k?1:0),2),0); },0)/B.length;
+      const dB=mb-bb; const col=dB<-0.01?"var(--hit)":(dB>0.01?"var(--miss)":"var(--gold)");
+      bk=`<span style="color:${col}" title="同一批 ${B.length} 場有賠率的比賽:模型 vs 莊家(命中/Brier)">${(mh*100).toFixed(0)}%/${mb.toFixed(3)} vs ${(bh*100).toFixed(0)}%/${bb.toFixed(3)}</span>`;
+    }
+    rows.push(`<tr><td>${ERAS[i].zh}<span style="color:var(--muted);font-size:10.5px;margin-left:6px">${new Date(lo+8*3600000).toISOString().slice(5,10)} 起</span></td><td style="text-align:right">${n}</td><td style="text-align:right">${(hit*100).toFixed(0)}%</td><td style="text-align:right">${(ex*100).toFixed(0)}%</td><td style="text-align:right">${t3!=null?(t3*100).toFixed(0)+"%":"—"}</td><td style="text-align:right">${br.toFixed(3)}</td><td style="text-align:right">${bk}</td></tr>`);
+  }
+  if(!rows.length) return "";
+  return `<div style="margin:14px 0 6px"><div style="font-family:var(--cond);font-weight:700;letter-spacing:.06em;margin-bottom:6px">📈 模型演進(依鎖定時期)</div>
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+      <thead><tr style="color:var(--muted)"><th style="text-align:left;font-weight:normal">時期</th><th style="text-align:right;font-weight:normal">場</th><th style="text-align:right;font-weight:normal">命中</th><th style="text-align:right;font-weight:normal">全中</th><th style="text-align:right;font-weight:normal">Top-3</th><th style="text-align:right;font-weight:normal">Brier</th><th style="text-align:right;font-weight:normal">模型 vs 莊家</th></tr></thead>
+      <tbody>${rows.join("")}</tbody></table>
+    <div style="margin-top:4px;font-size:11px;color:var(--muted)">每期只計該期鎖定的預測;「模型 vs 莊家」用同一批有賠率的比賽,綠=模型 Brier 較低。8/29 前預測含 55~70% 市場賠率,之後為純模型。</div></div>`;
+}
 function renderByLeague(){
   const rows=Object.values(scGet()).filter(s=>s&&!s.void&&s.hs!=null&&s.pred);
   const by={};
@@ -3509,7 +3547,7 @@ function renderInsights(){
     · <a href="#" id="expSC" style="color:var(--gold)">匯出學習資料</a> · <a href="#" id="impSC" style="color:var(--gold)">匯入學習資料</a><input type="file" id="impFile" accept="application/json,.json" style="display:none">
     · <a href="#" id="resetSC" style="color:var(--miss)">重設所有計分紀錄</a>
     <div style="margin-top:6px">${CLOUD_PRED?`<span id="cloudPredTag" style="color:var(--hit)">☁ 雲端統一預測 · 更新 ${String(CLOUD_PRED.updated||"").replace("T"," ").slice(5,16)} · 帳本 ${CLOUD_PRED.n||0} 筆</span> —— 預測與學習參數由雲端每 30 分鐘統一計算,手機與電腦數字一致`:`<span style="color:var(--gold)">尚未取得雲端統一預測(cloud-pred.json),目前用本機學習:已學習 ${n} 場,各裝置可能不同</span>`}</div></div></div>`;
-  box.innerHTML=renderCoverage()+renderTWSL()+renderCalib()+renderByLeague()+html;
+  box.innerHTML=renderCoverage()+renderTWSL()+renderCalib()+renderEras()+renderByLeague()+html;
   // e139:跨裝置同步 —— 匯出/匯入所有學習資料(帳本、評級校準、攻防乘數、市場權重、聯賽審核)
   const KEYS=["euroSC","euroADJ","euroAD","euroMKTW","euroLGD","euroDYN","euroTWSLN","euroTWSLL","euroADv2"];
   const ex=document.getElementById("expSC");
