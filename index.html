@@ -716,7 +716,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e182";
+const BUILD = "e183";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1310,7 +1310,14 @@ function pureGet(){ try{ return localStorage.getItem("euroPURE")!=="0"; }catch(e
    方向命中 64.7% → 52.9%,而且會出現「主 42% / 和 22%,卻看好和局」這種明顯不合理的畫面
    (因為最可能的單格常是 1-1,但和局實際只佔 24%)。
    比分仍然與看好方向綁定(e168),所以不會再有矛盾;想試比分優先:localStorage.setItem("euroSCOREFIRST","1") */
-function scoreFirstGet(){ try{ return localStorage.getItem("euroSCOREFIRST")==="1"; }catch(e){ return false; } }
+/* e183:預設改回「比分優先」—— 目標既然是精準比分,就用對比分最佳的規則。
+   線上 256 場鎖定資料(用凍結的 λ 重算)實測:
+     方向優先:全中 9.8% / Top-3 24.2% / 方向命中 49.6%
+     比分優先:全中 11.7% / Top-3 28.5% / 方向命中 43.8%
+   折衷方案(分歧小時才採比分方向)測了四個門檻,沒有一個能兩邊都拿到。
+   代價是方向命中約 −6 個百分點;畫面上改用「比分推導」標示,避免「看好和局但和局機率最低」的誤讀。
+   要切回方向優先:localStorage.setItem("euroSCOREFIRST","0") */
+function scoreFirstGet(){ try{ return localStorage.getItem("euroSCOREFIRST")!=="0"; }catch(e){ return true; } }
 let SCORE_FIRST=scoreFirstGet();
 let PURE_MODE=pureGet();
 let MKT_W=0.55;
@@ -2712,7 +2719,7 @@ function renderTodaySection(){
           return `<span style="font-family:var(--mono);font-size:10px;color:${mv2[1]>0?"var(--hit)":"var(--miss)"};margin-left:6px" title="開盤至今市場隱含機率變動(聰明錢流向)">📈 ${mv2[0]}${mv2[1]>0?"+":""}${mv2[1].toFixed(0)}pt</span>`;
         }catch(e){ return ""; }})()}${(__started&&snap&&(snap.fzT||snap.tU||snap.t))?`<span style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:6px" title="預測已於開賽時封存,之後不再變動">🔒 ${new Date(snap.fzT||snap.tU||snap.t).toTimeString().slice(0,5)}</span>`:''}
         <div class="tg-pred">
-          <b class="tp-pick">看好 ${pickSide?`<span class="ha ${pickSide==="主"?"hm":"aw"}">${pickSide}</span> `:""}${pickZh}</b>
+          <b class="tp-pick">看好 ${pickSide?`<span class="ha ${pickSide==="主"?"hm":"aw"}">${pickSide}</span> `:""}${pickZh}</b>${(()=>{ try{ const pk=(p.si!=null&&p.sj!=null)?(p.si>p.sj?"H":(p.si===p.sj?"D":"A")):null; const mx=(p.H>=p.D&&p.H>=p.A)?"H":((p.A>=p.D&&p.A>=p.H)?"A":"D"); if(pk&&pk!==mx){ const nm={H:"主勝",D:"和局",A:"客勝"}; return `<span class="tp-old" style="border-style:solid;color:var(--gold);border-color:rgba(230,190,90,.45)" title="比分優先模式:看好方向由「最可能的單一比分」推導。三向機率加總最高的其實是 ${nm[mx]}(${Math.round({H:p.H,D:p.D,A:p.A}[mx])}%),但單一比分裡 ${p.si}-${p.sj} 這一格機率最高。實測這個規則全中 11.7%、Top-3 28.5%,優於方向優先的 9.8%、24.2%;代價是方向命中約 −6 個百分點。">比分推導 · 三向最高 ${nm[mx]}</span>`; } }catch(e){} return ""; })()}
           <span class="tp-bar"><i class="a" style="width:${p.A}%"></i><i class="d" style="width:${p.D}%"></i><i class="h" style="width:${p.H}%"></i></span>
           <span class="tp-pct">客 ${Math.round(p.A)}% · 和 ${Math.round(p.D)}% · 主 ${Math.round(p.H)}%</span>
           ${p.mk?`<span class="tp-mk">含市場賠率</span>`:""}
