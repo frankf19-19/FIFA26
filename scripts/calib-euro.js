@@ -48,16 +48,16 @@ function usParse(html,key){
 }
 async function understat(out){
   const now=Date.now(); const yr=(new Date().getUTCMonth()+1>=7)?new Date().getUTCFullYear():new Date().getUTCFullYear()-1;
-  out.upr=out.upr||{}; let teamsHit=0, teamsMiss=[], players=0;
+  out.upr=out.upr||{}; let teamsHit=0, teamsMiss=[], players=0; const LOG=[]; const say=(m)=>{ LOG.push(m); console.log(m); };
   for(const lg in UNDERSTAT){
     const L=out.leagues[lg]; if(!L||!L.teams) continue;
     try{
       const url=`https://understat.com/league/${UNDERSTAT[lg]}/${yr}`;
       const r=await fetch(url,{headers:{"User-Agent":"Mozilla/5.0","Accept":"text/html"}});
-      if(!r.ok){ console.log("understat",lg,"HTTP",r.status); continue; }
+      if(!r.ok){ say("understat "+lg+" HTTP "+r.status); continue; }
       const html=await r.text();
       const teams=usParse(html,"teamsData"), players_=usParse(html,"playersData");
-      if(!teams){ console.log("understat",lg,"no teamsData"); continue; }
+      if(!teams){ say("understat "+lg+" no teamsData (html "+html.length+" bytes, title="+((html.match(/<title>([^<]*)/)||[])[1]||"?").slice(0,60)+")"); continue; }
       // 建立 understat 隊名 → calib 隊物件
       const T=L.teams; const byNorm={};
       for(const k in T){ if(k[0]==="#"||!T[k]||T[k].$) continue; byNorm[usNorm(k)]=T[k]; const al=US_ALIAS[k]; if(al) byNorm[usNorm(al)]=T[k]; }
@@ -75,9 +75,10 @@ async function understat(out){
         const key=usNorm(p.player_name)+"|"+usNorm(p.team_title);
         out.upr[key]=+(((+p.xG||0)+0.7*(+p.xA||0))/g).toFixed(4); players++; } }
       await new Promise(r=>setTimeout(r,800));
-    }catch(e){ console.log("understat",lg,"failed:",e.message); }
+    }catch(e){ say("understat "+lg+" failed: "+(e&&e.name)+" "+(e&&e.message)); }
   }
-  console.log(`understat: 隊伍 ${teamsHit} 命中,未對應 ${teamsMiss.length}${teamsMiss.length?" ["+teamsMiss.slice(0,8).join(", ")+"]":""}; 球員 ${players}`);
+  say(`understat: teams ${teamsHit} hit, ${teamsMiss.length} unmatched${teamsMiss.length?" ["+teamsMiss.slice(0,8).join(", ")+"]":""}; players ${players}`);
+  out.usLog=LOG;   // v18b
 }
 let UPR_HIT=0;
 function buildXiBase(out){
