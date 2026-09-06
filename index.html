@@ -716,7 +716,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e183";
+const BUILD = "e184";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1663,7 +1663,11 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
     const xgOf=(tid,nm)=>{ if(!CT2) return null;
       for(const x in CT2){ const T=CT2[x].teams||{};
         const t=(tid!=null&&T["#"+tid])||T[String(nm||"").toLowerCase()];
-        if(t&&t.xg&&t.xg.n>=8&&gN(t)>=8&&t.gp>0) return {xg:t.xg, gf:t.gf/t.gp, ga:t.ga/t.gp}; }
+        if(!t||!(t.gp>0)) return null;
+        // e184:Understat 射門級 xG(calib v17 寫入 t.ux)優先 —— 每一腳射門的位置/情境算出的 xG,
+        //      比「射正 × 聯賽轉換率」準確得多;至少 5 場才用。沒有的聯賽(美職/日職/英冠等)維持射正推估。
+        if(t.ux&&+t.ux.n>=5&&gN(t)>=5) return {xg:{n:t.ux.n, xf:+t.ux.xg, xa:+t.ux.xga}, gf:t.gf/t.gp, ga:t.ga/t.gp, real:1};
+        if(t.xg&&t.xg.n>=8&&gN(t)>=8) return {xg:t.xg, gf:t.gf/t.gp, ga:t.ga/t.gp}; }
       return null; };
     const xh=xgOf(hid,homeName), xa2=xgOf(aid,awayName);
     if(xh&&xa2){
@@ -1674,7 +1678,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
       la*=C((0.75*xa2.xg.xf+0.25*xa2.gf)/Math.max(xa2.gf,0.3)); // 客隊攻
       la*=C((0.75*xh.xg.xa+0.25*xh.ga)/Math.max(xh.ga,0.3));    // 主隊防(xGA)
       lh*=C((0.75*xa2.xg.xa+0.25*xa2.ga)/Math.max(xa2.ga,0.3)); // 客隊防
-      _xg={h:xh.xg.xf,a:xa2.xg.xf};
+      _xg={h:xh.xg.xf,a:xa2.xg.xf,real:(xh.real&&xa2.real)?1:0};
     }
   }catch(e){}
   // ② 歐戰夾縫:近 4 天內踢過歐冠/歐霸 → 輪換與疲勞折扣(-3%)
@@ -2041,7 +2045,7 @@ function analysisRows(hn,an,p,lg,hid,aid){
   if(p.ps){ const st3=v=>v>=57?"控球主導":(v<=43?"防守反擊":"均衡");
     rows.push(["球風對比",`場均控球 ${hz} ${p.ps.h}%(${st3(p.ps.h)}) · ${az} ${p.ps.a}%(${st3(p.ps.a)})`]); }
   if(p.tdr!=null) rows.push(["和局體質",`兩隊近182天合併和局率 ${p.tdr.toFixed(0)}%(已納入和局錨定)`]);
-  if(p.xg) rows.push(["xG 校正",`場均 xG:${hz} ${p.xg.h} · ${az} ${p.xg.a}(進球偏離 xG 視為運氣,已修正 ±10% 內)`]);
+  if(p.xg) rows.push(["xG 校正",`場均 xG:${hz} ${p.xg.h} · ${az} ${p.xg.a}(${p.xg.real?"<span style=\"color:var(--gold)\">Understat 射門級 xG</span>:每一腳射門的位置與情境":"由射正數 × 聯賽轉換率推估"};進球偏離 xG 視為運氣,已修正 ±28% 內)`]);
   if(p.eu) rows.push(["歐戰夾縫",`${p.eu.h?`${hz} ${p.eu.h.d} 天前踢${p.eu.h.c}`:""}${p.eu.h&&p.eu.a?" · ":""}${p.eu.a?`${az} ${p.eu.a.d} 天前踢${p.eu.a.c}`:""}(輪換疲勞 -3%)`]);
   if(p.mv) rows.push(["動機情境",`${p.mv.h?`${hz}:${p.mv.h.t}`:""}${p.mv.h&&p.mv.a?" · ":""}${p.mv.a?`${az}:${p.mv.a.t}`:""}(賽季後段效應)`]);
   if(p.rest) rows.push(["休息日",`${hz} ${p.rest.h} 天 · ${az} ${p.rest.a} 天(密集賽程 ±3% 內微調)`]);
