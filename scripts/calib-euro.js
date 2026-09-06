@@ -11,6 +11,9 @@ const WEEKS = 26;
    完全不參與調參),60 天:Brier 0.6617/命中 44.8%;120 天:Brier 0.6356/命中 47.1%。
    60 天衰減太快,等於丟掉太多有效樣本;拉長到 120 天在保留區間穩定較佳。 */
 const HALF_LIFE = 120;
+/* v18:全域 fetch 逸時 —— Node 的 fetch 預設永不逸時;第一次抓 Understat 時整個 job 卡住 30 分鐘以上。
+   任何請求超過 25 秒一律中止,由各自的 try/catch 接手。 */
+{ const _f=globalThis.fetch; globalThis.fetch=(u,o)=>{ o=o||{}; if(!o.signal){ try{ o.signal=AbortSignal.timeout(25000); }catch(e){} } return _f(u,o); }; }
 /* v16:先發陣容強度基準 —— 用帳本裡每場的先發名單(xi)與球隊名冊的球員產出,
    算出每隊「平常派出的先發強度」。賽前拿到當日先發名單後,就能算出
    「今天的陣容 ÷ 平常的陣容」,反映輪換、休息、傷病的真實影響。
