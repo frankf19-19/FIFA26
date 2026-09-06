@@ -15,18 +15,84 @@ const HALF_LIFE = 120;
    算出每隊「平常派出的先發強度」。賽前拿到當日先發名單後,就能算出
    「今天的陣容 ÷ 平常的陣容」,反映輪換、休息、傷病的真實影響。
    實測(1078 場):強度比 0.6x → 場均 1.18 球、1.0x → 1.52 球、1.2x → 1.67 球。 */
+/* ===== v17:Understat 射門級 xG(英超/西甲/德甲/義甲/法甲)=====
+   ESPN 沒有射門位置與品質,只能用「射正 × 聯賽轉換率」粗估 xG。Understat 有每一腳射門的 xG,
+   以及每個球員的 xG/xA。網頁內嵌 JSON(teamsData / datesData / playersData),不需要 API 金鑰。
+   寫入:
+     隊伍  t.ux = { n, xg, xga, npxg }   (近 HALF_LIFE 衰減加權的場均)
+     球員  out.upr[名字正規化|隊名正規化] = (xG+0.7xA)/games  → buildXiBase 優先採用
+   任何失敗都只印 log,不影響其他流程。 */
+const UNDERSTAT={ "eng.1":"EPL", "esp.1":"La_liga", "ger.1":"Bundesliga", "ita.1":"Serie_A", "fra.1":"Ligue_1" };
+const US_ALIAS={ "wolverhampton wanderers":"wolverhampton", "tottenham":"tottenham hotspur", "manchester utd":"manchester united",
+  "newcastle united":"newcastle", "brighton":"brighton & hove albion", "west ham":"west ham united", "nottingham forest":"nottingham forest",
+  "atletico madrid":"atlético madrid", "athletic club":"athletic bilbao", "alaves":"deportivo alavés", "real betis":"real betis balompié",
+  "celta vigo":"celta de vigo", "rayo vallecano":"rayo vallecano", "espanyol":"espanyol", "girona":"girona",
+  "bayern munich":"bayern münchen", "borussia dortmund":"borussia dortmund", "borussia m.gladbach":"borussia mönchengladbach",
+  "bayer leverkusen":"bayer 04 leverkusen", "rb leipzig":"rb leipzig", "eintracht frankfurt":"eintracht frankfurt", "freiburg":"sc freiburg",
+  "fc koln":"1. fc köln", "st. pauli":"fc st. pauli", "union berlin":"1. fc union berlin", "heidenheim":"1. fc heidenheim",
+  "hoffenheim":"tsg 1899 hoffenheim", "wolfsburg":"vfl wolfsburg", "augsburg":"fc augsburg", "mainz":"1. fsv mainz 05",
+  "werder bremen":"sv werder bremen", "hamburg sv":"hamburger sv", "stuttgart":"vfb stuttgart",
+  "internazionale":"inter", "inter milan":"inter", "ac milan":"milan", "as roma":"roma", "hellas verona":"verona",
+  "paris saint-germain":"paris saint germain", "marseille":"olympique marseille", "lyon":"olympique lyonnais", "lille":"lille",
+  "monaco":"monaco", "nice":"nice", "saint-etienne":"saint-etienne", "lens":"lens" };
+function usNorm(x){ return String(x||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+  .replace(/\b(fc|cf|sc|ac|as|ud|cd|sd|rcd|sv|vfb|vfl|tsg|bsc|fsv|ssc|us|afc)\b/g,"").replace(/[^a-z0-9]+/g," ").trim(); }
+function usParse(html,key){
+  const m=html.match(new RegExp("var\\s+"+key+"\\s*=\\s*JSON\\.parse\\('([^']*)'\\)"));
+  if(!m) return null;
+  const txt=m[1].replace(/\\x([0-9A-Fa-f]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));
+  try{ return JSON.parse(txt); }catch(e){ return null; }
+}
+async function understat(out){
+  const now=Date.now(); const yr=(new Date().getUTCMonth()+1>=7)?new Date().getUTCFullYear():new Date().getUTCFullYear()-1;
+  out.upr=out.upr||{}; let teamsHit=0, teamsMiss=[], players=0;
+  for(const lg in UNDERSTAT){
+    const L=out.leagues[lg]; if(!L||!L.teams) continue;
+    try{
+      const url=`https://understat.com/league/${UNDERSTAT[lg]}/${yr}`;
+      const r=await fetch(url,{headers:{"User-Agent":"Mozilla/5.0","Accept":"text/html"}});
+      if(!r.ok){ console.log("understat",lg,"HTTP",r.status); continue; }
+      const html=await r.text();
+      const teams=usParse(html,"teamsData"), players_=usParse(html,"playersData");
+      if(!teams){ console.log("understat",lg,"no teamsData"); continue; }
+      // 建立 understat 隊名 → calib 隊物件
+      const T=L.teams; const byNorm={};
+      for(const k in T){ if(k[0]==="#"||!T[k]||T[k].$) continue; byNorm[usNorm(k)]=T[k]; const al=US_ALIAS[k]; if(al) byNorm[usNorm(al)]=T[k]; }
+      const usTeamNorm={};
+      for(const id in teams){ const u=teams[id]; const nm=usNorm(u.title); usTeamNorm[u.title]=nm;
+        let t=byNorm[nm]; if(!t){ const k2=Object.keys(byNorm).find(k=>k&&(nm.includes(k)||k.includes(nm))); if(k2) t=byNorm[k2]; }
+        if(!t){ teamsMiss.push(lg+":"+u.title); continue; }
+        let sw=0,xg=0,xga=0,npxg=0,n=0;
+        for(const h of (u.history||[])){ const d=Date.parse(h.date); if(!(d>0)) continue;
+          const w=Math.max(0.25,Math.exp(-Math.LN2*((now-d)/86400000)/HALF_LIFE));
+          sw+=w; xg+=w*(+h.xG||0); xga+=w*(+h.xGA||0); npxg+=w*(+h.npxG||0); n++; }
+        if(n>=3&&sw>0){ t.ux={ n, xg:+(xg/sw).toFixed(3), xga:+(xga/sw).toFixed(3), npxg:+(npxg/sw).toFixed(3) }; teamsHit++; }
+      }
+      if(Array.isArray(players_)){ for(const p of players_){ const g=+p.games||0; if(g<3) continue;
+        const key=usNorm(p.player_name)+"|"+usNorm(p.team_title);
+        out.upr[key]=+(((+p.xG||0)+0.7*(+p.xA||0))/g).toFixed(4); players++; } }
+      await new Promise(r=>setTimeout(r,800));
+    }catch(e){ console.log("understat",lg,"failed:",e.message); }
+  }
+  console.log(`understat: 隊伍 ${teamsHit} 命中,未對應 ${teamsMiss.length}${teamsMiss.length?" ["+teamsMiss.slice(0,8).join(", ")+"]":""}; 球員 ${players}`);
+}
+let UPR_HIT=0;
 function buildXiBase(out){
   try{
     const PR={};
     for(const lg in (out.leagues||{})){
       const T=(out.leagues[lg]||{}).teams||{};
+      const nameOf=new Map(); for(const k in T){ if(k[0]!=="#"&&T[k]&&!T[k].$) nameOf.set(T[k],k); }   // v17:別名鍵 → 隊名
       for(const k in T){ const t=T[k];
         if(k[0]!=="#"||!t||!Array.isArray(t.r)) continue;
         for(const a of t.r){
           if(!Array.isArray(a[4])||!a[4].length) continue;
           const b=a[4].reduce((m,x)=>((+x[1]||0)>(+m[1]||0)?x:m),a[4][0]);
           const app=+b[1]||0; if(app<3) continue;
-          PR[String(a[0])]=((+b[2]||0)+0.7*(+b[3]||0))/app;
+          let v=((+b[2]||0)+0.7*(+b[3]||0))/app;
+          // v17:Understat 的 xG+xA 較不受幸運進球影響;有的話優先(依 名字|隊名 對應)
+          try{ if(out.upr){ const tn=usNorm(nameOf.get(t)||""); const key=usNorm(a[1])+"|"+tn; if(out.upr[key]!=null){ v=out.upr[key]; UPR_HIT++; } } }catch(e){}
+          PR[String(a[0])]=v;
         }
       }
     }
@@ -48,7 +114,7 @@ function buildXiBase(out){
       if(T&&T["#"+tid]){ T["#"+tid].xiB=+(sum/n2).toFixed(4); T["#"+tid].xiN=n2; wrote++; }
     }
     out.pr=PR;
-    console.log("xiBase teams="+wrote+" players="+Object.keys(PR).length);
+    console.log("xiBase teams="+wrote+" players="+Object.keys(PR).length+" (understat xG+xA 覆蓋 "+UPR_HIT+" 人)");
   }catch(e){ console.log("buildXiBase failed:", e.message); }
 }
 
@@ -407,6 +473,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
     console.log("完成:", lg, "(", n, "場 )");
   }
   // xG 已改為自產(SOT-xG,於各聯賽 checkpoint 內完成;外部源 Understat/FBref 均擋機房 IP)
+  try{ await understat(out); }catch(e){ console.log("understat 模組失敗:",e.message); }   // v17
   buildXiBase(out); save(out, null);   // v16
   console.log("全部完成:", out.n, "場,", Object.keys(out.leagues).length, "個聯賽");
 })();
