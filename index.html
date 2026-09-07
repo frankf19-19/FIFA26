@@ -716,7 +716,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e185";
+const BUILD = "e186";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1663,7 +1663,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
     const xgOf=(tid,nm)=>{ if(!CT2) return null;
       for(const x in CT2){ const T=CT2[x].teams||{};
         const t=(tid!=null&&T["#"+tid])||T[String(nm||"").toLowerCase()];
-        if(!t||!(t.gp>0)) return null;
+        if(!t||!(t.gp>0)) continue;   // e186:修正 e184 的 bug —— 第一個聯賽找不到就直接 return null,導致英超以外所有聯賽的 xG 層全部失效
         // e184:Understat 射門級 xG(calib v17 寫入 t.ux)優先 —— 每一腳射門的位置/情境算出的 xG,
         //      比「射正 × 聯賽轉換率」準確得多;至少 5 場才用。沒有的聯賽(美職/日職/英冠等)維持射正推估。
         if(t.ux&&+t.ux.n>=5&&gN(t)>=5) return {xg:{n:t.ux.n, xf:+t.ux.xg, xa:+t.ux.xga}, gf:t.gf/t.gp, ga:t.ga/t.gp, real:1};
@@ -2003,17 +2003,20 @@ function analysisRows(hn,an,p,lg,hid,aid){
   const rh=rating(hn), ra=rating(an), d=rh-ra;
   // ── 資料來源盤點:誠實揭露這場預測「有什麼、缺什麼」 ──
   const sh0=standOf(hn,lg,hid), sa0=standOf(an,lg,aid);
+  // e186:盤點改列「純模型真正用到的資料」,與資料充分度(dq)的計分項一致
+  const _cH=cloudTeamOf(lg,hid,hn), _cA=cloudTeamOf(lg,aid,an);
+  const gh_=_cH?gN(_cH):0, ga_=_cA?gN(_cA):0;
   const src=[
-    ["積分榜攻防", !!(sh0&&sa0&&+sh0.gp>=2&&+sa0.gp>=2)],
+    [`雲端實戰 ${gh_}/${ga_} 場`, Math.min(gh_,ga_)>=5],
+    [p.xg?(p.xg.real?"射門級 xG":"射正推估 xG"):"xG", !!p.xg],
+    ["當日先發名單", !!p.xi],
+    ["歷史對戰", !!(p.h2&&p.h2.n>=3)],
     ["近況戰績",   !!(formSeq(hn)||formSeq(an))],
-    ["真實賽程",   !!(schedOf(hn)&&schedOf(an))],
-    ["傷兵名單",   (injAdj(hn)<0.999||injAdj(an)<0.999)],
-    ["市場賠率",   !!p.mk],
-    ["已知評級",   (baseRating(hn)!==68||baseRating(an)!==68)],
+    ["積分榜攻防", !!(sh0&&sa0&&+sh0.gp>=2&&+sa0.gp>=2)],
   ];
   const okN=src.filter(x=>x[1]).length;
   rows.push(["資料來源", src.map(x=>`<span style="color:${x[1]?"var(--hit)":"var(--muted)"}">${x[1]?"✓":"✗"} ${x[0]}</span>`).join(" · ")
-    + `<br><span style="color:var(--muted);font-size:11px">${okN}/6 項可用 · 資料充分度 ${Math.round((p.dq||0)*100)}%</span>`]);
+    + `<br><span style="color:var(--muted);font-size:11px">${okN}/6 項可用 · 資料充分度 ${Math.round((p.dq||0)*100)}%${Math.min(gh_,ga_)<5?" · 至少一隊雲端實戰不足 5 場(升班馬或新賽季),預測主要靠積分榜與先驗":""}</span>`]);
   if(okN===0){
     rows.push(["⚠ 警告", `<span style="color:var(--miss)">ESPN 未提供這兩隊的任何實際數據,以下數字全部來自預設值推算,<b>不具參考價值</b>。建議直接參考市場賠率。</span>`]);
   }else if(okN<=2){
