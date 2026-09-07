@@ -37,7 +37,8 @@ const US_ALIAS={ "wolverhampton wanderers":"wolverhampton", "tottenham":"tottenh
   "werder bremen":"sv werder bremen", "hamburg sv":"hamburger sv", "stuttgart":"vfb stuttgart",
   "internazionale":"inter", "inter milan":"inter", "ac milan":"milan", "as roma":"roma", "hellas verona":"verona",
   "paris saint-germain":"paris saint germain", "marseille":"olympique marseille", "lyon":"olympique lyonnais", "lille":"lille",
-  "monaco":"monaco", "nice":"nice", "saint-etienne":"saint-etienne", "lens":"lens" };
+  "monaco":"monaco", "nice":"nice", "saint-etienne":"saint-etienne", "lens":"lens",
+  "borussia mönchengladbach":"borussia m.gladbach", "rb leipzig":"rasenballsport leipzig", "stade rennais":"rennes" };   // v20:#55 未對應的三隊
 function usNorm(x){ return String(x||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"")
   .replace(/\b(fc|cf|sc|ac|as|ud|cd|sd|rcd|sv|vfb|vfl|tsg|bsc|fsv|ssc|us|afc)\b/g,"").replace(/[^a-z0-9]+/g," ").trim(); }
 function usParse(html,key){
@@ -53,14 +54,19 @@ async function understat(out){
     const L=out.leagues[lg]; if(!L||!L.teams) continue;
     try{
       // v19:Understat 已改版 —— 資料不再嵌在網頁,改由 JSON 端點提供(探測確認:main/getLeagueData/{LG}/{yr} → 200)
-      const url=`https://understat.com/main/getLeagueData/${UNDERSTAT[lg]}/${yr}`;
-      const r=await fetch(url,{headers:{"User-Agent":"Mozilla/5.0","Accept":"application/json","X-Requested-With":"XMLHttpRequest","Referer":`https://understat.com/league/${UNDERSTAT[lg]}/${yr}`}});
-      if(!r.ok){ say("understat "+lg+" HTTP "+r.status); continue; }
-      let data=null; try{ data=await r.json(); }catch(e){ say("understat "+lg+" bad json"); continue; }
-      const teams=data&&(data.teams||data.teamsData)||null;
-      const players_=data&&(data.players||data.playersData)||null;
-      if(!teams){ say("understat "+lg+" no teams key; keys="+JSON.stringify(Object.keys(data||{}).slice(0,10))); continue; }
-      if(lg==="eng.1") say("understat keys="+JSON.stringify(Object.keys(data)).slice(0,120)+" players="+(Array.isArray(players_)?players_.length:typeof players_));
+      // v20:拉上一季一起算(衰減後下限 0.25),開季前幾週才有足夠場次達到 n>=5 的門檻
+      const teams={}; let players_=null;
+      for(const y of [yr, yr-1]){
+        const url=`https://understat.com/main/getLeagueData/${UNDERSTAT[lg]}/${y}`;
+        const r=await fetch(url,{headers:{"User-Agent":"Mozilla/5.0","Accept":"application/json","X-Requested-With":"XMLHttpRequest","Referer":`https://understat.com/league/${UNDERSTAT[lg]}/${y}`}});
+        if(!r.ok){ say("understat "+lg+" "+y+" HTTP "+r.status); continue; }
+        let data=null; try{ data=await r.json(); }catch(e){ say("understat "+lg+" "+y+" bad json"); continue; }
+        const tm=data&&(data.teams||data.teamsData)||null; if(!tm) continue;
+        for(const id in tm){ const u=tm[id]; const k=u.title; if(!teams[k]) teams[k]={title:k,history:[]}; teams[k].history.push(...(u.history||[])); }
+        if(y===yr) players_=data&&(data.players||data.playersData)||null;   // 球員只用本季
+        await new Promise(r=>setTimeout(r,600));
+      }
+      if(!Object.keys(teams).length){ say("understat "+lg+" no teams"); continue; }
       // 建立 understat 隊名 → calib 隊物件
       const T=L.teams; const byNorm={};
       for(const k in T){ if(k[0]==="#"||!T[k]||T[k].$) continue; byNorm[usNorm(k)]=T[k]; const al=US_ALIAS[k]; if(al) byNorm[usNorm(al)]=T[k]; }
