@@ -716,7 +716,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e184";
+const BUILD = "e185";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1840,10 +1840,18 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
   }
   // ===== 資料品質收縮:資料越少,越往基準率靠(不假裝有把握) =====
   let dq=0;                                     // 0=毫無資料,1=資料充分
-  if(mkt) dq+=0.55;                             // 有市場賠率 = 最強訊號
-  if(sh&&sa&&+sh.gp>=2&&+sa.gp>=2) dq+=0.30*(0.5+0.5*Math.min(1,Math.min(+sh.gp,+sa.gp)/10))*((_eh.cloud&&_ea.cloud)?0.9:(_prior?(Math.min(+sh.gp,+sa.gp)>=15?0.8:0.6):1));
-  if(schedOf(homeName)&&schedOf(awayName)) dq+=0.15;   // 真實近5場戰績(跨季有效,實戰數據)
-  // 已知評級不再計入資料充分度:名氣不是數據(信心只反映真實資料量)
+  /* e185:資料充分度改依「純模型真正用到的資料」計算。
+     舊版把市場賠率當最強訊號(+0.55),純模型根本不用它,結果沒有賠率的聯賽(蘇超/英冠/日職…)
+     就算雲端資料齊全也永遠「不足」,預測還被多收縮一層、信心永遠拉不上去。 */
+  if(!PURE_MODE&&mkt) dq+=0.55;                                     // 融合模式才把賠率算進來
+  { const gh=_ctH?gN(_ctH):0, ga=_ctA?gN(_ctA):0, gm=Math.min(gh,ga);
+    if(gm>=5) dq+=0.45*Math.min(1,gm/15);                            // 雲端實戰(兩隊皆有,15 場滿分)
+    else if(sh&&sa&&+sh.gp>=2&&+sa.gp>=2) dq+=0.20*Math.min(1,Math.min(+sh.gp,+sa.gp)/10);   // 只有積分榜/先驗
+    if(_xg) dq+=(_xg.real?0.20:0.15);                               // xG(Understat 射門級較高)
+    if(schedOf(homeName)&&schedOf(awayName)) dq+=0.10;               // 真實近 5 場
+    if(_xi) dq+=0.15;                                                // 當日先發名單
+    if(_h2&&_h2.n>=3) dq+=0.10;                                      // 歷史對戰
+    if(_ctH&&_ctA&&_ctH.pr&&_ctA.pr) dq+=0.05; }                     // 過程體質
   dq=Math.max(0,Math.min(1,dq));
   const shrink=0.15*(1-dq);                     // e133:30%→15%(收縮只防極端,不再把強弱差壓平)
   if(shrink>0.001){
