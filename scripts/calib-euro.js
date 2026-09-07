@@ -52,19 +52,15 @@ async function understat(out){
   for(const lg in UNDERSTAT){
     const L=out.leagues[lg]; if(!L||!L.teams) continue;
     try{
-      const url=`https://understat.com/league/${UNDERSTAT[lg]}/${yr}`;
-      const r=await fetch(url,{headers:{"User-Agent":"Mozilla/5.0","Accept":"text/html"}});
+      // v19:Understat 已改版 —— 資料不再嵌在網頁,改由 JSON 端點提供(探測確認:main/getLeagueData/{LG}/{yr} → 200)
+      const url=`https://understat.com/main/getLeagueData/${UNDERSTAT[lg]}/${yr}`;
+      const r=await fetch(url,{headers:{"User-Agent":"Mozilla/5.0","Accept":"application/json","X-Requested-With":"XMLHttpRequest","Referer":`https://understat.com/league/${UNDERSTAT[lg]}/${yr}`}});
       if(!r.ok){ say("understat "+lg+" HTTP "+r.status); continue; }
-      const html=await r.text();
-      const teams=usParse(html,"teamsData"), players_=usParse(html,"playersData");
-      if(!teams){
-        // v18c PROBE:頁面已改成前端載入 —— 把所有 script 來源與疑似 API 路徑寫進 usLog,下一版才知道要抓哪裡
-        const srcs=[...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(m=>m[1]).slice(0,12);
-        const apis=[...new Set((html.match(/["'](\/[a-zA-Z0-9_\/.-]*(api|data|json|league|xg)[a-zA-Z0-9_\/.-]*)["']/gi)||[]).map(s=>s.slice(1,-1)))].slice(0,15);
-        say("understat "+lg+" no teamsData (html "+html.length+" bytes) scripts="+JSON.stringify(srcs)+" apis="+JSON.stringify(apis));
-        if(lg==="eng.1"){ for(const u of ["https://understat.com/api/league/EPL/"+yr, "https://understat.com/getLeagueData?league=EPL&season="+yr, "https://understat.com/main/getLeagueData/EPL/"+yr]){ try{ const rr=await fetch(u,{headers:{"User-Agent":"Mozilla/5.0","Accept":"application/json","X-Requested-With":"XMLHttpRequest"}}); const tx=await rr.text(); say("probe "+u+" → "+rr.status+" "+tx.slice(0,120).replace(/\s+/g," ")); }catch(e){ say("probe "+u+" → "+e.name); } }
-          for(const u of ["https://www.fotmob.com/api/leagues?id=223","https://api.sofascore.com/api/v1/unique-tournament/196/seasons"]){ try{ const rr=await fetch(u,{headers:{"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36","Accept":"application/json"}}); const tx=await rr.text(); say("probe J1 "+u+" → "+rr.status+" "+tx.slice(0,120).replace(/\s+/g," ")); }catch(e){ say("probe J1 "+u+" → "+e.name); } } }
-        continue; }
+      let data=null; try{ data=await r.json(); }catch(e){ say("understat "+lg+" bad json"); continue; }
+      const teams=data&&(data.teams||data.teamsData)||null;
+      const players_=data&&(data.players||data.playersData)||null;
+      if(!teams){ say("understat "+lg+" no teams key; keys="+JSON.stringify(Object.keys(data||{}).slice(0,10))); continue; }
+      if(lg==="eng.1") say("understat keys="+JSON.stringify(Object.keys(data)).slice(0,120)+" players="+(Array.isArray(players_)?players_.length:typeof players_));
       // 建立 understat 隊名 → calib 隊物件
       const T=L.teams; const byNorm={};
       for(const k in T){ if(k[0]==="#"||!T[k]||T[k].$) continue; byNorm[usNorm(k)]=T[k]; const al=US_ALIAS[k]; if(al) byNorm[usNorm(al)]=T[k]; }
