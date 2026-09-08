@@ -88,8 +88,10 @@ async function understat(out){
   }
   say(`understat: teams ${teamsHit} hit, ${teamsMiss.length} unmatched${teamsMiss.length?" ["+teamsMiss.slice(0,8).join(", ")+"]":""}; players ${players}`);
   out.usLog=LOG;   // v18b
+  out.shotLog=SHOTLOG;   // v22:各聯賽 ESPN 射門座標覆蓋率 {n:射門數, xy:有座標的}
 }
 let UPR_HIT=0;
+const SHOTLOG={};   // v22:各聯賽射門座標覆蓋率(寫進 calib.json 的 shotLog)
 const PR_PRIOR=0.12, PR_K=6;   // v21:球員產出率收縮參數(聯盟平均約 0.12/場)
 function buildXiBase(out){
   try{
@@ -190,9 +192,13 @@ function fitRho(rows){
     return +(best[0]*N/(N+150)).toFixed(3);   // 樣本收縮
   }catch(e){ return null; }
 }
+/* v22:回填模式 —— LEDGER_ONLY=1 時只擴充帳本 matches.json(賽果/先發/射門/裁判/射門座標),不改 calib.json。
+   搭配 LEDGER_ANCHOR(掃描終點日期)與 LEDGER_WEEKS(往回幾週)可一次補上一整季歷史,
+   讓球員貢獻模型、裁判資料庫、自建 xG 有多季樣本。 */
+const LEDGER_ONLY = process.env.LEDGER_ONLY === "1";
 function save(out, lg){
   out.updated = new Date().toISOString();
-  fs.writeFileSync("calib.json", JSON.stringify(slimOut(out)));
+  if(!LEDGER_ONLY) fs.writeFileSync("calib.json", JSON.stringify(slimOut(out)));
   try { saveMatches(); } catch(e) {}
   if (process.env.GIT_PUSH === "1") {
     try {
@@ -283,13 +289,13 @@ function accProcess(T, hid, aid, hs, as, pr, w){
   let out = { updated:"", d:today, days:WEEKS*7, n:0, leagues:{} };
   try {
     const prev = JSON.parse(fs.readFileSync("calib.json","utf8"));
-    if (!process.env.CALIB_FULL && prev && prev.d === today && prev.leagues) { out = unslim(prev); console.log("接續今天的進度:已完成", Object.keys(prev.leagues).filter(k=>prev.leagues[k].done).join(", ")||"(無)"); }   // v12c:手動觸發(CALIB_FULL=1)一律全量重跑,不接續
+    if (!process.env.CALIB_FULL && !LEDGER_ONLY && prev && prev.d === today && prev.leagues) { out = unslim(prev); console.log("接續今天的進度:已完成", Object.keys(prev.leagues).filter(k=>prev.leagues[k].done).join(", ")||"(無)"); }   // v12c:手動觸發(CALIB_FULL=1)一律全量重跑,不接續
   } catch(e) {}
 
   for (const lg of LEAGUES) {
     if (out.leagues[lg] && out.leagues[lg].done) { console.log("跳過(今天已完成):", lg); continue; }
     console.log("處理中:", lg);
-    const now = new Date();
+    const now = process.env.LEDGER_ANCHOR ? new Date(process.env.LEDGER_ANCHOR+"T00:00:00Z") : new Date();
     let hw=0, dr=0, goals=0, n=0, nr=0; const SCR=[];   // v13:SCR 收集本聯賽所有比分,供 Dixon-Coles rho 實測擬合
     const T={};
     const add=(id,nm,gf,ga,isHome,dt,w2)=>{ const w=(w2!=null?w2:1); const o=(T["#"+id]=T["#"+id]||{gp:0,gf:0,ga:0,hgp:0,hgf:0,hga:0,agp:0,agf:0,aga:0,lp:""});
@@ -300,7 +306,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
       if(dt && dt>o.lp) o.lp=dt;                               // 最近一場日期(休息日計算用)
       if(nm) T[String(nm).toLowerCase()]=o; };
     // ── 賽果(近 182 天)──
-    const WK = /^uefa\./.test(lg) ? WEEKS_CUP : WEEKS;   // v14:盃賽掃更長區間
+    const WK = process.env.LEDGER_WEEKS ? +process.env.LEDGER_WEEKS : (/^uefa\./.test(lg) ? WEEKS_CUP : WEEKS);   // v14/v22
     for (let seg=0; seg<WK; seg++) {
       const b=new Date(now); b.setDate(b.getDate()-seg*7);
       const a=new Date(now); a.setDate(a.getDate()-(seg+1)*7);
@@ -362,6 +368,28 @@ function accProcess(T, hid, aid, hs, as, pr, w){
                   const xi=parseXI(sj2,(H.team||{}).id);
                   if (MATCHES[ev.id]) { if(xi) MATCHES[ev.id].xi=[xi.h.map(x=>x[0]).join(","), xi.a.map(x=>x[0]).join(",")]; else MATCHES[ev.id].noxi=1; }
                   accXI((H.team||{}).id,(A.team||{}).id,hs,as,xi,__w);
+                  /* v22:(a) 裁判 —— 記到帳本 MATCHES[id].ref,供裁判資料庫(每人場均黃紅牌/點球);
+                         (b) 射門座標 —— ESPN 的 plays 對部分聯賽有 coordinate{x,y};若有,記錄每腳射門(x,y,進球?,點球?)
+                             → 之後可用帳本自建「位置型 xG」,補 Understat 沒有的聯賽(美職/日職/英冠/蘇超/葡荷土比)。 */
+                  try{ if(MATCHES[ev.id]){
+                    const offs=((sj2.gameInfo||{}).officials)||sj2.officials||[];
+                    const refO=(Array.isArray(offs)?offs:[]).find(o=>/referee/i.test(String((o.position&&o.position.name)||o.displayName||""))&&!/assistant|video|fourth/i.test(String((o.position&&o.position.name)||"")))||offs[0];
+                    const refN=refO&&(refO.displayName||refO.fullName||(refO.official&&refO.official.displayName));
+                    if(refN) MATCHES[ev.id].ref=String(refN);
+                    const plays=Array.isArray(sj2.plays)?sj2.plays:[];
+                    const shots=[]; let withXY=0;
+                    for(const pl of plays){ const tp=String((pl.type&&pl.type.text)||"").toLowerCase();
+                      const isShot=/shot|goal|attempt/.test(tp)&&!/own goal/.test(tp)&&!/kick.?off|corner|throw|offside|foul|card|substitution/.test(tp);
+                      if(!isShot) continue;
+                      const c=pl.coordinate||pl.coordinates||{}; const x=+c.x, y=+c.y; const has=Number.isFinite(x)&&Number.isFinite(y);
+                      if(has) withXY++;
+                      const side=String((pl.team&&pl.team.id))===String((H.team||{}).id)?1:0;
+                      shots.push([side, has?+x.toFixed(1):null, has?+y.toFixed(1):null, pl.scoringPlay?1:0, /penalty/.test(tp)?1:0, /header|head/.test(String(pl.text||"").toLowerCase())?1:0]);
+                    }
+                    if(shots.length) MATCHES[ev.id].shots=shots;
+                    if(!SHOTLOG[lg]) SHOTLOG[lg]={n:0,xy:0};
+                    SHOTLOG[lg].n+=shots.length; SHOTLOG[lg].xy+=withXY;
+                  } }catch(e){}
                   // 射門/犯規(帳本留底)
                   const bt0=(sj2.boxscore&&sj2.boxscore.teams)||[];
                   if (bt0.length===2&&MATCHES[ev.id]) { const g2=(t2,nm2)=>{ const st2=(t2.statistics||[]).find(x=>x.name===nm2); return st2?parseFloat(st2.displayValue):null; };
@@ -413,6 +441,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
     out.n += n;
     // ── 名單 + 球員逐季數據(含守門/防守欄位)──
     try {
+      if(LEDGER_ONLY) throw new Error("skip roster in ledger-only mode");   // v22
       const tr = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/teams`);
       if (tr.ok) { const tj = await tr.json();
         let teams=[]; try{teams=tj.sports[0].leagues[0].teams.map(t=>t.team);}catch(e){teams=(tj.teams||[]).map(t=>t.team||t);}
@@ -489,6 +518,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
     console.log("完成:", lg, "(", n, "場 )");
   }
   // xG 已改為自產(SOT-xG,於各聯賽 checkpoint 內完成;外部源 Understat/FBref 均擋機房 IP)
+  if(LEDGER_ONLY){ saveMatches(); console.log("LEDGER_ONLY:帳本已更新,不寫 calib.json"); process.exit(0); }   // v22
   try{ await understat(out); }catch(e){ console.log("understat 模組失敗:",e.message); }   // v17
   buildXiBase(out); save(out, null);   // v16
   console.log("全部完成:", out.n, "場,", Object.keys(out.leagues).length, "個聯賽");
