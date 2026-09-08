@@ -1,0 +1,36 @@
+name: euro-ledger-backfill
+on:
+  workflow_dispatch:
+    inputs:
+      anchor:
+        description: "掃描終點日期(YYYY-MM-DD),往回掃 weeks 週"
+        default: "2025-09-16"
+      weeks:
+        description: "往回幾週"
+        default: "48"
+permissions:
+  contents: write
+concurrency:
+  group: euro-calib
+  cancel-in-progress: false
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      LEDGER_ONLY: "1"
+      LEDGER_ANCHOR: ${{ inputs.anchor }}
+      LEDGER_WEEKS: ${{ inputs.weeks }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: node scripts/calib-euro.js
+      - name: commit matches.json
+        run: |
+          git config user.name  "calib-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add matches.json
+          git diff --cached --quiet || git commit -m "ledger backfill ${{ inputs.anchor }} -${{ inputs.weeks }}w"
+          git pull --rebase origin main || { git rebase --abort || true; git pull --no-rebase -X ours origin main; }
+          git push
