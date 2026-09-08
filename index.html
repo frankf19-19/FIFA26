@@ -716,7 +716,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e187";
+const BUILD = "e188";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1339,7 +1339,13 @@ function pureGet(){ try{ return localStorage.getItem("euroPURE")!=="0"; }catch(e
    折衷方案(分歧小時才採比分方向)測了四個門檻,沒有一個能兩邊都拿到。
    代價是方向命中約 −6 個百分點;畫面上改用「比分推導」標示,避免「看好和局但和局機率最低」的誤讀。
    要切回方向優先:localStorage.setItem("euroSCOREFIRST","0") */
-function scoreFirstGet(){ try{ return localStorage.getItem("euroSCOREFIRST")!=="0"; }catch(e){ return true; } }
+/* e188:預設改回「方向優先」,這次是決定性的。
+   比分優先在 256 場實測多拿到 +1.9 點全中,但代價是:方向命中 −6 點,並且在英冠/荷甲這種
+   預期進球 1.1~1.9 的聯賽,單一比分的最高格幾乎永遠是 1-1 → 整頁「看好和局」,
+   連客勝 53% 的場次都看好和局。那不是預測,那是卡在數學上的局部最高點。
+   方向優先:先看三向機率看好誰,再取該方向底下最可能的比分;Top-3 仍會列出包含 1-1 在內的選項。
+   想試比分優先:localStorage.setItem("euroSCOREFIRST","1") */
+function scoreFirstGet(){ try{ return localStorage.getItem("euroSCOREFIRST")==="1"; }catch(e){ return false; } }
 let SCORE_FIRST=scoreFirstGet();
 let PURE_MODE=pureGet();
 let MKT_W=0.55;
