@@ -82,7 +82,7 @@ async function understat(out){
       }
       if(Array.isArray(players_)){ for(const p of players_){ const g=+p.games||0; if(g<3) continue;
         const key=usNorm(p.player_name)+"|"+usNorm(p.team_title);
-        out.upr[key]=+(((+p.xG||0)+0.7*(+p.xA||0))/g).toFixed(4); players++; } }
+        out.upr[key]=+((((+p.xG||0)+0.7*(+p.xA||0))+PR_PRIOR*PR_K)/(g+PR_K)).toFixed(4); players++; } }   // v21:同樣收縮
       await new Promise(r=>setTimeout(r,800));
     }catch(e){ say("understat "+lg+" failed: "+(e&&e.name)+" "+(e&&e.message)); }
   }
@@ -90,6 +90,7 @@ async function understat(out){
   out.usLog=LOG;   // v18b
 }
 let UPR_HIT=0;
+const PR_PRIOR=0.12, PR_K=6;   // v21:球員產出率收縮參數(聯盟平均約 0.12/場)
 function buildXiBase(out){
   try{
     const PR={};
@@ -102,7 +103,9 @@ function buildXiBase(out){
           if(!Array.isArray(a[4])||!a[4].length) continue;
           const b=a[4].reduce((m,x)=>((+x[1]||0)>(+m[1]||0)?x:m),a[4][0]);
           const app=+b[1]||0; if(app<3) continue;
-          let v=((+b[2]||0)+0.7*(+b[3]||0))/app;
+          // v21:球員產出率向聯盟均值收縮(先驗 0.12、相當 6 場)—— 開季只踢 3~4 場的球員,進 2 球就變成 0.67/場,
+          //     先發強度比因此飆到 1.5~1.8x 頂到上限,把預期進球系統性推高(實測 9/2 後預測總進球 3.13 vs 實際 2.88)
+          let v=((+b[2]||0)+0.7*(+b[3]||0)+PR_PRIOR*PR_K)/(app+PR_K);
           // v17:Understat 的 xG+xA 較不受幸運進球影響;有的話優先(依 名字|隊名 對應)
           try{ if(out.upr){ const tn=usNorm(nameOf.get(t)||""); const key=usNorm(a[1])+"|"+tn; if(out.upr[key]!=null){ v=out.upr[key]; UPR_HIT++; } } }catch(e){}
           PR[String(a[0])]=v;
