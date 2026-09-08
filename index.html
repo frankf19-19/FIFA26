@@ -716,7 +716,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e186";
+const BUILD = "e187";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1134,6 +1134,12 @@ function bestCellFor(k,lh,la,lg){
     return {i:cells[0].i, j:cells[0].j, top3:cells.slice(0,3).map(c=>({i:c.i,j:c.j,p:+(c.p/tot*100).toFixed(1)}))};
   }catch(e){ return null; }
 }
+/* e187:看好方向的唯一定義 —— 由預測比分推得(e168 起比分與看好綁定;e183 起比分優先時方向就是比分的方向)。
+   之前評分仍用「三向機率最高者」,在比分優先模式下會把「看好和局、開出 0-0」判成未中。 */
+function pickDirOf(p){
+  if(p&&p.si!=null&&p.sj!=null) return p.si>p.sj?"H":(p.si===p.sj?"D":"A");
+  return (p.H>=p.D&&p.H>=p.A)?"H":((p.A>=p.D&&p.A>=p.H)?"A":"D");
+}
 function migrateSnapshots(){
   const sc=scGet(); let changed=false;
   for(const k in sc){
@@ -1164,7 +1170,23 @@ function migrateSnapshots(){
   }
   if(changed) scSet(sc);
 }
+/* e187:一次性重評 —— e183(比分優先)之後鎖定、已評分、但當時用三向機率判方向的場次,改依比分方向重判。
+   只動 9/6 之後的紀錄;之前的方向優先時期兩者一致,不受影響。標 rg=1 避免重複。 */
+function regradeScoreFirst(){
+  try{
+    const sc=scGet(); let ch=0; const CUT=Date.parse("2026-09-05T20:00:00Z");
+    for(const k in sc){ const s=sc[k]; if(!s||!s.pred||s.void||s.hs==null||s.rg) continue;
+      if(!(s.fzT>=CUT)) continue; const p=s.pred; if(p.si==null||p.sj==null) continue;
+      const pd=pickDirOf(p), rd=s.hs>s.as?"H":(s.hs<s.as?"A":"D");
+      const hit=(pd===rd), score=hit&&p.si===s.hs&&p.sj===s.as;
+      if(hit!==!!s.hit||score!==!!s.score){ s.hit=hit; s.score=score; ch++; }
+      s.homePick=(pd==="H"); s.rg=1; }
+    if(ch) scSet(sc);
+    if(ch) console.log("regradeScoreFirst:",ch,"場重判");
+  }catch(e){}
+}
 function computeTuning(){
+  regradeScoreFirst();
   const sc=scGet();
   const entries=Object.values(sc).filter(s=>s&&s.pred&&s.hnk&&!s.void);
   // --- 近況:每隊最近 5 場的勝負 ---
@@ -3232,7 +3254,7 @@ async function gradeFinished(games){
     };
     const sp0=(ex&&(ex.fz||ex.pred))?(ex.fz||ex.pred):{H:p.H,D:p.D,A:p.A,si:p.si,sj:p.sj,conf:p.conf,pick:p.pick};   // 賽前存證優先
     const realOut = g.hs>g.as?"H":g.hs<g.as?"A":"D";
-    const predOut = sp0.H>=sp0.D&&sp0.H>=sp0.A?"H":sp0.A>=sp0.D&&sp0.A>=sp0.H?"A":"D";
+    const predOut = pickDirOf(sp0);   // e187
     const y={H:0,D:0,A:0}; y[realOut]=1;
     const brier=(sp0.H/100-y.H)**2+(sp0.D/100-y.D)**2+(sp0.A/100-y.A)**2;
     sc[g.id]={hit:(ex&&ex.hit!=null)?ex.hit:(predOut===realOut),
@@ -3656,6 +3678,23 @@ function makeReview(g){
     if(w) parts.push(`預測失準:看好 ${zhName(p.pick)},實際 ${w} 勝出${s.mc?`(歸因:${s.mc})`:""}`);
     if(p.oldSc) parts.push(`注意:上方 ${p.si}-${p.sj} 是舊制比分,與看好方向不一致;判定以「看好」為準`);
   }
+  /* e187:逐場檢討 —— 用賽前凍結的預期進球、先發強度、射正,說清楚「哪一邊、差多少、為什麼」 */
+  try{ if(p.lh!=null&&p.la!=null){
+    const eh=+p.lh, ea=+p.la, dh=s.hs-eh, da=s.as-ea;
+    const w=(x,nm)=>Math.abs(x)<0.6?`${nm}如預期`:(x>0?`${nm}多進 ${x.toFixed(1)} 球`:`${nm}少進 ${Math.abs(x).toFixed(1)} 球`);
+    parts.push(`預期進球 ${hz} ${eh.toFixed(2)}、${az} ${ea.toFixed(2)} → ${w(dh,hz)}、${w(da,az)}`);
+    const dirP=pickDirOf(p), dirR=s.hs>s.as?"H":(s.hs<s.as?"A":"D");
+    if(dirP!==dirR){
+      if(dirR==="D"&&Math.abs(eh-ea)<0.35) parts.push(`根因:兩隊預期進球只差 ${Math.abs(eh-ea).toFixed(2)},本來就是均勢局,和局機率 ${p.D}% 被低估(比分優先模式仍看好 ${zhName(p.pick)},屬合理範圍內的落空)`);
+      else if(dirR==="D") parts.push(`根因:預期強弱差 ${Math.abs(eh-ea).toFixed(2)} 球但踢成和局,${eh>ea?hz:az}的進攻沒有兌現`);
+      else if((dirP==="H"&&dirR==="A")||(dirP==="A"&&dirR==="H")) parts.push(`根因:方向完全相反 —— ${dirR==="H"?hz:az}實際表現遠超模型評估(${dirR==="H"?w(dh,hz):w(da,az)}),屬強弱判斷錯誤而非運氣`);
+      else if(dirP==="D") parts.push(`根因:模型認為均勢(和局 ${p.D}%),實際${dirR==="H"?hz:az}分出勝負`);
+    }
+    if(p.xi&&(p.xi.h!=null||p.xi.a!=null)) parts.push(`先發強度:${hz} ${p.xi.h!=null?Math.round(p.xi.h*100)+"%":"—"} · ${az} ${p.xi.a!=null?Math.round(p.xi.a*100)+"%":"—"}(相對該隊平常)`);
+    if(p.xg) parts.push(`賽前 xG:${hz} ${p.xg.h} · ${az} ${p.xg.a}${p.xg.real?"(射門級)":"(射正推估)"}`);
+    if(p.h2&&p.h2.n) parts.push(`對戰紀錄調整 ${p.h2.adj>0?"+":""}${p.h2.adj} 球`);
+    if(Array.isArray(p.sc3)&&p.sc3.length){ const inTop3=p.sc3.some(c=>c.i===s.hs&&c.j===s.as); parts.push(inTop3?`實際比分 ${s.hs}-${s.as} 在 Top-3 之內`:`實際比分 ${s.hs}-${s.as} 不在 Top-3(${p.sc3.map(c=>c.i+"-"+c.j).join("/")})之內,單一比分本來就只有 ${p.sc3[0].p}% 機率`); }
+  } }catch(e){}
   if(s.perf&&s.perf.hsot!=null){
     let line=`場面:射正 ${s.perf.hsot}-${s.perf.asot}`;
     if(s.perf.hpos!=null) line+=`、控球 ${s.perf.hpos}%-${s.perf.apos}%`;
@@ -3686,7 +3725,7 @@ function gameCard(g){
       exact=hitFlag&&(snap0.score===true||((snap0.v>=2)&&snap0.pred.si!=null&&snap0.pred.si===g.hs&&snap0.pred.sj===g.as));   // e168
     }else{
       const realOut=g.hs>g.as?"H":g.hs<g.as?"A":"D";
-      const predOut=p.H>=p.D&&p.H>=p.A?"H":p.A>=p.D&&p.A>=p.H?"A":"D";
+      const predOut=pickDirOf(p);   // e187
       hitFlag=realOut===predOut; exact=hitFlag&&p.si!=null&&p.si===g.hs&&p.sj===g.as;   // e168
     }
     if(!pill) pill= exact?`<span class="pill hit" title="勝負方向與比分皆預測正確">全中</span>`
@@ -3977,7 +4016,7 @@ function gameNarrative(g,goals,statPairs){
     const w=g.hs>g.as?hz:g.hs<g.as?az:null;
     if(!w) parts.push(`${hz} ${g.hs}-${g.as} ${az},雙方戰平`);
     else parts.push(`${w}以 ${Math.max(g.hs,g.as)}-${Math.min(g.hs,g.as)} ${g.hs>g.as?"主場":"客場"}${Math.abs(g.hs-g.as)>=3?"大勝":"擊敗"}對手`);
-    const predOut=p.H>=p.D&&p.H>=p.A?"H":p.A>=p.D&&p.A>=p.H?"A":"D";
+    const predOut=pickDirOf(p);   // e187
     const realOut=g.hs>g.as?"H":g.hs<g.as?"A":"D";
     const pkz=p.pick==="和局"?"和局":(p.pick===g.hn?hz:az);
     if(predOut===realOut) parts.push(`模型賽前看好${pkz}(${Math.max(p.H,p.D,p.A).toFixed(0)}%),方向命中`);
