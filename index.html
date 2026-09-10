@@ -716,7 +716,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e188";
+const BUILD = "e189";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2776,6 +2776,7 @@ function renderTodaySection(){
             return sr?`<div class="tg-rv" style="color:var(--muted)">💡 ${sr}</div>`:""; }
           const rv=(typeof makeReview==="function")?makeReview(g):null;
           if(!rv||!rv.text) return "";
+          if(rv.pending) return `<div class="tg-rv" style="color:var(--muted)">⏳ ${rv.text}</div>`;
           return `<div class="tg-rv ${rv.good?"ok":"bad"}">${rv.good?"✓":"✗"} ${rv.text}</div>`;
         })()}
         <div class="an-box" id="an-${g.id}">${ana}</div>
@@ -3660,6 +3661,8 @@ function teamRow(name,logo,score,win,pred,ha){
 /* 賽後檢討:比對快照與實際,生成分析與教訓 */
 function makeReview(g){
   const s=scGet()[g.id]; if(!s||!s.pred) return null;
+  // e189:尚未評分(完場但雲端還沒對帳)→ 不寫檢討,否則會出現 undefined/NaN;等 30 分鐘內的雲端評分
+  if(s.hs==null||s.as==null||s.hit==null) return {text:"完場,等待雲端評分(每 30 分鐘一輪)。評分後這裡會出現逐場檢討。",good:null,pending:true};
   if(s.void) return {text:"此場早期預測自相矛盾(顯示異常),整筆作廢——不計入命中率、驗證數與 Brier。之後的新預測依 v2 制度誠實計分。",good:false};
   const p=s.pred, hz=s.hz, az=s.az;
   const parts=[];
@@ -3691,7 +3694,7 @@ function makeReview(g){
     parts.push(`預期進球 ${hz} ${eh.toFixed(2)}、${az} ${ea.toFixed(2)} → ${w(dh,hz)}、${w(da,az)}`);
     const dirP=pickDirOf(p), dirR=s.hs>s.as?"H":(s.hs<s.as?"A":"D");
     if(dirP!==dirR){
-      if(dirR==="D"&&Math.abs(eh-ea)<0.35) parts.push(`根因:兩隊預期進球只差 ${Math.abs(eh-ea).toFixed(2)},本來就是均勢局,和局機率 ${p.D}% 被低估(比分優先模式仍看好 ${zhName(p.pick)},屬合理範圍內的落空)`);
+      if(dirR==="D"&&Math.abs(eh-ea)<0.35) parts.push(`根因:兩隊預期進球只差 ${Math.abs(eh-ea).toFixed(2)},本來就是均勢局,和局機率 ${p.D}% 被低估(方向優先仍看好 ${zhName(p.pick)},屬合理範圍內的落空)`);
       else if(dirR==="D") parts.push(`根因:預期強弱差 ${Math.abs(eh-ea).toFixed(2)} 球但踢成和局,${eh>ea?hz:az}的進攻沒有兌現`);
       else if((dirP==="H"&&dirR==="A")||(dirP==="A"&&dirR==="H")) parts.push(`根因:方向完全相反 —— ${dirR==="H"?hz:az}實際表現遠超模型評估(${dirR==="H"?w(dh,hz):w(da,az)}),屬強弱判斷錯誤而非運氣`);
       else if(dirP==="D") parts.push(`根因:模型認為均勢(和局 ${p.D}%),實際${dirR==="H"?hz:az}分出勝負`);
