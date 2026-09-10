@@ -716,7 +716,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e191";
+const BUILD = "e192";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -3207,8 +3207,11 @@ function parseEvents(data){
 }
 
 /* ================= 記分卡(localStorage,含防呆) ================= */
+let __scMem=null, __scWarned=false;
 function scGet(){
-  try{const v=localStorage.getItem("euroSC");return v?JSON.parse(v):{};}catch(e){return inMemScorecard;}
+  if(__scMem) return __scMem;                      // e192:記憶體優先 —— localStorage 寫入失敗時也不會讀到舊版
+  try{const v=localStorage.getItem("euroSC"); __scMem=v?JSON.parse(v):{}; }catch(e){ __scMem=inMemScorecard||{}; }
+  return __scMem;
 }
 /* e191:雲端評分永遠不能被本機覆蓋。
    本機有多條路徑會「讀出整份帳本 → 改一筆 → 整份寫回」(開賽鎖定、本機預測、自動刷新),
@@ -3221,8 +3224,9 @@ function scSet(o){
       for(const k of CLOUD_KEEP){ if(c[k]!==undefined) o[id][k]=c[k]; }
       if(c.pred&&(c.hs!=null||c.fz)) o[id].pred=c.pred;   // 已鎖定/已評分 → 預測值也以雲端為準
     } } }catch(e){}
-  inMemScorecard=o;
-  try{localStorage.setItem("euroSC",JSON.stringify(o));}catch(e){}
+  inMemScorecard=o; __scMem=o;
+  try{localStorage.setItem("euroSC",JSON.stringify(o));}
+  catch(e){ if(!__scWarned){ __scWarned=true; console.warn("euroSC 寫入 localStorage 失敗(配額?)",e&&e.name); try{ localStorage.removeItem("euroCalibCache"); localStorage.setItem("euroSC",JSON.stringify(o)); }catch(e2){} } }
 }
 async function gradeFinished(games){
   const sc=scGet(); let changed=false;
@@ -4480,7 +4484,10 @@ function hideTeam(){
   const __resolveCalib=j=>{ try{ for(const lg in (j.leagues||{})){ const T=j.leagues[lg]&&j.leagues[lg].teams; if(!T) continue; for(const k in T){ const t=T[k]; if(t&&t.$&&T[t.$]) T[k]=T[t.$]; } } }catch(e){} return j; };   // e154:calib v12 別名 {$:"#id"} 還原
   const __applyCalib=j=>{
     if(j&&j.leagues){ window.CLOUD=__resolveCalib(j);
-      try{ localStorage.setItem("euroCalibCache", JSON.stringify(j)); }catch(e){}
+      /* e192:不再把 calib.json 存進 localStorage —— 它已經長到 2.9MB(含球員表),
+         加上帳本後超過瀏覽器 5MB 上限,結果每一次帳本寫入都靜默失敗:雲端評分合併不進來、
+         完場永遠「待評分」。calib 每次開頁本來就會重抓,離線快取的價值遠低於這個代價。 */
+      try{ localStorage.removeItem("euroCalibCache"); }catch(e){}
       const el=document.getElementById("cloudTag");
       if(el) el.textContent="☁ 雲端校準("+(j.days||28)+"天)· 更新 "+String(j.updated||"").replace("T"," ").slice(5,16)+" · 樣本 "+Math.round(+j.n||0)+" 場";
       return true;
@@ -4495,11 +4502,7 @@ function hideTeam(){
       }catch(e){}
       await new Promise(res=>setTimeout(res, 2000*(i+1)));
     }
-    try{                                            // 全滅 → 用上次成功的本機快取(不裸奔)
-      const c=JSON.parse(localStorage.getItem("euroCalibCache")||"null");
-      if(__applyCalib(c)){ const el=document.getElementById("cloudTag");
-        if(el) el.textContent+="(本機快取)"; }
-    }catch(e){}
+    try{ const el=document.getElementById("cloudTag"); if(el){ el.textContent="☁ 雲端校準載入失敗(重整再試)"; el.style.color="var(--miss)"; } }catch(e){}   // e192:不再有本機快取
   })();
   applyView();
 }
