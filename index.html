@@ -716,7 +716,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e189";
+const BUILD = "e190";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -4791,7 +4791,11 @@ function init(){
   document.addEventListener("visibilitychange",()=>{
     if(!document.hidden && Date.now()-SWEEP_AT>30000) checkTodayGames(isoDate(curDate), true);
   });            // 開站 2 秒後抓傷兵
-  setInterval(()=>{ if(!document.hidden) loadInjuries(); }, 600000);   // 每 10 分鐘更新傷兵
+  /* e190:每 10 分鐘重新載入雲端預測(鎖定值、評分、逐場檢討)。
+     原本只在開頁時載一次 —— 頁面開一整天的話,完場的比賽會一直卡在「待評分」,
+     其實雲端 30 分鐘內就評好了,只是瀏覽器沒再去拿。(傷停 API 是空的,順便停掉它的 10 分鐘重抸) */
+  setInterval(()=>{ if(document.hidden||overlayOpen()) return;
+    loadCloudPred().then(ok=>{ if(ok){ try{ computeTuning(); if(VIEW==="today"&&typeof renderTodaySection==="function") renderTodaySection(); else if(window.__lastGames) renderGames(window.__lastGames); }catch(e){} } }); }, 600000);
   setInterval(()=>{
     if(!document.hidden && !overlayOpen()) load();   // 看比賽/球隊/球員頁時不自動刷新(不打斷閱讀)
   }, 90000);
