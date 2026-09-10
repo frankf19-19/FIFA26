@@ -716,7 +716,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e190";
+const BUILD = "e191";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -3210,7 +3210,17 @@ function parseEvents(data){
 function scGet(){
   try{const v=localStorage.getItem("euroSC");return v?JSON.parse(v):{};}catch(e){return inMemScorecard;}
 }
+/* e191:雲端評分永遠不能被本機覆蓋。
+   本機有多條路徑會「讀出整份帳本 → 改一筆 → 整份寫回」(開賽鎖定、本機預測、自動刷新),
+   若讀出的是雲端合併前的舊版,寫回時就把雲端剛合併進來的評分(hs/hit/…)洗掉,
+   畫面上完場的比賽就一直卡在「待評分」。這裡在每次寫回時,把雲端已有的欄位重新蓋回去。 */
+const CLOUD_KEEP=["hs","as","hit","brier","score","s3","hz","az","fz","fzT","locked","lg","void","vr","adj","mc","out","pp","homePick","draw","cal","rg"];
 function scSet(o){
+  try{ const C=(typeof CLOUD_PRED!=="undefined"&&CLOUD_PRED&&CLOUD_PRED.sc)||null;
+    if(C&&o){ for(const id in C){ const c=C[id]; if(!c||!o[id]) continue;
+      for(const k of CLOUD_KEEP){ if(c[k]!==undefined) o[id][k]=c[k]; }
+      if(c.pred&&(c.hs!=null||c.fz)) o[id].pred=c.pred;   // 已鎖定/已評分 → 預測值也以雲端為準
+    } } }catch(e){}
   inMemScorecard=o;
   try{localStorage.setItem("euroSC",JSON.stringify(o));}catch(e){}
 }
