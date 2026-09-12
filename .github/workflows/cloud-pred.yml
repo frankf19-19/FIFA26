@@ -1,7 +1,7 @@
 name: euro-cloud-pred
 on:
   schedule:
-    - cron: "9,39 * * * *"        # 排程只是「點火」:GitHub 尖峰時段會把排程延後數小時,所以每次點火後在同一個 job 裡自己跟 30 分鐘一輪、最長跑 5.5 小時
+    - cron: "9,39 * * * *"        # 只是點火:GitHub 排程會被節流,真正的節奏在 job 內部(10 分鐘一輪,最長 5.5 小時)
   workflow_dispatch:
 permissions:
   contents: write
@@ -17,19 +17,25 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - run: npm i jsdom@24 --no-save --silent
-      - name: predict loop (every 30 min, up to ~5.5h)
+      - name: predict loop (full pass every 30 min, lineup pass every 10 min, up to ~5.5h)
         run: |
           git config user.name  "pred-bot"
           git config user.email "bot@users.noreply.github.com"
           END=$(( $(date +%s) + 330*60 ))
+          I=0
           while true; do
             git pull --rebase origin main || { git rebase --abort || true; git pull --no-rebase -X theirs origin main; }
-            node scripts/predict-euro.js || echo "predict failed (continue)"
+            if [ $(( I % 3 )) -eq 0 ]; then
+              node scripts/predict-euro.js || echo "predict failed (continue)"
+            else
+              LINEUP_PASS=1 node scripts/predict-euro.js || echo "lineup pass failed (continue)"
+            fi
             git add cloud-pred.json
             git diff --cached --quiet || git commit -m "cloud prediction"
             git pull --rebase origin main || { git rebase --abort || true; git pull --no-rebase -X ours origin main; }
             git push || { git pull --rebase origin main; git push; }
+            I=$(( I + 1 ))
             NOW=$(date +%s); [ $NOW -ge $END ] && break
-            LEFT=$(( END - NOW )); S=1800; [ $LEFT -lt $S ] && S=$LEFT
+            LEFT=$(( END - NOW )); S=600; [ $LEFT -lt $S ] && S=$LEFT
             echo "sleep $S s"; sleep $S
           done
