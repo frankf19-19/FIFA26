@@ -1,4 +1,5 @@
-/* 雲端統一預測 v9(停抓空的傷停 API、對戰視窗 5→9 天)
+/* 雲端統一預測 v10(LINEUP_PASS=1:每 10 分鐘的輕量輪 —— 只處理 100 分鐘內開賽的比賽,抓先發名單重算;不評分、不掃孤兒)
+   v9(停抓空的傷停 API、對戰視窗 5→9 天)
    v8(e180:開賽前 2 小時抓先發名單餵模型 —— 先發陣容層原本只在前端跑,
    但「鎖定值」是雲端產生的,等於這層從來沒有進到正式預測裡。)
    v7(e162:快照存 h2l —— 近 5 次交手日期與比分,供列表直接顯示)
@@ -79,6 +80,8 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
   // try { await m.loadInjuries(); } catch (e) {}
 
   const now = new Date();
+  const LINEUP_PASS = process.env.LINEUP_PASS === "1";   // v10
+  if (LINEUP_PASS) console.log("LINEUP_PASS:輕量輪(只處理 100 分鐘內開賽)");
   const d0 = new Date(now); d0.setDate(d0.getDate() - 4);   // v5:GitHub 排程可能延後數小時~一天,視窗放寬避免漏評
   const d1 = new Date(now); d1.setDate(d1.getDate() + 3);
   let nPred = 0, nLock = 0, nDone = 0;
@@ -93,6 +96,7 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
       for (const g of games) {
         const ex = sc[g.id];
         const kick = Date.parse(g.date) || g.ts || 0;
+        if (LINEUP_PASS) { const mm = (kick - Date.now()) / 60000; if (!(mm > -5 && mm < 100)) continue; }   // v10
         const started = g.state !== "pre" || (kick > 0 && Date.now() >= kick);
         if (started) {
           if (ex && ex.pred && !ex.fz) { ex.fz = { ...ex.pred }; ex.fzT = ex.tU || ex.t || Date.now(); ex.lg = ex.lg || l.id; changed = true; nLock++; }   // 鎖定時間 = 最後一次「賽前」預測時間
@@ -125,6 +129,7 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
       await sleep(150);
     } catch (e) { console.log("聯賽失敗:", l.id, e.message); }
   }
+  if (!LINEUP_PASS) {   // v10:輕量輪不掃孤兒、不評分
   // v5:孤兒清掃 —— 已鎖定但超出視窗仍未評分的預測:有 lg+date 的補抓該日賽程評分;對不上且超過 14 天的標作廢(不計命中/Brier)
   try {
     const sc1 = m.scGet(); const inWin = new Set(allGames.map(g => String(g.id)));
@@ -151,6 +156,7 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
   try { const sc0 = m.scGet();
     const done = allGames.filter(g => g.completed && g.hs != null && sc0[g.id] && sc0[g.id].pred);   // 只評「賽前已鎖定」的比賽(無前視)
     nDone = done.length; await m.gradeFinished(done); } catch (e) { console.log("評分:", e.message); }
+  }   // v10 end
   try { m.computeTuning(); } catch (e) {}
 
   const sc = m.scGet();
