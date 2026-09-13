@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 350
     env:
       LEDGER_ONLY: "1"
+      DETAIL_FILL: "1"
       LEDGER_ANCHOR: ${{ inputs.anchor }}
       LEDGER_WEEKS: ${{ inputs.weeks }}
     steps:
