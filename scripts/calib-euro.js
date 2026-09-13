@@ -165,6 +165,7 @@ function detFile(d){ const y=+String(d||"").slice(0,4)||new Date().getUTCFullYea
 function detLoad(f){ if(DET_SEASON===f) return; detSave(); DET_SEASON=f;
   try{ DETAILS=JSON.parse(fs.readFileSync(f,"utf8"))||{}; }catch(e){ DETAILS={}; } }
 function detSave(){ if(!DET_SEASON) return; try{ fs.writeFileSync(DET_SEASON, JSON.stringify(DETAILS)); }catch(e){} }
+function detHas(evId,d){ try{ detLoad(detFile(d)); return !!DETAILS[evId]; }catch(e){ return false; } }
 function grabDetail(sj2, evId, dstr, homeId){
   try{
     detLoad(detFile(dstr));
@@ -237,6 +238,10 @@ function fitRho(rows){
    搭配 LEDGER_ANCHOR(掃描終點日期)與 LEDGER_WEEKS(往回幾週)可一次補上一整季歷史,
    讓球員貢獻模型、裁判資料庫、自建 xG 有多季樣本。 */
 const LEDGER_ONLY = process.env.LEDGER_ONLY === "1";
+/* v24:DETAIL_FILL=1 → 已在帳本裡、但還沒有逐場細節的比賽,強制重抓一次摘要。
+   沒有這個開關的話,__cached 會直接跳過摘要請求(因為賽果/先發/射門早就有了),
+   grabDetail 永遠不會被呼叫 → 回填一場細節都收不到。 */
+const DETAIL_FILL = process.env.DETAIL_FILL === "1";
 function save(out, lg){
   out.updated = new Date().toISOString();
   if(!LEDGER_ONLY) fs.writeFileSync("calib.json", JSON.stringify(slimOut(out)));
@@ -388,7 +393,8 @@ function accProcess(T, hid, aid, hs, as, pr, w){
             add((H.team||{}).id,(H.team||{}).displayName,hs,as,true, ev.date||"", __w);
             add((A.team||{}).id,(A.team||{}).displayName,as,hs,false,ev.date||"", __w);
             // 射正數(自產 xG 用):抓該場 summary 的 shotsOnTarget(v8:帳本已有射正 → 直接沿用,省請求)
-            const __cached=MATCHES[ev.id]&&MATCHES[ev.id].sot&&(MATCHES[ev.id].ev||MATCHES[ev.id].noev)&&(MATCHES[ev.id].xi||MATCHES[ev.id].noxi);
+            const __cached=MATCHES[ev.id]&&MATCHES[ev.id].sot&&(MATCHES[ev.id].ev||MATCHES[ev.id].noev)&&(MATCHES[ev.id].xi||MATCHES[ev.id].noxi)
+              && !(DETAIL_FILL && !detHas(ev.id, MATCHES[ev.id].d));   // v24:缺細節就重抓
             if (__cached) { const [sh2,sa2,ch,ca2,ph,pa]=MATCHES[ev.id].sot;
               accProcess(T,(H.team||{}).id,(A.team||{}).id,hs,as,MATCHES[ev.id].ev,__w);
               try{ const x=MATCHES[ev.id].xi; if(x) accXI((H.team||{}).id,(A.team||{}).id,hs,as,{h:x[0].split(",").map(s=>[s,""]),a:x[1].split(",").map(s=>[s,""])},__w); }catch(e){}
