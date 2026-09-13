@@ -211,6 +211,15 @@
   .an-btn{font-family:var(--cond);font-weight:600;font-size:11.5px;letter-spacing:.04em;color:var(--muted);
     background:none;border:1px solid var(--line);border-radius:999px;padding:3px 12px;cursor:pointer;transition:.15s}
   .an-btn:hover{color:var(--gold);border-color:var(--gold)}
+  .bell-btn{font-size:13px;line-height:1;background:none;border:1px solid var(--line);border-radius:999px;
+    padding:3px 9px;cursor:pointer;color:var(--muted);transition:.15s}
+  .bell-btn:hover{border-color:var(--gold);color:var(--gold)}
+  .bell-btn.on{color:var(--gold);border-color:var(--gold);background:rgba(230,190,90,.10)}
+  #toastWrap{position:fixed;right:14px;bottom:14px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:min(360px,86vw)}
+  .toast{background:var(--card);border:1px solid var(--gold);border-radius:12px;padding:11px 13px;
+    box-shadow:0 8px 26px rgba(0,0,0,.45);font-size:13px;line-height:1.5;animation:tin .25s ease}
+  .toast b{color:var(--gold)}
+  @keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   .an-box{grid-column:1/-1;display:none;margin-top:8px;padding:11px 13px;background:var(--wash);
     border:1px solid var(--line);border-radius:13px}
   .an-box.open{display:block;animation:fadeup .25s ease-out}
@@ -716,7 +725,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e192";
+const BUILD = "e193";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2769,6 +2778,7 @@ function renderTodaySection(){
           ${(p.dq!=null&&p.dq<0.2)?`<span class="tp-nodata" title="可用資料較少,預測已向基準率收縮,信心較低">⚠ 資料有限</span>`:""}
           ${(()=>{const t=twslOf(g); if(!t) return "";
             return `<span class="tp-twsl" title="台灣運彩場中盤口${t.no?" · 場次 "+t.no:""}">運彩 ${t.odds?`${t.odds.a} / ${t.odds.d} / ${t.odds.h}`:"場中開盤"}</span>`;})()}
+          ${done?"":`<button class="bell-btn ${bellOn(g.id)?"on":""}" data-bell="${g.id}" title="${bellOn(g.id)?"已開啟:進球/開賽/完場會提醒(需保持本頁開啟)":"開啟進球提醒(需保持本頁開啟)"}">${bellOn(g.id)?"🔔":"🔕"}</button>`}
           <button class="an-btn" data-an="${g.id}">詳細分析 ▾</button>
         </div>
         ${h2hStrip(snap, g)}
@@ -2795,7 +2805,7 @@ function renderTodaySection(){
     if(window.switchLeague) window.switchLeague(el.dataset.golg); });
   // 比賽列 → 直接開該場比賽詳情
   box.querySelectorAll(".tg-row[data-gid]").forEach(el=>el.onclick=(ev)=>{
-    if(ev.target.closest(".an-btn")||ev.target.closest(".an-box")) return;
+    if(ev.target.closest(".an-btn")||ev.target.closest(".an-box")||ev.target.closest(".bell-btn")) return;
     const g=GAMES_BY_ID[el.dataset.gid];
     if(g && window.showGame) showGame(g);
   });
@@ -2805,6 +2815,8 @@ function renderTodaySection(){
   box.querySelectorAll(".an-btn").forEach(b=>b.onclick=(ev)=>{ev.stopPropagation();
     const bx=document.getElementById("an-"+b.dataset.an); if(!bx) return;
     const open=bx.classList.toggle("open"); b.textContent=open?"收合分析 ▴":"詳細分析 ▾";});
+  box.querySelectorAll(".bell-btn").forEach(b=>b.onclick=(ev)=>{ ev.stopPropagation();   // e193
+    const id=b.dataset.bell; bellToggle(id, GAMES_BY_ID[id]); });
 }
 function renderTodayLine(){
   const el=document.getElementById("todayLine"); if(!el) return;
@@ -3171,6 +3183,78 @@ function showPlayer(p, fromPop){
   });
 }
 
+/* ===== e193:進球提醒(小鈴鐺)=====
+   每場比賽可單獨開啟追蹤。開啟後每 30 秒查一次該場比分,有變化就跳桌面通知 + 頁內浮出提示 + 提示音。
+   限制說清楚:GitHub Pages 是純靜態站,沒有伺服器可以推播,所以「網頁必須保持開著」(分頁可以在背景)。
+   手機把瀏覽器切到背景或鎖屏後,系統會凍結分頁,提醒會停 —— 這是瀏覽器的限制,不是設定問題。 */
+function bellGet(){ try{ return JSON.parse(localStorage.getItem("euroBell")||"{}"); }catch(e){ return {}; } }
+function bellSet(o){ try{ localStorage.setItem("euroBell", JSON.stringify(o)); }catch(e){} }
+let BELL=bellGet(), _bellBusy=false, _bellAudio=null;
+function bellOn(id){ return !!BELL[id]; }
+async function bellToggle(id, g){
+  if(BELL[id]){ delete BELL[id]; bellSet(BELL); toast("已關閉提醒", zhName(g&&g.hn)+" vs "+zhName(g&&g.an)); }
+  else{
+    if(window.Notification && Notification.permission==="default"){ try{ await Notification.requestPermission(); }catch(e){} }
+    BELL[id]={h:(g&&g.hs!=null)?g.hs:null, a:(g&&g.as!=null)?g.as:null, st:(g&&g.state)||"pre", lg:(g&&g.league)||curLeague, t:Date.now()};
+    bellSet(BELL);
+    const perm=(window.Notification&&Notification.permission)||"unsupported";
+    toast("已開啟進球提醒", zhName(g&&g.hn)+" vs "+zhName(g&&g.an)+(perm==="granted"?"":"(瀏覽器未允許通知,將只在頁面內提示)")+" · 需保持本頁開啟");
+    bellPoll();
+  }
+  if(VIEW==="today"&&typeof renderTodaySection==="function") renderTodaySection();
+  else if(window.__lastGames) renderGames(window.__lastGames);
+}
+function beep(){
+  try{
+    _bellAudio=_bellAudio||new (window.AudioContext||window.webkitAudioContext)();
+    const c=_bellAudio, o=c.createOscillator(), g2=c.createGain();
+    o.connect(g2); g2.connect(c.destination); o.type="sine"; o.frequency.value=880;
+    g2.gain.setValueAtTime(0.0001,c.currentTime); g2.gain.exponentialRampToValueAtTime(0.22,c.currentTime+0.02);
+    g2.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+0.45);
+    o.start(); o.stop(c.currentTime+0.5);
+  }catch(e){}
+}
+function toast(title, body){
+  let w=document.getElementById("toastWrap");
+  if(!w){ w=document.createElement("div"); w.id="toastWrap"; document.body.appendChild(w); }
+  const d=document.createElement("div"); d.className="toast"; d.innerHTML=`<b>${title}</b><br>${body||""}`;
+  w.appendChild(d); setTimeout(()=>{ d.style.opacity="0"; d.style.transition="opacity .4s"; setTimeout(()=>d.remove(),420); }, 9000);
+}
+function notify(title, body){
+  toast(title, body); beep();
+  try{ if(window.Notification && Notification.permission==="granted") new Notification(title,{body:body, tag:title+body, icon:"favicon.ico"}); }catch(e){}
+}
+async function bellPoll(){
+  if(_bellBusy) return; const ids=Object.keys(BELL); if(!ids.length) return;
+  _bellBusy=true;
+  try{
+    const byLg={};
+    ids.forEach(id=>{ const b=BELL[id]; const lg=(GAMES_BY_ID[id]&&GAMES_BY_ID[id].league)||b.lg; if(lg) (byLg[lg]=byLg[lg]||[]).push(id); });
+    for(const lg in byLg){
+      let evs=null;
+      try{ evs=parseEvents(await jget(espnScore(lg, ymd(new Date())), true)); }catch(e){ continue; }
+      if(!evs) continue;
+      for(const ev of evs){
+        if(!BELL[ev.id]) continue;
+        const b=BELL[ev.id], hz=zhName(ev.hn), az=zhName(ev.an);
+        if(b.st==="pre" && ev.state==="in") notify("開賽了", `${hz} vs ${az}`);
+        const nh=ev.hs, na=ev.as;
+        if(nh!=null&&na!=null&&b.h!=null&&b.a!=null&&(nh!==b.h||na!==b.a)){
+          const who=(nh>b.h)?hz:az;
+          notify(`⚽ ${who} 進球!`, `${hz} ${nh} - ${na} ${az}${ev.clock?" · "+ev.clock:""}`);
+        }
+        if(b.st!=="post" && ev.state==="post"){
+          notify("完場", `${hz} ${ev.hs} - ${ev.as} ${az}`);
+          delete BELL[ev.id];   // 完場自動取消追蹤
+          bellSet(BELL); continue;
+        }
+        BELL[ev.id]={...b, h:nh, a:na, st:ev.state, lg};
+      }
+      await new Promise(r=>setTimeout(r,200));
+    }
+    bellSet(BELL);
+  } finally { _bellBusy=false; }
+}
 function parseEvents(data){
   const out=[];
   (data.events||[]).forEach(ev=>{
@@ -3779,7 +3863,7 @@ function gameCard(g){
   }
   // e178:聯賽列表也顯示歷史對戰(與今日總覽同一套資料與格式)
   const h2=h2hStrip(scGet()[g.id], g);
-  return `<div class="game ${done?'done':''}" data-gid="${g.id}" data-golg="${g.league||curLeague}"><div class="g-top"><span class="g-time">${g.time}</span>${pill}<button class="detail-btn" data-gid="${g.id}">詳情 ›</button></div>${rows}${body}${h2}</div>`;
+  return `<div class="game ${done?'done':''}" data-gid="${g.id}" data-golg="${g.league||curLeague}"><div class="g-top"><span class="g-time">${g.time}</span>${pill}${done?"":`<button class="bell-btn ${bellOn(g.id)?"on":""}" data-bell="${g.id}" title="${bellOn(g.id)?"已開啟:進球/開賽/完場會提醒(需保持本頁開啟)":"開啟進球提醒(需保持本頁開啟)"}">${bellOn(g.id)?"🔔":"🔕"}</button>`}<button class="detail-btn" data-gid="${g.id}">詳情 ›</button></div>${rows}${body}${h2}</div>`;
 }
 
 function renderGames(games){
@@ -3792,6 +3876,8 @@ function renderGames(games){
   box.innerHTML=games.map(gameCard).join("");
   box.querySelectorAll(".nm[data-team]").forEach(el=>el.onclick=()=>showTeam(el.dataset.team));
   box.querySelectorAll(".detail-btn").forEach(el=>el.onclick=()=>{const g=GAMES_BY_ID[el.dataset.gid]; if(g) showGame(g);});
+  box.querySelectorAll(".bell-btn").forEach(b=>b.onclick=(ev)=>{ ev.stopPropagation();   // e193
+    const id=b.dataset.bell; bellToggle(id, GAMES_BY_ID[id]); });
   fillH2H(box, ".game[data-gid]");      // e178:聯賽列表也自動補抓交手紀錄
   fillLineups(box, ".game[data-gid]");
 }
@@ -4801,6 +4887,8 @@ function init(){
     if((liveNow||nearKick) ? since>=45000 : since>=180000) checkTodayGames(isoDate(curDate), true);
   }, 15000);
   setInterval(()=>{ if(!document.hidden) checkTodayGames(isoDate(curDate)); }, 1200000);
+  setInterval(bellPoll, 30000);   // e193:進球提醒 —— 背景分頁也跑(這是提醒的重點)
+  bellPoll();
   document.addEventListener("visibilitychange",()=>{
     if(!document.hidden && Date.now()-SWEEP_AT>30000) checkTodayGames(isoDate(curDate), true);
   });            // 開站 2 秒後抓傷兵
