@@ -165,6 +165,48 @@ function detFile(d){ const y=+String(d||"").slice(0,4)||new Date().getUTCFullYea
 function detLoad(f){ if(DET_SEASON===f) return; detSave(); DET_SEASON=f;
   try{ DETAILS=JSON.parse(fs.readFileSync(f,"utf8"))||{}; }catch(e){ DETAILS={}; } }
 function detSave(){ if(!DET_SEASON) return; try{ fs.writeFileSync(DET_SEASON, JSON.stringify(DETAILS)); }catch(e){} }
+/* ===== v25:球員逐場索引 =====
+   把 details-*.json(依「比賽」分組)轉成依「球員」分組,前端才有辦法按需載入單一球員。
+   420k 筆全部塞一個檔太大,依球員 ID 末兩碼分成 100 個分片,每片約 250KB。
+     players-<NN>.json = { pid: [ [日期, 聯賽, 對手隊名, 主?, 先發?, 替補上?, 替補下?,
+                                   射門, 射正, 進球, 助攻, 犯規, 被犯規, 黃, 紅, 撲救, 失球, 我方比分, 對方比分], ... ] }
+   純顯示用,不影響預測。 */
+function buildPlayerIndex(){
+  try{
+    const shard={}; let rows=0;
+    const files=fs.readdirSync(".").filter(f=>/^details-\d{4}-\d{2}\.json$/.test(f));
+    const nameOf={};   // lg|tid -> 隊名(取帳本裡最後出現的名稱)
+    for(const id in MATCHES){ const M=MATCHES[id]; if(!M) continue;
+      if(M.hn) nameOf[M.lg+"|"+M.hid]=M.hn; if(M.an) nameOf[M.lg+"|"+M.aid]=M.an; }
+    for(const f of files){
+      let D={}; try{ D=JSON.parse(fs.readFileSync(f,"utf8"))||{}; }catch(e){ continue; }
+      for(const id in D){
+        const M=MATCHES[id], pl=D[id]&&D[id].pl; if(!M||!pl||pl.length!==2) continue;
+        for(let side=0; side<2; side++){
+          const home=side===0;
+          const oppKey=M.lg+"|"+(home?M.aid:M.hid);
+          const opp=nameOf[oppKey]||(home?M.an:M.hn)||"";
+          const my=home?M.hs:M.as, th=home?M.as:M.hs;
+          for(const p of pl[side]){
+            const pid=String(p[0]||""); if(!pid) continue;
+            const k=pid.slice(-2).padStart(2,"0");
+            (shard[k]=shard[k]||{});
+            (shard[k][pid]=shard[k][pid]||[]).push([
+              M.d, M.lg, opp, home?1:0, p[1]?1:0, p[3]?1:0, p[4]?1:0,
+              p[5],p[6],p[7],p[8],p[9],p[10],p[11],p[12],p[13],p[14], my, th ]);
+            rows++;
+          }
+        }
+      }
+    }
+    let n=0;
+    for(const k in shard){
+      for(const pid in shard[k]) shard[k][pid].sort((a,b)=>String(b[0]).localeCompare(String(a[0])));   // 新→舊
+      fs.writeFileSync("players-"+k+".json", JSON.stringify(shard[k])); n++;
+    }
+    console.log("v25 球員索引:"+rows+" 筆 → "+n+" 個分片");
+  }catch(e){ console.log("v25 球員索引失敗:", e.message); }
+}
 function detHas(evId,d){ try{ detLoad(detFile(d)); return !!DETAILS[evId]; }catch(e){ return false; } }
 function grabDetail(sj2, evId, dstr, homeId){
   try{
@@ -566,9 +608,10 @@ function accProcess(T, hid, aid, hs, as, pr, w){
     console.log("完成:", lg, "(", n, "場 )");
   }
   // xG 已改為自產(SOT-xG,於各聯賽 checkpoint 內完成;外部源 Understat/FBref 均擋機房 IP)
-  if(LEDGER_ONLY){ saveMatches(); console.log("LEDGER_ONLY:帳本已更新,不寫 calib.json"); process.exit(0); }   // v22
+  if(LEDGER_ONLY){ saveMatches(); buildPlayerIndex(); console.log("LEDGER_ONLY:帳本已更新,不寫 calib.json"); process.exit(0); }   // v22/v25
   try{ await understat(out); }catch(e){ console.log("understat 模組失敗:",e.message); }   // v17
   console.log("v23 逐場細節新增/更新 "+DET_N+" 場 → "+(DET_SEASON||"-"));
+  detSave(); buildPlayerIndex();   // v25:細節落檔後重建球員索引
   buildXiBase(out); save(out, null);   // v16
   console.log("全部完成:", out.n, "場,", Object.keys(out.leagues).length, "個聯賽");
 })();
