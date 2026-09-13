@@ -216,8 +216,14 @@
   .bell-btn:hover{border-color:var(--gold);color:var(--gold)}
   .bell-btn.on{color:var(--gold);border-color:var(--gold);background:rgba(230,190,90,.10)}
   #toastWrap{position:fixed;right:14px;bottom:14px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:min(360px,86vw)}
-  .toast{background:var(--card);border:1px solid var(--gold);border-radius:12px;padding:11px 13px;
-    box-shadow:0 8px 26px rgba(0,0,0,.45);font-size:13px;line-height:1.5;animation:tin .25s ease}
+  .toast{background:var(--card);border:1px solid var(--gold);border-radius:12px;padding:11px 34px 11px 13px;
+    box-shadow:0 8px 26px rgba(0,0,0,.45);font-size:13px;line-height:1.5;animation:tin .25s ease;position:relative;cursor:pointer}
+  .toast .x{position:absolute;top:6px;right:9px;font-size:15px;line-height:1;color:var(--muted);cursor:pointer;padding:2px 4px}
+  .toast .x:hover{color:var(--gold)}
+  .toast .ts{display:block;margin-top:4px;font-family:var(--cond);font-size:10.5px;color:var(--muted);letter-spacing:.04em}
+  #toastWrap .clr{align-self:flex-end;font-family:var(--cond);font-size:11px;color:var(--muted);
+    background:var(--card);border:1px solid var(--line);border-radius:999px;padding:3px 11px;cursor:pointer}
+  #toastWrap .clr:hover{color:var(--gold);border-color:var(--gold)}
   .toast b{color:var(--gold)}
   @keyframes tin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   .an-box{grid-column:1/-1;display:none;margin-top:8px;padding:11px 13px;background:var(--wash);
@@ -725,7 +731,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e193";
+const BUILD = "e194";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -3214,15 +3220,35 @@ function beep(){
     o.start(); o.stop(c.currentTime+0.5);
   }catch(e){}
 }
-function toast(title, body){
+/* e194:通知不自動消失 —— 使用者看到並關掉才會不見。
+   進球提醒的意義就是「不能錯過」,9 秒自動淡出等於你一離開座位就漏掉了。
+   改成常駐:每則自己的 ×、下方一顆「全部清除」;桌面通知也設 requireInteraction。
+   例外:開關鈴鐺時的操作回饋(非賽事事件)仍自動淡出,那種不需要保留。 */
+function toast(title, body, sticky){
   let w=document.getElementById("toastWrap");
   if(!w){ w=document.createElement("div"); w.id="toastWrap"; document.body.appendChild(w); }
-  const d=document.createElement("div"); d.className="toast"; d.innerHTML=`<b>${title}</b><br>${body||""}`;
-  w.appendChild(d); setTimeout(()=>{ d.style.opacity="0"; d.style.transition="opacity .4s"; setTimeout(()=>d.remove(),420); }, 9000);
+  const d=document.createElement("div"); d.className="toast";
+  const hh=new Date().toLocaleTimeString("zh-TW",{hour:"2-digit",minute:"2-digit",hour12:false});
+  d.innerHTML=`<span class="x" title="關閉">×</span><b>${title}</b><br>${body||""}<span class="ts">${hh}</span>`;
+  const close=()=>{ d.style.opacity="0"; d.style.transition="opacity .3s"; setTimeout(()=>{ d.remove(); syncClear(); },320); };
+  d.querySelector(".x").onclick=(e)=>{ e.stopPropagation(); close(); };
+  d.onclick=close;
+  w.appendChild(d);
+  if(!sticky) setTimeout(close, 9000);
+  else syncClear();
+}
+function syncClear(){
+  const w=document.getElementById("toastWrap"); if(!w) return;
+  const n=w.querySelectorAll(".toast").length;
+  let c=w.querySelector(".clr");
+  if(n>=2){ if(!c){ c=document.createElement("div"); c.className="clr"; c.textContent="全部清除"; c.onclick=()=>{ w.querySelectorAll(".toast").forEach(t=>t.remove()); c.remove(); }; w.appendChild(c); }
+    else w.appendChild(c); }
+  else if(c) c.remove();
 }
 function notify(title, body){
-  toast(title, body); beep();
-  try{ if(window.Notification && Notification.permission==="granted") new Notification(title,{body:body, tag:title+body, icon:"favicon.ico"}); }catch(e){}
+  toast(title, body, true); beep();   // e194:賽事事件 → 常駐,看到才消失
+  try{ if(window.Notification && Notification.permission==="granted")
+    new Notification(title,{body:body, tag:title+body, icon:"favicon.ico", requireInteraction:true}); }catch(e){}
 }
 async function bellPoll(){
   if(_bellBusy) return; const ids=Object.keys(BELL); if(!ids.length) return;
