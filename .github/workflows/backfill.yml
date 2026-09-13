@@ -30,7 +30,7 @@ jobs:
         run: |
           git config user.name  "calib-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add matches.json
+          git add matches.json details-*.json
           git diff --cached --quiet || git commit -m "ledger backfill ${{ inputs.anchor }} -${{ inputs.weeks }}w"
           git pull --rebase origin main || { git rebase --abort || true; git pull --no-rebase -X ours origin main; }
           git push
