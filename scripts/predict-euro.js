@@ -1,4 +1,5 @@
-/* 雲端統一預測 v10(LINEUP_PASS=1:每 10 分鐘的輕量輪 —— 只處理 100 分鐘內開賽的比賽,抓先發名單重算;不評分、不掃孤兒)
+/* 雲端統一預測 v11(ESPN 2026-09 起 scoreboard 不再接受 dates=A-B,一律 HTTP 400 → 改逐日抓再合併)
+   v10(LINEUP_PASS=1:每 10 分鐘的輕量輪 —— 只處理 100 分鐘內開賽的比賽,抓先發名單重算;不評分、不掃孤兒)
    v9(停抓空的傷停 API、對戰視窗 5→9 天)
    v8(e180:開賽前 2 小時抓先發名單餵模型 —— 先發陣容層原本只在前端跑,
    但「鎖定值」是雲端產生的,等於這層從來沒有進到正式預測裡。)
@@ -68,6 +69,27 @@ w.eval(js);
 const m = w.__m;
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* v11:日期區間 → 逐日。先試區間(哪天 ESPN 修好就自動用回去),400 就切成單日並合併事件。
+   雲端一輪要掃 18 個聯賽 × 5 天,加了 120ms 間隔避免被限流。 */
+let RANGE_OK = true;
+async function sbRange(m, lg, d0, d1){
+  const A = ymd(d0), B = ymd(d1);
+  if (RANGE_OK) {
+    try { const r = await m.jget(m.espnScore(lg, A + "-" + B), true); if (r) return r; }
+    catch (e) { if (/\b400\b/.test(String(e && e.message))) RANGE_OK = false; else throw e; }
+  }
+  const out = { leagues: null, events: [] }, seen = {};
+  for (let d = new Date(d0); d <= d1; d.setDate(d.getDate() + 1)) {
+    let j = null;
+    try { j = await m.jget(m.espnScore(lg, ymd(new Date(d))), true); } catch (e) { continue; }
+    if (!j) continue;
+    if (!out.leagues && j.leagues) out.leagues = j.leagues;
+    for (const ev of (j.events || [])) if (!seen[ev.id]) { seen[ev.id] = 1; out.events.push(ev); }
+    await sleep(120);
+  }
+  return out;
+}
 const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
 
 (async () => {
@@ -89,7 +111,7 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
   for (const l of m.LEAGUES) {
     try {
       try { await m.loadStandFor(l.id); } catch (e) {}
-      const data = await m.jget(m.espnScore(l.id, ymd(d0) + "-" + ymd(d1)), true);
+      const data = await sbRange(m, l.id, d0, d1);   // v11:ESPN 不再接受日期區間 → 逐日抓再合併
       const games = m.parseEvents(data);
       games.forEach(g => { g.league = l.id; allGames.push(g); });
       const sc = m.scGet(); let changed = false;
