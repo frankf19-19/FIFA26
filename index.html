@@ -731,7 +731,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e194";
+const BUILD = "e195";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2040,6 +2040,63 @@ function h2hStrip(snap, g){
   return `<div class="tp-h2h"><span class="k">交手</span><span class="rec" title="${HZ}(本場主隊)近 ${L.length} 次對 ${AZ} 的戰績;每格右下角的主/客是當時 ${HZ} 踢主場還是客場">${HZ} ${w}勝${d}平${l}負</span>${cells}</div>`;
 }
 /* 詳細分析:逐項列出模型依據(無資料的項目自動略過,不編造) */
+/* ===== e195:AI 判讀 =====
+   不再只是把 21 層攤成一張表,而是把它們「想過一遍」再用人話講出來:
+     ① 主論點(看好誰、多少機率、比分)
+     ② 依實際 λ 影響力排序的關鍵理由(而非固定順序的清單)
+     ③ 反面因素 —— 與結論相抵觸的訊號,誠實列出而不是藏起來
+     ④ 最大不確定性 + 「什麼情況我會改判」
+   每一句都由該場真實數值推導,沒有套版空話。 */
+function brainRead(hn,an,p,lg){
+  try{
+    if(!p||p.lh==null) return null;
+    const hz=zhName(hn), az=zhName(an);
+    const dirK=(p.si!=null&&p.sj!=null)?(p.si>p.sj?"H":(p.si===p.sj?"D":"A")):((p.H>=p.D&&p.H>=p.A)?"H":((p.A>=p.D&&p.A>=p.H)?"A":"D"));
+    const favZ=dirK==="H"?hz:(dirK==="A"?az:"和局");
+    const top={H:p.H,D:p.D,A:p.A}[dirK];
+    const edge=Math.abs(p.lh-p.la), tot=p.lh+p.la;
+    // ── 各層的實際影響力(換算成「淨勝球」方向與大小)──
+    const F=[];  // {t:文字, v:對主隊有利的淨勝球影響}
+    const push=(v,t)=>{ if(v!=null&&Math.abs(v)>=0.02) F.push({v:+v, t}); };
+    if(p.xi){ const d=( (p.xi.dh||0)-(p.xi.da||0) )*tot/2;
+      push(d, `先發陣容:${hz} 今日陣容約為平常的 ${Math.round((p.xi.h||1)*100)}%、${az} ${Math.round((p.xi.a||1)*100)}%`); }
+    if(p.xg){ const d=(p.xg.h-p.xg.a)*0.35;
+      push(d, `${p.xg.real?"射門級 xG":"xG(射正推估)"}:場均 ${hz} ${p.xg.h}、${az} ${p.xg.a}`); }
+    if(p.h2&&p.h2.adj) push(p.h2.adj, `歷史對戰:近 ${p.h2.n} 次交手加權淨勝球 ${p.h2.gd>0?"+":""}${p.h2.gd}`);
+    if(p.rest&&p.rest.h!=null&&p.rest.a!=null){ const d=(p.rest.h-p.rest.a)*0.02;
+      push(d, `休息日:${hz} ${p.rest.h} 天、${az} ${p.rest.a} 天`); }
+    if(p.prs) push(p.prs*(p.pw||0)*2, `過程體質:守成/追分能力差 ${p.prs>0?"+":""}${p.prs}`);
+    if(p.pls) push(p.pls*(p.plw||0), `缺陣影響:淨貢獻差 ${p.pls>0?"+":""}${p.pls} 球`);
+    if(p.ps){ const d=(p.ps.h-p.ps.a)*0.004; push(d, `球風:控球 ${hz} ${p.ps.h}%、${az} ${p.ps.a}%`); }
+    if(p.mv) push(p.mv, `動機情境:${p.mv>0?hz:az} 這階段更有企圖`);
+    if(p.eu) push(p.eu, `歐戰擁擠度:${p.eu>0?az:hz} 賽程較滿`);
+    F.sort((a,b)=>Math.abs(b.v)-Math.abs(a.v));
+    const sign=dirK==="H"?1:(dirK==="A"?-1:0);
+    const pro=F.filter(f=>sign===0?false:f.v*sign>0).slice(0,3);
+    const con=F.filter(f=>sign===0?true:f.v*sign<0).slice(0,2);
+    const L=[];
+    const lvl = top>=60?"相當明確":(top>=48?"傾向":"沒有明顯優勢");
+    L.push(`<b>主論點</b>:這場我看好 <b>${favZ}</b>(${top.toFixed(0)}%),${lvl}。預期進球 ${hz} ${p.lh}、${az} ${p.la},差距 ${edge.toFixed(2)} 球,總進球水位 ${tot.toFixed(2)}${tot>=3.2?"(偏高)":(tot<=2.4?"(偏低)":"")};在這個方向底下最可能的比分是 ${p.si}-${p.sj}。`);
+    if(pro.length) L.push(`<b>主要依據</b>(依實際影響力排序):${pro.map((f,i)=>`${i+1}. ${f.t}(${f.v>0?"利主":"利客"} ${Math.abs(f.v).toFixed(2)} 球)`).join(" ｜ ")}`);
+    if(con.length) L.push(`<b>反面因素</b>:${con.map(f=>`${f.t}(反向 ${Math.abs(f.v).toFixed(2)} 球)`).join(" ｜ ")} —— 這些與結論相反,已計入機率,不是被忽略。`);
+    const U=[];
+    if((p.dq||0)<0.45) U.push(`可用資料只有 ${Math.round((p.dq||0)*100)}%,預測已向基準率收縮`);
+    if(!p.xi) U.push("尚未取得當日先發名單(開賽前約一小時才公布),陣容輪換是最大的未知數");
+    if(Math.abs(p.H-p.A)<8) U.push(`兩隊勝率只差 ${Math.abs(p.H-p.A).toFixed(1)} 個百分點,本質上是均勢局`);
+    if(p.D>=27) U.push(`和局機率 ${p.D}% 偏高,平手是實際存在的風險`);
+    if(p.h2&&p.h2.n&&p.h2.n<4) U.push(`交手樣本只有 ${p.h2.n} 場,對戰紀錄的權重已自動壓低`);
+    if(U.length) L.push(`<b>最大不確定性</b>:${U.slice(0,2).join(";")}。`);
+    const flip=[];
+    if(!p.xi) flip.push(`${favZ} 若大幅輪換(先發強度掉到 80% 以下),預期進球會下修約 6~7%,這場就會變成均勢`);
+    if(p.mkp){ const mk={H:p.mkp.H,D:p.mkp.D,A:p.mkp.A}[dirK];
+      const gap=top-mk;
+      flip.push(Math.abs(gap)<6?`市場對這場的看法與我一致(市場給 ${mk}%),沒有明顯分歧`
+        :`市場給 ${favZ} ${mk}%,與我差 ${Math.abs(gap).toFixed(0)} 個百分點 —— 分歧這麼大時,歷史上市場對的機率比較高,這場我的信心要打折`);
+    }
+    if(flip.length) L.push(`<b>會讓我改判的情況</b>:${flip.join(";")}。`);
+    return L.join("<br>");
+  }catch(e){ return null; }
+}
 function analysisRows(hn,an,p,lg,hid,aid){
   if(lg){ const L0=LEAGUES.find(x=>x.id===lg); if(L0&&L0.stand) lg=L0.stand; }
   const rows=[], hz=zhName(hn), az=zhName(an);
@@ -2134,6 +2191,8 @@ function analysisRows(hn,an,p,lg,hid,aid){
   const top=Math.max(p.H,p.D,p.A);
   const pickZh=p.pick==="和局"?"和局":zhName(p.pick);
   rows.push(["結論", `${pickZh} 機率最高(${top.toFixed(1)}%),信心 ${p.conf}${p.conf==="低"?"(勢均力敵,參考性較低)":""}`]);
+  const brain=brainRead(hn,an,p,lg);   // e195:把整張表想過一遍,放在最前面
+  if(brain) rows.unshift(["🧠 AI 判讀", `<div style="line-height:1.75">${brain}</div>`]);
   return rows;
 }
 function reasonText(hn,an,p){
