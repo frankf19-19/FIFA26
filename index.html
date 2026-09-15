@@ -731,7 +731,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e196";
+const BUILD = "e197";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -3125,6 +3125,48 @@ function openPlayerEl(el){
   catch(e){ __toast("⚠ 球員資料解析失敗:"+String((e&&e.message)||e).slice(0,60), 1); }
 }
 let VIEW_SEQ=0;
+/* ===== e197:球員逐場戰績 =====
+   calib v25 把 42 萬筆逐場紀錄依球員 ID 末兩碼切成 100 個分片(players-NN.json,每片約 300KB)。
+   這裡只載入該球員所在的那一片,不是整包 20MB。
+   欄位順序見 calib 的 buildPlayerIndex:
+     [日期, 聯賽, 對手, 主?, 先發?, 替補上?, 替補下?, 射門, 射正, 進球, 助攻, 犯規, 被犯規, 黃, 紅, 撲救, 失球, 我方, 對方] */
+const PLOG_CACHE={};
+async function playerLog(pid){
+  pid=String(pid||""); if(!pid) return null;
+  const k=pid.slice(-2).padStart(2,"0");
+  if(!PLOG_CACHE[k]){
+    PLOG_CACHE[k]=fetch("players-"+k+".json?_="+Date.now(),{cache:"no-store"})
+      .then(r=>r.ok?r.json():null).catch(()=>null);
+  }
+  const d=await PLOG_CACHE[k];
+  return (d&&d[pid])||null;
+}
+function renderPlayerLog(rows, pos){
+  if(!rows||!rows.length) return `<div class="empty" style="font-size:12.5px">此球員在帳本涵蓋的賽季內沒有出賽紀錄(帳本自 2024/10 起,僅涵蓋網站列出的 15 個聯賽)。</div>`;
+  const gk=/G/i.test(pos||"");
+  const n=rows.length, st=rows.filter(r=>r[4]===1).length;
+  const sum=(i)=>rows.reduce((a,r)=>a+(+r[i]||0),0);
+  const G=sum(9), A=sum(10), SH=sum(7), SOT=sum(8), YC=sum(13), RC=sum(14), SV=sum(15), GA=sum(16);
+  const head=`<div style="font-family:var(--cond);font-size:12.5px;color:var(--ink2);margin:8px 0 10px">
+    ${n} 場(先發 ${st}、替補 ${n-st})${gk?` · 撲救 ${SV} · 失球 ${GA}`:` · 進球 ${G} · 助攻 ${A} · 射門 ${SH}(射正 ${SOT})`} · 黃 ${YC} 紅 ${RC}</div>`;
+  const cols=gk?["日期","聯賽","對手","主客","出賽","撲救","失球","卡"]:["日期","聯賽","對手","主客","出賽","射門","射正","進球","助攻","卡"];
+  const body=rows.slice(0,60).map(r=>{
+    const zh=(typeof zhName==="function")?zhName(r[2]):r[2];
+    const app=r[4]===1?"先發":(r[5]===1?"替補":"未出賽");
+    const res=(r[17]!=null&&r[18]!=null)?`${r[17]}-${r[18]}`:"";
+    const win=(r[17]>r[18])?"var(--hit)":((r[17]<r[18])?"var(--miss)":"var(--muted)");
+    const card=(r[14]?"🟥":"")+(r[13]?"🟨".repeat(Math.min(2,r[13])):"")||"—";
+    const hl=(r[9]>0)?'style="background:rgba(230,190,90,.07)"':"";
+    const cells=gk
+      ? [r[0].slice(5), lgZh(r[1]), zh, r[3]?"主":"客", app, r[15]??"—", r[16]??"—", card]
+      : [r[0].slice(5), lgZh(r[1]), zh, r[3]?"主":"客", app, r[7]??"—", r[8]??"—", (r[9]||0)?`<b style="color:var(--gold)">${r[9]}</b>`:"—", (r[10]||0)||"—", card];
+    return `<tr ${hl}>${cells.map((c,i)=>`<td style="padding:5px 7px;border-bottom:1px solid var(--line);${i>=4?"text-align:center":""}">${c}</td>`).join("")}<td style="padding:5px 7px;text-align:center;color:${win};font-family:var(--mono)">${res}</td></tr>`;
+  }).join("");
+  return head+`<div class="table-wrap" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
+    <thead><tr style="color:var(--muted);font-family:var(--cond)">${cols.concat(["比分"]).map((c,i)=>`<th style="text-align:${i>=4?"center":"left"};font-weight:normal;padding:5px 7px">${c}</th>`).join("")}</tr></thead>
+    <tbody>${body}</tbody></table></div>${rows.length>60?`<div style="font-size:11.5px;color:var(--muted);margin-top:6px">顯示最近 60 場,共 ${rows.length} 場</div>`:""}`;
+}
+function lgZh(id){ const L=LEAGUES.find(x=>x.id===id); return L?L.zh:(id||""); }
 function showPlayer(p, fromPop){
   VIEW_SEQ++;                                  // 開球員頁 → 使所有進行中的球隊頁晚到渲染作廢
   if(!fromPop){ if(!overlayOpen()) window.__listScroll=window.scrollY; try{history.pushState({v:"player",p:p},"");}catch(e){} }
@@ -3151,10 +3193,19 @@ function showPlayer(p, fromPop){
     <div id="playerHist"></div>
     <div class="pos-group" style="margin-top:18px">本季數據 <span id="statLoad" style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0">載入中…</span></div>
     <div id="playerStats"></div>
+    <div class="pos-group" style="margin-top:18px">逐場戰績 <span id="logLoad" style="font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0">載入中…</span></div>
+    <div id="playerLog"></div>
     <div class="player" data-team="${p.teamName}" style="cursor:pointer;margin-top:14px"><div class="avatar">${zhName(p.teamName).charAt(0)}</div>
       <div><div class="p-top"><span class="pnm">${zhName(p.teamName)} 完整陣容</span></div><div class="p-note">點我查看 ›</div></div></div>`;
   document.getElementById("roster").querySelectorAll("[data-team]").forEach(el=>el.onclick=()=>showTeam(el.dataset.team));
   window.scrollTo(0,0);
+  // e197:逐場戰績(本機帳本,按需載入分片)
+  playerLog(p.id).then(rows=>{
+    const load=document.getElementById("logLoad"), box=document.getElementById("playerLog");
+    if(!box) return;
+    if(load) load.textContent = rows?`${rows.length} 場 · 本站帳本`:"無紀錄";
+    box.innerHTML = renderPlayerLog(rows, p.pos);
+  }).catch(()=>{ const load=document.getElementById("logLoad"); if(load) load.textContent="載入失敗"; });
   // 歷年數據(逐季)
   fetchPlayerHistory(p.league||curLeague, p.id).then(hist=>{
     const load=document.getElementById("histLoad"), box=document.getElementById("playerHist");
