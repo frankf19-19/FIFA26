@@ -731,7 +731,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e195";
+const BUILD = "e196";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2071,6 +2071,7 @@ function brainRead(hn,an,p,lg){
     if(p.mv) push(p.mv, `動機情境:${p.mv>0?hz:az} 這階段更有企圖`);
     if(p.eu) push(p.eu, `歐戰擁擠度:${p.eu>0?az:hz} 賽程較滿`);
     F.sort((a,b)=>Math.abs(b.v)-Math.abs(a.v));
+    if(brainRead._want){ brainRead._out=F; }   // e196:賽後複盤要用同一份排序
     const sign=dirK==="H"?1:(dirK==="A"?-1:0);
     const pro=F.filter(f=>sign===0?false:f.v*sign>0).slice(0,3);
     const con=F.filter(f=>sign===0?true:f.v*sign<0).slice(0,2);
@@ -2852,7 +2853,8 @@ function renderTodaySection(){
           const rv=(typeof makeReview==="function")?makeReview(g):null;
           if(!rv||!rv.text) return "";
           if(rv.pending) return `<div class="tg-rv" style="color:var(--muted)">⏳ ${rv.text}</div>`;
-          return `<div class="tg-rv ${rv.good?"ok":"bad"}">${rv.good?"✓":"✗"} ${rv.text}</div>`;
+          return `<div class="tg-rv ${rv.good?"ok":"bad"}">${rv.good?"✓":"✗"} ${rv.text}</div>`
+            + (rv.brain?`<div class="tg-rv" style="border-left-color:var(--gold);color:var(--ink2);line-height:1.75;margin-top:6px">🧠 <b>賽後複盤</b><br>${rv.brain}</div>`:"");
         })()}
         <div class="an-box" id="an-${g.id}">${ana}</div>
       </div>`}`;
@@ -3842,6 +3844,55 @@ function teamRow(name,logo,score,win,pred,ha){
   return `<div class="team ${win?'win':''}">${logoImg}${haTag}<span class="nm" data-team="${name}">${zh} ${en}</span>${sc}</div>`;
 }
 /* 賽後檢討:比對快照與實際,生成分析與教訓 */
+/* ===== e196:賽後複盤 =====
+   把賽前那份「AI 判讀」拿回來跟結果對帳:當初排第一的理由對了嗎?
+   當初自己點出的反面因素,是不是正好就是翻盤的那個?當初說的不確定性有沒有成真?
+   這才是「檢討」——不是再唸一次數據,而是驗證自己的推理哪一段錯了。 */
+function brainReview(g,s){
+  try{
+    const p=s&&s.pred; if(!p||p.lh==null||s.hs==null) return null;
+    const hz=s.hz||zhName(g.hn), az=s.az||zhName(g.an);
+    brainRead._want=1; brainRead._out=null;
+    brainRead(g.hn||hz, g.an||az, p, s.lg);
+    const F=brainRead._out||[]; brainRead._want=0;
+    const dirP=pickDirOf(p), dirR=s.hs>s.as?"H":(s.hs<s.as?"A":"D");
+    const realSign=dirR==="H"?1:(dirR==="A"?-1:0);
+    const gdR=s.hs-s.as, gdP=+p.lh-+p.la;
+    const L=[];
+    const favZ=dirP==="H"?hz:(dirP==="A"?az:"和局");
+    const top={H:p.H,D:p.D,A:p.A}[dirP];
+    L.push(dirP===dirR
+      ? `<b>判斷</b>:賽前看好 ${favZ}(${top.toFixed(0)}%),方向正確。預期淨勝 ${gdP>0?"+":""}${gdP.toFixed(2)}、實際 ${gdR>0?"+":""}${gdR}。`
+      : `<b>判斷</b>:賽前看好 ${favZ}(${top.toFixed(0)}%),方向錯了 —— 實際 ${dirR==="D"?"和局":(dirR==="H"?hz:az)}。預期淨勝 ${gdP>0?"+":""}${gdP.toFixed(2)}、實際 ${gdR>0?"+":""}${gdR},誤差 ${Math.abs(gdR-gdP).toFixed(2)} 球。`);
+    const sgnP0=dirP==="H"?1:(dirP==="A"?-1:0);
+    const conSet=new Set(F.filter(f=>sgnP0!==0&&f.v*sgnP0<0).map(f=>f.t.split(":")[0]));
+    if(F.length&&realSign!==0){
+      const ok=[],bad=[];
+      F.slice(0,4).forEach(f=>{
+        const nm=f.t.split(":")[0]; if(conSet.has(nm)) return;
+        (f.v*realSign>0?ok:bad).push(nm);
+      });
+      if(ok.length) L.push(`<b>站得住的理由</b>:${ok.join("、")} —— 這幾層指對了方向。`);
+      if(bad.length) L.push(`<b>站不住的理由</b>:${bad.join("、")} —— 這幾層這場指錯了。`);
+    }
+    const con=F.filter(f=>sgnP0!==0&&f.v*sgnP0<0);
+    if(con.length&&dirP!==dirR) L.push(`<b>早該重視的訊號</b>:賽前已列出「${con[0].t.split(":")[0]}」是反面因素(反向 ${Math.abs(con[0].v).toFixed(2)} 球),結果正是往那個方向走。權重可能給得不夠。`);
+    else if(con.length) L.push(`<b>反面因素</b>:賽前列出的「${con[0].t.split(":")[0]}」這場沒有兌現。`);
+    if(!p.xi) L.push(`<b>盲點</b>:這場鎖定時沒拿到先發名單,陣容輪換完全沒進到判斷裡。`);
+    else if(p.xi&&(Math.abs((p.xi.h||1)-1)>0.25||Math.abs((p.xi.a||1)-1)>0.25)) L.push(`<b>陣容</b>:賽前已抓到 ${hz} ${Math.round((p.xi.h||1)*100)}% · ${az} ${Math.round((p.xi.a||1)*100)}%,該調整已計入。`);
+    const DQ=(s.dq!=null?s.dq:(p.dq!=null?p.dq:null));
+    if(DQ!=null&&DQ<0.45) L.push(`<b>資料</b>:可用資料僅 ${Math.round(DQ*100)}%,這場本來就該低信心看待。`);
+    const totP=+p.lh+ +p.la, totR=s.hs+s.as;
+    if(Math.abs(totR-totP)>=1.5) L.push(`<b>進球水位</b>:預期 ${totP.toFixed(2)}、實際 ${totR} —— ${totR>totP?"雙方比預期開放":"比預期保守"}。`);
+    if(Array.isArray(p.sc3)&&p.sc3.length){
+      const inT=p.sc3.some(c=>c.i===s.hs&&c.j===s.as);
+      L.push(inT?`<b>比分</b>:${s.hs}-${s.as} 落在 Top-3 之內。`:`<b>比分</b>:${s.hs}-${s.as} 不在 Top-3(${p.sc3.map(c=>c.i+"-"+c.j).join("/")})—— 單一比分本就只有 ${p.sc3[0].p}% 機率。`);
+    }
+    if(s.adj) L.push(`<b>已學到</b>:${s.adj>0?hz:az} 評級 +${Math.abs(s.adj)}、對手 −${Math.abs(s.adj)},之後的預測會反映這場。${s.luck==="lucky"?"(結果與場面背離,校準幅度已減半,避免追噪音)":""}`);
+    if(typeof s.brier==="number") L.push(`<b>本場 Brier</b> ${s.brier.toFixed(2)}${s.brier<0.4?"(機率給得準)":(s.brier>0.75?"(機率給得差)":"")}`);
+    return L.join("<br>");
+  }catch(e){ return null; }
+}
 function makeReview(g){
   const s=scGet()[g.id]; if(!s||!s.pred) return null;
   // e189:尚未評分(完場但雲端還沒對帳)→ 不寫檢討,否則會出現 undefined/NaN;等 30 分鐘內的雲端評分
@@ -3899,7 +3950,8 @@ function makeReview(g){
     parts.push(`已自動校準:${up} 評級 +${Math.abs(s.adj)}、${dn} -${Math.abs(s.adj)},之後預測將反映`);
   }
   if(typeof s.brier==="number") parts.push(`本場 Brier ${s.brier.toFixed(2)}`);
-  return {text:parts.join(";")+"。", good:s.hit};
+  const br=brainReview(g,s);   // e196:把賽前推理拿回來對帳
+  return {text:parts.join(";")+"。", good:s.hit, brain:br};
 }
 function gameCard(g){
   const p=predict(g.hn,g.an,g.odds,g.league||curLeague,g.hid,g.aid,g.id);
