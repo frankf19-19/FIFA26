@@ -171,6 +171,82 @@ function detSave(){ if(!DET_SEASON) return; try{ fs.writeFileSync(DET_SEASON, JS
      players-<NN>.json = { pid: [ [日期, 聯賽, 對手隊名, 主?, 先發?, 替補上?, 替補下?,
                                    射門, 射正, 進球, 助攻, 犯規, 被犯規, 黃, 紅, 撲救, 失球, 我方比分, 對方比分], ... ] }
    純顯示用,不影響預測。 */
+/* ===== v26:球隊輪廓 =====
+   用帳本(matches.json)+ 逐場細節(details-*.json)算出每支球隊的「真實長相」,
+   寫成一個小檔 teams.json(約 400 隊,幾百 KB),前端可以整包載入。
+   這不是預測用的校準值,是給人看的分析:這支球隊到底怎麼踢球。 */
+function buildTeamProfiles(){
+  try{
+    const files=fs.readdirSync(".").filter(f=>/^details-\d{4}-\d{2}\.json$/.test(f));
+    const DET={}; for(const f of files){ try{ Object.assign(DET, JSON.parse(fs.readFileSync(f,"utf8"))||{}); }catch(e){} }
+    const TSI={}; ["totalShots","shotsOnTarget","possessionPct","wonCorners","foulsCommitted","yellowCards"]
+      .forEach((k)=>{ TSI[k]=TS_KEYS.indexOf(k); });
+    const gd={}, gp={};
+    for(const id in MATCHES){ const M=MATCHES[id]; if(!M||M.hs==null) continue;
+      const kh=M.lg+"|"+M.hid, ka=M.lg+"|"+M.aid;
+      gd[kh]=(gd[kh]||0)+(M.hs-M.as); gp[kh]=(gp[kh]||0)+1;
+      gd[ka]=(gd[ka]||0)+(M.as-M.hs); gp[ka]=(gp[ka]||0)+1; }
+    const rank={}; for(const k in gd) rank[k]=gd[k]/Math.max(gp[k],1);
+    const byLg={}; for(const k in rank){ const lg=k.split("|")[0]; (byLg[lg]=byLg[lg]||[]).push([k,rank[k]]); }
+    const strong={}; for(const lg in byLg){ const a=byLg[lg].sort((x,y)=>y[1]-x[1]); a.slice(0,Math.ceil(a.length/2)).forEach(([k])=>strong[k]=1); }
+    const P={}, name={};
+    const blank=()=>({n:0,fm:{},hn:0,an:0,hgf:0,hga:0,agf:0,aga:0,hw:0,aw:0,tm:[0,0,0,0,0,0],
+      lead:0,held:0,back:0,drew:0,htLose:0,htComeback:0,sh:0,sot:0,pos:0,cor:0,foul:0,yc:0,sn:0,
+      vsS:[0,0],vsW:[0,0],fx:[]});
+    const all=Object.keys(MATCHES).filter(id=>MATCHES[id]&&MATCHES[id].hs!=null)
+      .sort((a,b)=>String(MATCHES[a].d).localeCompare(String(MATCHES[b].d)));
+    for(const id of all){
+      const M=MATCHES[id], D=DET[id]||{};
+      if(M.hn) name[M.lg+"|"+M.hid]=M.hn; if(M.an) name[M.lg+"|"+M.aid]=M.an;
+      for(let side=0; side<2; side++){
+        const home=side===0, key=M.lg+"|"+(home?M.hid:M.aid), oppKey=M.lg+"|"+(home?M.aid:M.hid);
+        const t=(P[key]=P[key]||blank());
+        const my=home?M.hs:M.as, th=home?M.as:M.hs;
+        t.n++;
+        if(home){ t.hn++; t.hgf+=my; t.hga+=th; if(my>th) t.hw++; }
+        else    { t.an++; t.agf+=my; t.aga+=th; if(my>th) t.aw++; }
+        const fm=D.fm&&D.fm[side]; if(fm) t.fm[fm]=(t.fm[fm]||0)+1;
+        const gm=String((M.ev||{}).gm||"");
+        for(const tok of gm.split(",").filter(Boolean)){
+          const mi=parseInt(tok,10)||0, sd=tok.slice(-1);
+          const mine=(sd==="H")===home; if(!mine) continue;
+          t.tm[Math.min(5, Math.floor((mi-1)/15))]++;
+        }
+        const ht=(M.ev||{}).ht;
+        if(Array.isArray(ht)){
+          const hm=home?ht[0]:ht[1], ha2=home?ht[1]:ht[0];
+          if(hm>ha2){ t.lead++; if(my>th) t.held++; else if(my<th) t.back++; else t.drew++; }
+          else if(hm<ha2){ t.htLose++; if(my>=th) t.htComeback++; }
+        }
+        const ts=D.ts&&D.ts[side];
+        if(ts){ t.sn++;
+          const g=(k)=>{ const i=TSI[k]; return (i>=0&&ts[i]!=null)?+ts[i]:0; };
+          t.sh+=g("totalShots"); t.sot+=g("shotsOnTarget"); t.pos+=g("possessionPct");
+          t.cor+=g("wonCorners"); t.foul+=g("foulsCommitted"); t.yc+=g("yellowCards"); }
+        const bucket=strong[oppKey]?t.vsS:t.vsW; bucket[0]+=(my-th); bucket[1]++;
+        t.fx.push([M.d, (home?"H":"A"), (name[oppKey]||""), my, th]);
+      }
+    }
+    const out={};
+    for(const key in P){
+      const t=P[key]; if(t.n<8) continue;
+      const top=Object.entries(t.fm).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([f,c])=>[f,c]);
+      const r=(x,d=2)=>+(x).toFixed(d);
+      out[key]={ nm:name[key]||"", n:t.n,
+        fm:top,
+        h:{n:t.hn, gf:r(t.hgf/Math.max(t.hn,1)), ga:r(t.hga/Math.max(t.hn,1)), w:r(t.hw/Math.max(t.hn,1),3)},
+        a:{n:t.an, gf:r(t.agf/Math.max(t.an,1)), ga:r(t.aga/Math.max(t.an,1)), w:r(t.aw/Math.max(t.an,1),3)},
+        tm:t.tm,
+        cc:{lead:t.lead, held:t.held, back:t.back, htLose:t.htLose, htCb:t.htComeback},
+        st:t.sn?{n:t.sn, sh:r(t.sh/t.sn), sot:r(t.sot/t.sn), pos:r(t.pos/t.sn,1), cor:r(t.cor/t.sn), foul:r(t.foul/t.sn), yc:r(t.yc/t.sn)}:null,
+        vs:{s:[r(t.vsS[0]/Math.max(t.vsS[1],1)), t.vsS[1]], w:[r(t.vsW[0]/Math.max(t.vsW[1],1)), t.vsW[1]]},
+        fx:t.fx.slice(-10).reverse()
+      };
+    }
+    fs.writeFileSync("teams.json", JSON.stringify(out));
+    console.log("v26 球隊輪廓:"+Object.keys(out).length+" 隊 → teams.json");
+  }catch(e){ console.log("v26 球隊輪廓失敗:", e.message); }
+}
 function buildPlayerIndex(){
   try{
     const shard={}; let rows=0;
@@ -608,10 +684,10 @@ function accProcess(T, hid, aid, hs, as, pr, w){
     console.log("完成:", lg, "(", n, "場 )");
   }
   // xG 已改為自產(SOT-xG,於各聯賽 checkpoint 內完成;外部源 Understat/FBref 均擋機房 IP)
-  if(LEDGER_ONLY){ saveMatches(); buildPlayerIndex(); console.log("LEDGER_ONLY:帳本已更新,不寫 calib.json"); process.exit(0); }   // v22/v25
+  if(LEDGER_ONLY){ saveMatches(); buildPlayerIndex(); buildTeamProfiles(); console.log("LEDGER_ONLY:帳本已更新,不寫 calib.json"); process.exit(0); }   // v22/v25/v26
   try{ await understat(out); }catch(e){ console.log("understat 模組失敗:",e.message); }   // v17
   console.log("v23 逐場細節新增/更新 "+DET_N+" 場 → "+(DET_SEASON||"-"));
-  detSave(); buildPlayerIndex();   // v25:細節落檔後重建球員索引
+  detSave(); buildPlayerIndex(); buildTeamProfiles();   // v25/v26
   buildXiBase(out); save(out, null);   // v16
   console.log("全部完成:", out.n, "場,", Object.keys(out.leagues).length, "個聯賽");
 })();
