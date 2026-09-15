@@ -731,7 +731,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e197";
+const BUILD = "e198";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2240,6 +2240,28 @@ async function jget(url,live){
 function _feedNote(){ try{ window.__espnDown=1; const st=document.getElementById("status");
   if(st&&!st.dataset.fd){ st.dataset.fd="1"; st.textContent="☁ ESPN 直連中斷 → 已改用雲端資料(每 30 分鐘更新,比分非即時)"; st.style.color="var(--gold)"; } }catch(e){} }
 function espnScore(league,date){return `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/scoreboard?dates=${date}`;}
+/* e198:ESPN 的 scoreboard 從 2026-09 起不再接受日期區間(dates=A-B 一律回 HTTP 400),
+   只接受單日。整站的賽程、近況、補抓都靠區間查詢,所以全面改走這個包裝:
+   先試區間(哪天 ESPN 修好就自動用回去),失敗就逐日抓再合併。單日最多 10 天,避免爆量。 */
+let _RANGE_OK=true;
+async function jgetRange(league, a, b){
+  const A=String(a), B=String(b||a);
+  if(A===B) return await jget(espnScore(league,A), true);
+  if(_RANGE_OK){
+    try{ const r=await jget(espnScore(league, A+"-"+B), true); if(r) return r; }
+    catch(e){ if(/\b400\b/.test(String(e&&e.message))) _RANGE_OK=false; else throw e; }
+  }
+  const days=[], p=(x)=>new Date(+x.slice(0,4), +x.slice(4,6)-1, +x.slice(6,8));
+  for(let d=p(A); d<=p(B) && days.length<10; d.setDate(d.getDate()+1)) days.push(ymd(new Date(d)));
+  const out={leagues:null, events:[]}; const seen={};
+  for(const d of days){
+    let j=null; try{ j=await jget(espnScore(league,d), true); }catch(e){ continue; }
+    if(!j) continue;
+    if(!out.leagues && j.leagues) out.leagues=j.leagues;
+    for(const ev of (j.events||[])) if(!seen[ev.id]){ seen[ev.id]=1; out.events.push(ev); }
+  }
+  return out.events.length||out.leagues ? out : null;
+}
 function espnInjuries(league){return `https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/injuries`;}
 let INJURIES={};        // norm(team) -> [{name,status,out}]
 let INJ_BY_PLAYER={};   // norm(player) -> status
@@ -2368,7 +2390,7 @@ async function getTeamList(league){
   // 路徑3:從近兩天賽程萃取(至少涵蓋有比賽的球隊)
   try{
     const d0=new Date(); const d1=new Date(); d1.setDate(d1.getDate()-1);
-    const sb=await jget(espnScore(league, ymd(d1)+"-"+ymd(d0)), true);
+    const sb=await jgetRange(league, ymd(d1), ymd(d0));
     const seen={}; const teams=[];
     (sb.events||[]).forEach(ev=>{const c=(ev.competitions||[])[0];((c&&c.competitors)||[]).forEach(x=>{
       const t=x.team||{}; if(t.id&&!seen[t.id]){seen[t.id]=1;teams.push({id:t.id,displayName:t.displayName});}});});
@@ -2495,7 +2517,7 @@ async function checkTodayGames(targetIso, fast){
     const CONC=8, next={};
     for(let i=0;i<L.length;i+=CONC){
       await Promise.all(L.slice(i,i+CONC).map(async lg=>{ if(!lgVisible(lg)) return; try{
-        const sb=await jget(espnScore(lg.id,range), true);
+        const sb=await jgetRange(lg.id, String(range).split("-")[0], String(range).split("-")[1]||String(range));
         const evs=parseEvents(sb).filter(g=>g.localIso===today);
         if(evs.length) next[lg.id]={n:evs.length,live:evs.some(g=>g.state==="in"),games:evs};
       }catch(e){}}));
@@ -4797,7 +4819,7 @@ async function load(){
     // 先抓積分榜:攻防形狀與戰績橫幅都靠它(失敗不影響賽事)
     try{ const sd0=await jget(espnStand(curLeague)); renderStandings(sd0); }catch(e){}
     loadStandFor(curLeague).catch(()=>{});
-    const data=await jget(espnScore(curLeague, ymd(d0)+"-"+dateStr), true);
+    const data=await jgetRange(curLeague, ymd(d0), dateStr);
     const all=parseEvents(data);
     const games=all.filter(g=>g.localIso===isoDate(curDate));
     await gradeFinished(all.filter(g=>g.completed));   // 兩天內所有完賽都納入學習(含場面數據)
@@ -4817,7 +4839,7 @@ async function load(){
           const a=new Date(t0); a.setDate(a.getDate()+seg*7);
           const b=new Date(t0); b.setDate(b.getDate()+(seg+1)*7);
           try{
-            const sb=await jget(espnScore(curLeague, ymd(a)+"-"+ymd(b)), true);
+            const sb=await jgetRange(curLeague, ymd(a), ymd(b));
             const evs=parseEvents(sb).filter(g=>g.localIso>=isoDate(t0));
             if(evs.length) target=evs.map(g=>g.localIso).sort()[0];
           }catch(e){}
@@ -4825,7 +4847,7 @@ async function load(){
         if(!target){   // 未來 21 天都沒有 → 往回找最近踢過的一天
           const back=new Date(t0); back.setDate(back.getDate()-7);
           try{
-            const sb=await jget(espnScore(curLeague, ymd(back)+"-"+ymd(t0)), true);
+            const sb=await jgetRange(curLeague, ymd(back), ymd(t0));
             const evs=parseEvents(sb);
             if(evs.length) target=evs.map(g=>g.localIso).sort().slice(-1)[0];
           }catch(e){}
