@@ -731,7 +731,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e198";
+const BUILD = "e199";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -4171,6 +4171,76 @@ function renderHeadlines(games){
   box.querySelectorAll("[data-link]").forEach(el=>el.onclick=()=>window.open(el.dataset.link,"_blank","noopener"));
 }
 
+/* ===== e199:球隊分析 =====
+   calib v26 把兩季半的帳本 + 逐場細節壓成 teams.json(402 隊,約 290KB,整包載入)。
+   這裡不是把數字攤出來,而是用判讀的方式講:這支球隊到底怎麼踢球、強在哪、弱在哪。
+   每一句都由該隊真實數值推導,沒有套版。 */
+let TEAMS_DB=null, _teamsPromise=null;
+function loadTeams(){
+  if(!_teamsPromise) _teamsPromise=fetch("teams.json?_="+Date.now(),{cache:"no-store"})
+    .then(r=>r.ok?r.json():null).then(j=>{ TEAMS_DB=j; return j; }).catch(()=>null);
+  return _teamsPromise;
+}
+function teamProfile(db, name, lg){
+  if(!db) return null;
+  const n=norm(name);
+  let best=null;
+  for(const k in db){ const t=db[k];
+    if(!t||!t.nm) continue;
+    if(norm(t.nm)!==n) continue;
+    if(lg && k.indexOf(lg+"|")===0) return t;
+    if(!best||t.n>best.n) best=t;
+  }
+  return best;
+}
+function teamRead(t, zh){
+  if(!t) return "";
+  const L=[], pc=x=>Math.round(x*100);
+  const hw=pc(t.h.w), aw=pc(t.a.w), dw=hw-aw;
+  L.push(`<b>主客差異</b>:主場 ${t.h.n} 場勝率 ${hw}%(進 ${t.h.gf}、失 ${t.h.ga}),客場 ${t.a.n} 場 ${aw}%(進 ${t.a.gf}、失 ${t.a.ga})。${
+    dw>=18?`主場是他們的武器 —— 差 ${dw} 個百分點,遠高於一般球隊的 10~12。`
+    :(dw<=2?`主客幾乎沒差(${dw>=0?"+":""}${dw} 個百分點),換場地對他們影響很小。`
+    :`差 ${dw} 個百分點,屬於正常範圍。`)}`);
+  if(t.fm&&t.fm.length){
+    const main=t.fm[0], share=Math.round(main[1]/t.n*100);
+    L.push(`<b>踢法</b>:主打 ${main[0]}(${share}% 的場次)${t.fm[1]?`,其次 ${t.fm[1][0]}`:""}${
+      share>=70?" —— 陣型非常固定,很少變陣。":(share<45?" —— 陣型多變,會依對手調整。":"")}${
+      t.st?` 場均射門 ${t.st.sh}(射正 ${t.st.sot})、控球 ${t.st.pos}%、角球 ${t.st.cor}、犯規 ${t.st.foul}、黃牌 ${t.st.yc}。${
+        t.st.pos>=55?"控球主導型。":(t.st.pos<=45?"不執著控球,偏反擊。":"")}`:""}`);
+  }
+  if(t.tm){
+    const tot=t.tm.reduce((a,b)=>a+b,0);
+    if(tot>=15){
+      const lab=["0-15","16-30","31-45","46-60","61-75","76-90+"];
+      const mx=Math.max.apply(null,t.tm), mi=t.tm.indexOf(mx);
+      const h2=(t.tm[3]+t.tm[4]+t.tm[5])/tot, late=(t.tm[5])/tot;
+      L.push(`<b>進球時段</b>:${lab.map((l,i)=>`${l} ${t.tm[i]}`).join(" · ")}(共 ${tot} 球)。最旺 ${lab[mi]} 分。${
+        h2>=0.6?`下半場進了 ${Math.round(h2*100)}% 的球 —— 越踢越強,落後時別太早放棄。`
+        :(h2<=0.42?`上半場就決勝負(${Math.round((1-h2)*100)}%),開賽早段要盯緊。`:"")}${
+        late>=0.24?` 其中 ${Math.round(late*100)}% 在 76 分後,是有名的尾盤隊。`:""}`);
+    }
+  }
+  if(t.cc&&(t.cc.lead>=5||t.cc.htLose>=5)){
+    const hold=t.cc.lead?Math.round(t.cc.held/t.cc.lead*100):null;
+    const cb=t.cc.htLose?Math.round(t.cc.htCb/t.cc.htLose*100):null;
+    L.push(`<b>領先與落後</b>:${t.cc.lead?`半場領先 ${t.cc.lead} 次守住 ${t.cc.held} 次(${hold}%)${t.cc.back?`、被逆轉 ${t.cc.back} 次`:""}${hold>=75?" —— 守成能力強":(hold<=55?" —— 守不住領先,是明顯弱點":"")}`:""}${
+      t.cc.lead&&t.cc.htLose?";":""}${t.cc.htLose?`半場落後 ${t.cc.htLose} 次拿分 ${t.cc.htCb} 次(${cb}%)${cb>=35?" —— 追分能力不錯":(cb<=12?" —— 一旦落後幾乎回不來":"")}`:""}。`);
+  }
+  if(t.vs&&t.vs.s[1]>=6&&t.vs.w[1]>=6){
+    const S=t.vs.s[0], W=t.vs.w[0], gap=W-S;
+    L.push(`<b>對強弱隊</b>:對前半段球隊場均淨勝 ${S>0?"+":""}${S}(${t.vs.s[1]} 場)、對後半段 ${W>0?"+":""}${W}(${t.vs.w[1]} 場)。${
+      gap>=0.9?"典型的「欺善怕惡」型 —— 打弱隊吃得下,遇強隊就縮。"
+      :(gap<=0.15?"對強弱隊表現接近 —— 穩定,但也代表打弱隊沒有明顯優勢。"
+      :(S>0?"連對強隊都能取得正淨勝球,是真正的強隊。":""))}`);
+  }
+  if(t.fx&&t.fx.length){
+    const last=t.fx.slice(0,6);
+    const seq=last.map(f=>f[3]>f[4]?"勝":(f[3]<f[4]?"負":"和")).join("");
+    const w=last.filter(f=>f[3]>f[4]).length, l=last.filter(f=>f[3]<f[4]).length;
+    L.push(`<b>近 ${last.length} 場</b>:${seq}(${w} 勝 ${last.length-w-l} 和 ${l} 負)—— ${last.map(f=>`${f[0].slice(5)} ${f[1]==="H"?"主":"客"} ${zhName(f[2])} ${f[3]}-${f[4]}`).join("；")}`);
+  }
+  return `<div style="line-height:1.85">${L.join("<br>")}</div>`;
+}
 async function showTeam(name, fromPop){
   const __seq=++VIEW_SEQ;                      // 本次渲染的序號
   if(!fromPop){ if(!overlayOpen()) window.__listScroll=window.scrollY; try{history.pushState({v:"team",name:name},"");}catch(e){} }
@@ -4199,6 +4269,16 @@ async function showTeam(name, fromPop){
       injL.map(x=>`<span style="margin-left:10px">${x.name}<span style="color:var(--muted)">(${x.status})</span></span>`).join("")+`</div>`;
   }
   box.dataset.banner = banner;
+  // e199:球隊分析(本站帳本)
+  banner+=`<div id="teamRead" class="why" style="border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:13px 15px;margin-bottom:16px">
+    <span class="k">🧠 球隊分析</span><span id="teamReadBody" style="color:var(--muted)">載入中…</span></div>`;
+  loadTeams().then(db=>{
+    if(__seq!==VIEW_SEQ) return;
+    const el=document.getElementById("teamReadBody"); if(!el) return;
+    const t=teamProfile(db, name, curLeague);
+    el.innerHTML = t ? teamRead(t, zhName(name))
+      : `本站帳本(2024/10 起,15 個聯賽)沒有這支球隊足夠的比賽紀錄(至少 8 場)。`;
+  });
   // 先從已載入的球員索引找出整隊(即時、真實名冊)
   const roster = PLAYER_INDEX.filter(p=>norm(p.teamName)===norm(name));
   if(roster.length){
