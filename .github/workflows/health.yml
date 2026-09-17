@@ -1,0 +1,31 @@
+name: self-health
+on:
+  schedule:
+    - cron: "25,55 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+  issues: write
+concurrency:
+  group: self-health
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: node scripts/health.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+      - name: commit health.json
+        run: |
+          git config user.name  "health-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add health.json
+          git diff --cached --quiet || git commit -m "health: $(date -u +%H:%M)"
+          git pull --rebase origin main || { git rebase --abort || true; git pull --no-rebase -X ours origin main; }
+          git push
