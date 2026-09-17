@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e201";
+const BUILD = "e202";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1225,9 +1225,15 @@ function computeTuning(){
     const avgD=all.reduce((a,s)=>a+s.pred.D,0)/n;
     const drawRate=all.filter(s=>s.draw).length/n*100;
     DRAW_NUDGE=Math.max(0,Math.min(4, (drawRate-avgD)*0.5));   // e174:7→4
-    const avgH=all.reduce((a,s)=>a+s.pred.H,0)/n;
-    const homeRate=all.filter(s=>s.hs>s.as).length/n*100;
-    HA_TUNE=Math.max(-0.08,Math.min(0.08,(homeRate-avgH)/100*0.35));
+    /* e202:主場係數的帳本校正改看「最近 30 天鎖定值」而不是全部歷史,學習速率 0.35→0.5,上限 ±0.10。
+       評估期 185 場實測:預測主勝 44.8%、實際 39.5%,差 5.3 個百分點 —— 本季主場優勢明顯比前兩季弱,
+       用兩季資料學出來的係數反應太慢。改看近期,模型才跟得上賽季內的變化。 */
+    const cut=Date.now()-30*86400000;
+    const rec=all.filter(s=>s.fzT&&s.fzT>=cut&&s.hs!=null);
+    const use=rec.length>=60?rec:all;
+    const avgH=use.reduce((a,s)=>a+s.pred.H,0)/use.length;
+    const homeRate=use.filter(s=>s.hs>s.as).length/use.length*100;
+    HA_TUNE=Math.max(-0.10,Math.min(0.10,(homeRate-avgH)/100*0.5));
     if(n>=40) LEDGER_BASE={H:homeRate, D:drawRate, A:Math.max(0,100-homeRate-drawRate)};
   }
   try{ mktWTune(); }catch(e){}   // e143:市場權重最佳化 + 對戰莊家統計(每次調參都重算,雲端/各裝置一致)
@@ -1666,7 +1672,8 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
   let sh=_eh.s, sa=_ea.s; const _prior=(_eh.prior||_ea.prior);
   const _hasData=!!(sh&&sa&&+sh.gp>=2&&+sa.gp>=2);
   const d=(rh-ra)*(_hasData?0.6:1.0);   // e133:0.4→0.6
-  const COEF=0.08, HA=(cl&&cl.ha!=null)?cl.ha:(0.24+HA_TUNE); // 主場優勢:雲端校準優先,否則本機自調
+  // e202:帳本校正疊加在雲端校準之上 —— 之前有雲端 ha 時 HA_TUNE 被整個忽略,近況校正從來沒生效過
+  const COEF=0.08, HA=Math.max(0.05,((cl&&cl.ha!=null)?cl.ha:0.24)+HA_TUNE);
   const BASE=Math.max(1.1,Math.min(1.9,(cl&&cl.lgAvg)||(lg&&LGAVG_BY_LG[lg])||1.32)); // e133:進球水位依聯賽實際
   const _cd=Math.max(-1.4,Math.min(1.4,COEF*d));   // e142:評級臂 0.03→0.08(9 分差 ≈ 1.5 倍強弱),上限 4 倍
   let lh=BASE*Math.exp(_cd/2 + HA/2), la=BASE*Math.exp(-_cd/2 - HA/2);
@@ -2146,7 +2153,7 @@ function analysisRows(hn,an,p,lg,hid,aid){
   }
   const ih=injAdj(hn), ia=injAdj(an);
   if(ih<0.999||ia<0.999) rows.push(["傷兵影響", `${hz} 預期進球 ${((1-ih)*100).toFixed(0)}% 下修 · ${az} ${((1-ia)*100).toFixed(0)}% 下修`]);
-  rows.push(["主場加成", `係數 ${(0.24+HA_TUNE).toFixed(2)}` + (Math.abs(HA_TUNE)>0.005
+  rows.push(["主場加成", `係數 ${((((window.CLOUD||{}).leagues||{})[lg]||{}).ha??0.24).toFixed(2)}${HA_TUNE?` ${HA_TUNE>0?"+":""}${HA_TUNE.toFixed(3)}(近 30 天帳本校正)`:""}` + (Math.abs(HA_TUNE)>0.005
     ? `(依實際主勝率自動校準,基準 0.24)`
     : `<span style="color:var(--muted);font-size:11px">(全站通用基準值,尚未依此聯賽校準)</span>`)]);
   if(PURE_MODE&&p.mkp) rows.push(["市場賠率", `<span style="color:var(--gold)">純模型模式:預測完全不採用賠率</span> —— 本場市場報價 主 ${p.mkp.H}% · 和 ${p.mkp.D}% · 客 ${p.mkp.A}%,僅作為對照與「對戰莊家」計分,不影響預測`]);
