@@ -639,6 +639,7 @@
       </div>
       <div id="todayLine"></div>
       <div id="cloudTag" style="text-align:center;font-family:var(--mono);font-size:11px;color:var(--teal);padding:2px 0 0"></div>
+      <div id="healthTag" title="系統自我診斷(每 30 分鐘)" style="text-align:center;font-family:var(--cond);font-size:11px;color:var(--muted);padding:2px 0 0;cursor:pointer"></div>
       <div id="hiddenNote" style="text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted);padding:3px 2px 0;line-height:1.6"></div>
     </div>
 
@@ -731,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e199";
+const BUILD = "e200";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -5178,6 +5179,17 @@ function init(){
   }, 15000);
   setInterval(()=>{ if(!document.hidden) checkTodayGames(isoDate(curDate)); }, 1200000);
   setInterval(bellPoll, 30000);   // e193:進球提醒 —— 背景分頁也跑(這是提醒的重點)
+  /* e200:系統自我診斷 —— 讀 health.json(GitHub Action 每 30 分鐘檢查 ESPN/雲端/校準/資料檔並自動開 Issue),
+     在標題列顯示一顆狀態燈,點開看細項。 */
+  const loadHealth=async()=>{ try{
+    const r=await fetch("health.json?_="+Date.now(),{cache:"no-store"}); if(!r.ok) return;
+    const h=await r.json(); const el=document.getElementById("healthTag"); if(!el) return;
+    const age=(Date.now()-new Date(h.t))/60000;
+    const col=h.ok?(h.problems.length?"var(--gold)":"var(--hit)"):"var(--miss)";
+    el.innerHTML=`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};margin-right:5px;vertical-align:middle"></span>自我診斷:${h.summary}${age>90?"(已 "+Math.round(age)+" 分鐘沒更新)":""}`;
+    el.onclick=()=>{ const lines=Object.entries(h.checks).map(([k,v])=>`${v.ok?"✓":"✗"} ${k}:${v.msg}`).join("\n"); alert("系統自我診斷 "+new Date(h.t).toLocaleString("zh-TW")+"\n\n"+lines); };
+  }catch(e){} };
+  loadHealth(); setInterval(loadHealth, 600000);
   bellPoll();
   document.addEventListener("visibilitychange",()=>{
     if(!document.hidden && Date.now()-SWEEP_AT>30000) checkTodayGames(isoDate(curDate), true);
