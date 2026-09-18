@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e202";
+const BUILD = "e204";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2784,12 +2784,13 @@ function renderTodaySection(){
         if(noPredGate(pp,l.id)){ dropped++; return false; }
         // 賽前拍照存證:預測一顯示就鎖定,完賽後不得再變(誠信保證)
         const __kick=Date.parse(g.date)||0;
-        if(g.state!=="in"&&!g.completed&&(__kick===0||Date.now()<__kick)&&(pp.dq||0)>=0.2){
+        // e204:資料不足的比賽也建快照、也評分 —— 但標 low,統計時另計(不進主命中率)。
+        if(g.state!=="in"&&!g.completed&&(__kick===0||Date.now()<__kick)){
           try{ const sc0=scGet(); const ex0=sc0[g.id];
             if(!ex0 || (ex0.locked && ex0.hs==null)){        // 賽前:滾動更新(吸收陣容/名單變化);已開賽或已評分:碰都不碰
               sc0[g.id]={ ...(ex0||{}),
                 pred:{H:pp.H,D:pp.D,A:pp.A,si:pp.si,sj:pp.sj,conf:pp.conf,pick:pp.pick,lh:pp.lh,la:pp.la,prs:pp.prs,pw:pp.pw,pls:pp.pls,plw:pp.plw,pure:pp.pure,mkp:pp.mkp,mw:pp.mw},
-                odds:(g.odds||(ex0&&ex0.odds)||null),
+                odds:(g.odds||(ex0&&ex0.odds)||null), low:((pp.dq||0)<0.2)?1:0,
                 odds0:((ex0&&ex0.odds0)||g.odds||null),
                 dq:pp.dq, t:(ex0&&ex0.t)||Date.now(), tU:Date.now(), v:2, locked:1, lg:l.id };
               scSet(sc0);
@@ -2829,7 +2830,10 @@ function renderTodaySection(){
         rowCls="live";
       } else if(done){
         st=`<span class="stx st-done">完場</span>`;
-        if(snap&&snap.void){ st+=`<span class="stx r-void">不計</span>`; rowCls="done"; }
+        if(snap&&snap.void&&snap.vr==="lowdq"&&snap.hs!=null){   // e204
+          st+=(snap.hit?`<span class="stx r-hit" style="opacity:.75">✓ 命中</span>`:`<span class="stx r-miss" style="opacity:.75">✗ 未中</span>`)
+             +`<span class="stx r-void" title="兩隊帳本資料不足(歐戰新面孔或非涵蓋聯賽)。結果已記錄進資料庫供累積,但不計入主命中率">低資料·另計</span>`; rowCls="done"; }
+        else if(snap&&snap.void){ st+=`<span class="stx r-void">不計</span>`; rowCls="done"; }
         else if(snap&&snap.hs!=null){
           const exact=!!snap.hit&&(snap.score===true||((snap.v>=2)&&snap.pred&&snap.pred.si!=null&&snap.pred.si===g.hs&&snap.pred.sj===g.as));   // e168
           if(exact){ st+=`<span class="stx r-exact">★ 全中</span>`; rowCls="exact"; }
@@ -3547,6 +3551,7 @@ async function gradeFinished(games){
       odds:(ex&&ex.odds)||undefined, odds0:(ex&&ex.odds0)||undefined,
       mc:(ex&&ex.mc)||__mc(sp0,predOut,realOut,g),
       pred:sp0};
+    if((ex&&ex.low)||((sc[g.id].dq||0)<0.2)){ sc[g.id].low=1; sc[g.id].void=true; sc[g.id].vr="lowdq"; }   // e204:記錄但不進主統計
     // --- 評級自我校準:淨勝球誤差 → 微調兩隊評級(此消彼長,單場上限 ±2;每場只做一次) ---
     if(!sc[g.id].cal){
       const err=(g.hs-g.as)-(sp0.si-sp0.sj);
@@ -3868,6 +3873,8 @@ function renderInsights(){
     · <a href="#" id="expSC" style="color:var(--gold)">匯出學習資料</a> · <a href="#" id="impSC" style="color:var(--gold)">匯入學習資料</a><input type="file" id="impFile" accept="application/json,.json" style="display:none">
     · <a href="#" id="resetSC" style="color:var(--miss)">重設所有計分紀錄</a>
     <div style="margin-top:6px">${CLOUD_PRED?`<span id="cloudPredTag" style="color:var(--hit)">☁ 雲端統一預測 · 更新 ${String(CLOUD_PRED.updated||"").replace("T"," ").slice(5,16)} · 帳本 ${CLOUD_PRED.n||0} 筆</span> —— 預測與學習參數由雲端每 30 分鐘統一計算,手機與電腦數字一致`:`<span style="color:var(--gold)">尚未取得雲端統一預測(cloud-pred.json),目前用本機學習:已學習 ${n} 場,各裝置可能不同</span>`}</div></div></div>`;
+  { const low=Object.values(scGet()).filter(s=>s&&s.vr==="lowdq"&&s.hs!=null);   // e204
+    if(low.length) html+=`<div style="margin-top:10px;font-size:12px;color:var(--muted)">資料不足場次(另計,不進主命中率):${low.length} 場 · 命中 ${Math.round(low.filter(s=>s.hit).length/low.length*100)}% · Brier ${(low.reduce((a,s)=>a+(s.brier||0),0)/low.length).toFixed(3)} —— 這些球隊的比賽結果已持續累積進資料庫,資料夠了就會自動轉入主統計。</div>`; }
   box.innerHTML=renderCoverage()+renderTWSL()+renderCalib()+renderEras()+renderByLeague()+html;
   // e139:跨裝置同步 —— 匯出/匯入所有學習資料(帳本、評級校準、攻防乘數、市場權重、聯賽審核)
   const KEYS=["euroSC","euroADJ","euroAD","euroMKTW","euroLGD","euroDYN","euroTWSLN","euroTWSLL","euroADv2"];

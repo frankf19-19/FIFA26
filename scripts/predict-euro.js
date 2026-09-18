@@ -1,4 +1,4 @@
-/* 雲端統一預測 v11(ESPN 2026-09 起 scoreboard 不再接受 dates=A-B,一律 HTTP 400 → 改逐日抓再合併)
+/* 雲端統一預測 v12(低資料場次也建快照並評分,標 low 另計) ← v11(ESPN 2026-09 起 scoreboard 不再接受 dates=A-B,一律 HTTP 400 → 改逐日抓再合併)
    v10(LINEUP_PASS=1:每 10 分鐘的輕量輪 —— 只處理 100 分鐘內開賽的比賽,抓先發名單重算;不評分、不掃孤兒)
    v9(停抓空的傷停 API、對戰視窗 5→9 天)
    v8(e180:開賽前 2 小時抓先發名單餵模型 —— 先發陣容層原本只在前端跑,
@@ -136,14 +136,14 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
           try { await m.loadLineup(l.id, g.id, g.hid, g.aid); await sleep(150); } catch (e) {}
         }
         const pp = m.predict(g.hn, g.an, g.odds, l.id, g.hid, g.aid, g.id);
-        if (m.noPredGate(pp, l.id) || !((pp.dq || 0) >= 0.2)) continue;
+        if (m.noPredGate(pp, l.id)) continue;   // v12:資料不足也建快照(low 標記),評分時另計 —— 結果都要記進資料庫
         if (ex && ex.hs != null) continue;              // 已評分不動
         sc[g.id] = { ...(ex || {}),
           pred: { H: pp.H, D: pp.D, A: pp.A, si: pp.si, sj: pp.sj, conf: pp.conf, pick: pp.pick, lh: pp.lh, la: pp.la, prs: pp.prs, pw: pp.pw, pls: pp.pls, plw: pp.plw,
             ...(pp.sc3?{sc3:pp.sc3}:{}), ...(pp.h2s!=null?{h2s:pp.h2s,h2w:pp.h2w}:{}), ...(pp.h2?{h2:pp.h2}:{}), ...(h2l?{h2l}:{}), ...(pp.xi?{xi:pp.xi}:{}), ...(pp.xg?{xg:pp.xg}:{}),   // v10:存 xG 來源(real=Understat 射門級)，純記錄，供事後拆解貢獻
             ...(pp.pure?{pure:pp.pure}:{}), ...(pp.mkp?{mkp:pp.mkp}:{}), ...(pp.mw!=null?{mw:pp.mw}:{}) },   // v2:對戰莊家原料(純模型/市場/權重)
           odds: (g.odds || (ex && ex.odds) || null), odds0: ((ex && ex.odds0) || g.odds || null),
-          dq: pp.dq, t: (ex && ex.t) || Date.now(), tU: Date.now(), v: 2, locked: 1, lg: l.id,
+          dq: pp.dq, low: ((pp.dq || 0) < 0.2) ? 1 : 0, t: (ex && ex.t) || Date.now(), tU: Date.now(), v: 2, locked: 1, lg: l.id,
           hn: g.hn, an: g.an, hid: g.hid, aid: g.aid, date: g.date, cl: 1 };
         changed = true; nPred++;
       }
