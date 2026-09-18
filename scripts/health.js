@@ -28,6 +28,8 @@ async function j(u) { const r = await fetch(u, { cache: "no-store" }); if (!r.ok
   try { const c = await j(RAW + "calib.json?_=" + Date.now()); const h = (now - new Date(c.updated)) / 3600000;
     if (h > 36) bad("calib.age", `calib.json ${Math.round(h)} 小時沒更新(每日排程可能失敗)`, "warn"); else good("calib.age", `${Math.round(h)} 小時前校準`);
     const lg = Object.keys(c.leagues || {}).length; if (lg < 12) bad("calib.leagues", `calib 只有 ${lg} 個聯賽`, "warn");
+    const nT = Object.values(c.leagues || {}).reduce((s, L) => s + Object.keys((L && L.teams) || {}).filter(k => k[0] === "#").length, 0);
+    if ((+c.n || 0) < 500 || nT < 150) bad("calib.n", `calib 內容異常:總場數 ${c.n}、球隊 ${nT}(應 ≥500 / ≥150)—— 校準可能抓到空的`, "error"); else good("calib.n", `總場數 ${c.n}、球隊 ${nT}`);
   } catch (e) { bad("calib.age", "calib.json 讀取失敗:" + e.message, "error"); }
   const y = now.getUTCMonth() + 1 >= 7 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
   const det = `details-${y}-${String(y + 1).slice(2)}.json`;
