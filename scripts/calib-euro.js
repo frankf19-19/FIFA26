@@ -139,6 +139,29 @@ function buildXiBase(out){
 const WEEKS_CUP = 60;   // v14:歐冠/歐霸賽季 9 月~5 月,26 週只掃得到淘汰賽尾巴 → 盃賽掃 60 週(約 14 個月),完整涵蓋上一屆
 const ymd = d => d.toISOString().slice(0,10).replace(/-/g,"");
 const sb = (lg,a,b) => `https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard?dates=${a}-${b}`;
+/* v27:ESPN 2026-09 起不接受 dates=A-B(HTTP 400)。9/17 的每日校準因此每個聯賽都抓到 0 場,
+   還把一份「全部為空」的 calib.json 存了上去,整站退化成只剩先驗 —— 自我診斷也沒抓到(只查檔案年齡)。
+   兩個修正:
+     (1) 週段抓取先試區間,400 就逐日抓再合併(同 predict v11)
+     (2) 存檔前做「總場數不得少於上一版一半」的安全閘,寧可不存也不要存空的 */
+let RANGE_OK=true;
+async function sbFetch(lg, a, b){
+  if(RANGE_OK){
+    const r=await fetch(sb(lg, ymd(a), ymd(b)));
+    if(r.ok) return await r.json();
+    if(r.status!==400) return null;
+    RANGE_OK=false; console.log("ESPN 區間查詢 400 → 改逐日");
+  }
+  const out={events:[]}, seen={};
+  for(let d=new Date(a); d<=b; d.setDate(d.getDate()+1)){
+    try{ const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${lg}/scoreboard?dates=${ymd(new Date(d))}`);
+      if(!r.ok) continue; const j=await r.json();
+      for(const ev of (j.events||[])) if(!seen[ev.id]){ seen[ev.id]=1; out.events.push(ev); }
+    }catch(e){}
+    await new Promise(r=>setTimeout(r,120));
+  }
+  return out;
+}
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 const flatWalk = d => { const f={}; (function w(o){ if(!o||typeof o!=="object")return;
   if(Array.isArray(o)){o.forEach(w);return;}
@@ -360,8 +383,12 @@ const LEDGER_ONLY = process.env.LEDGER_ONLY === "1";
    沒有這個開關的話,__cached 會直接跳過摘要請求(因為賽果/先發/射門早就有了),
    grabDetail 永遠不會被呼叫 → 回填一場細節都收不到。 */
 const DETAIL_FILL = process.env.DETAIL_FILL === "1";
+let PREV_N=0; try{ PREV_N=+(JSON.parse(fs.readFileSync("calib.json","utf8")).n)||0; }catch(e){}
 function save(out, lg){
   out.updated = new Date().toISOString();
+  // v27:安全閘 —— 全部聯賽跑完(lg==null)時,總場數若不到上一版的一半,視為抓取失敗,不覆蓋
+  if(lg==null && PREV_N>200 && (+out.n||0) < PREV_N*0.5){ console.log(`安全閘:本次 n=${out.n} < 上一版 ${PREV_N} 的一半 → 不存 calib.json`); try{ saveMatches(); }catch(e){} return; }
+  if(lg!=null && PREV_N>200 && (+out.n||0)===0){ console.log("安全閘:中途檢查點 n=0 → 不覆蓋 calib.json"); try{ saveMatches(); }catch(e){} return; }
   if(!LEDGER_ONLY) fs.writeFileSync("calib.json", JSON.stringify(slimOut(out)));
   try { saveMatches(); } catch(e) {}
   if (process.env.GIT_PUSH === "1") {
@@ -475,8 +502,8 @@ function accProcess(T, hid, aid, hs, as, pr, w){
       const b=new Date(now); b.setDate(b.getDate()-seg*7);
       const a=new Date(now); a.setDate(a.getDate()-(seg+1)*7);
       try {
-        const r = await fetch(sb(lg, ymd(a), ymd(b)));
-        if (r.ok) { const j = await r.json();
+        const j = await sbFetch(lg, a, b);   // v27
+        if (j) {
           for (const ev of (j.events||[])) {
             const c=(ev.competitions||[])[0]; if(!c) continue;
             if(!(((c.status||{}).type)||{}).completed) continue;
