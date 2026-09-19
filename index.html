@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e204";
+const BUILD = "e205";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1951,7 +1951,9 @@ function scoreReasonLine(p,hz,az){
     const dirZh=pkK==="H"?`${hz} 勝`:pkK==="A"?`${az} 勝`:"和局";
     const tot=(p.lh+p.la).toFixed(1);
     const lvl=tot>=3.1?"對攻":tot<=2.3?"悶戰":"中等節奏";
-    return `為何 ${p.si}-${p.sj}:預期進球 ${hz} ${p.lh}、${az} ${p.la}(${lvl});看好 ${dirZh},在該方向底下 ${p.si}-${p.sj} 是最可能的比分 ${pSel.toFixed(1)}%${alt?`,次選 ${alt[0]}-${alt[1]} ${alt[2].toFixed(1)}%`:""}${p.mk?" · 已含市場賠率":""} —— 點「詳細分析」看完整依據`;
+    // e205:一行理由也要看得到 xG 從哪來(射門級 Understat / 射正推估)
+    const xgS=p.xg?` · xG ${hz} ${(+p.xg.h).toFixed(2)}、${az} ${(+p.xg.a).toFixed(2)}${p.xg.real?"(射門級)":"(射正推估)"}`:"";
+    return `為何 ${p.si}-${p.sj}:預期進球 ${hz} ${p.lh}、${az} ${p.la}(${lvl})${xgS};看好 ${dirZh},在該方向底下 ${p.si}-${p.sj} 是最可能的比分 ${pSel.toFixed(1)}%${alt?`,次選 ${alt[0]}-${alt[1]} ${alt[2].toFixed(1)}%`:""}${p.mk?" · 已含市場賠率":""} —— 點「詳細分析」看完整依據`;
   }catch(e){ return ""; }
 }
 /* e163:列表上缺交手紀錄的比賽(雲端還沒抓到的)→ 前端逐一補抓,一次最多 8 場、每場間隔 250ms,
