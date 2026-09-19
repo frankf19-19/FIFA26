@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e205";
+const BUILD = "e206";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2881,6 +2881,7 @@ function renderTodaySection(){
           <span class="tp-bar"><i class="a" style="width:${p.A}%"></i><i class="d" style="width:${p.D}%"></i><i class="h" style="width:${p.H}%"></i></span>
           <span class="tp-pct">客 ${Math.round(p.A)}% · 和 ${Math.round(p.D)}% · 主 ${Math.round(p.H)}%</span>
           ${p.mk?`<span class="tp-mk">含市場賠率</span>`:""}
+          ${(()=>{ try{ if(!p.mkp||p.hs!=null) return ""; const mk=p.mkp; const mkK=(mk.H>=mk.D&&mk.H>=mk.A)?"H":((mk.A>=mk.D&&mk.A>=mk.H)?"A":"D"); const myK=pickDirOf(p); if(mkK===myK) return ""; const gap=Math.abs(({H:p.H,D:p.D,A:p.A})[myK]-({H:mk.H,D:mk.D,A:mk.A})[myK]); if(gap<6) return ""; const nm={H:zhName(g.hn),D:"和局",A:zhName(g.an)}[mkK]; return `<span class="tp-nodata" style="color:var(--gold);border-color:rgba(230,190,90,.45)" title="e206:市場(賠率)看好 ${nm} ${Math.round(({H:mk.H,D:mk.D,A:mk.A})[mkK])}%,與模型看好不同、機率差 ${gap.toFixed(0)} 點。純模型時期實測:模型與市場分歧的 74 場,模型只對 14 場、市場對 42 場;分歧超過 12 點時 8 比 27。這場請把模型當第二意見看。">⚠ 市場看好 ${nm}</span>`; }catch(e){ return ""; } })()}
           ${(p.dq!=null&&p.dq<0.2)?`<span class="tp-nodata" title="可用資料較少,預測已向基準率收縮,信心較低">⚠ 資料有限</span>`:""}
           ${(()=>{const t=twslOf(g); if(!t) return "";
             return `<span class="tp-twsl" title="台灣運彩場中盤口${t.no?" · 場次 "+t.no:""}">運彩 ${t.odds?`${t.odds.a} / ${t.odds.d} / ${t.odds.h}`:"場中開盤"}</span>`;})()}
