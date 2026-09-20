@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e206";
+const BUILD = "e207";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1926,8 +1926,15 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
   const _gb=_sf?_gbAll:best[predOut];
   if(_sf) predOut=(_gb.i>_gb.j)?"H":((_gb.i===_gb.j)?"D":"A");
   const si=_gb.i, sj=_gb.j;
-  // e168:Top-3 波膽同樣限定在看好方向底下(與全中制度一致)
-  const _sc3=_cells.filter(c=>(c.i>c.j?"H":c.i===c.j?"D":"A")===predOut).slice(0,3).map(c=>({i:c.i,j:c.j,p:+(c.p/t*100).toFixed(1)}));   // 與看好方向一致的 Top-3
+  /* e207:Top-3 改為「看好方向 2 格 + 最佳和局格」。
+     純模型時期 489 場實測:實際比分 26% 是和局(1-1 最常見,佔 10.4%),但「同方向 3 格」永遠碰不到和局,
+     Top-3 只有 19.8%;換成 2 格同方向 + 1 格和局 → 26.0%(+6.2 點)。
+     看好方向與主比分(全中判定)完全不變,只是第三格改押最可能的和局比分。看好和局時維持同方向 3 格。 */
+  const _dirOf=c=>(c.i>c.j?"H":c.i===c.j?"D":"A");
+  const _same=_cells.filter(c=>_dirOf(c)===predOut);
+  const _bestDraw=_cells.find(c=>c.i===c.j);
+  const _pick3=(predOut!=="D"&&_bestDraw)?_same.slice(0,2).concat([_bestDraw]):_same.slice(0,3);
+  const _sc3=_pick3.map(c=>({i:c.i,j:c.j,p:+(c.p/t*100).toFixed(1)}));
   const top=Math.max(H,D,A);
   // 信心分級同時看機率高度與資料品質:資料不足時不給「高」
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
