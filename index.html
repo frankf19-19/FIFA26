@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e209";
+const BUILD = "e210";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1920,6 +1920,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
   }
   // 預測結果與顯示比分保持一致:先定結果,再取該結果下最可能的比分
   let predOut = H>=D&&H>=A ? "H" : A>=D&&A>=H ? "A" : "D";   // e171:比分優先時會被下方的比分方向覆寫
+  let _drawBold=0;   // e210
   /* e171:比分優先 —— 一切判斷以「預估比分」為主。
        先取全部比分中機率最高的一格,方向直接由那一格決定(比分是主隊贏 → 看好主隊)。
        全中 = 比分完全正確 ｜ 命中 = 比分的方向正確 ｜ 未中 = 方向也錯。
@@ -1929,8 +1930,14 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
        localStorage.setItem("euroSCOREFIRST","0") 後重新整理。 */
   const _gbAll=_cells[0];
   const _sf=SCORE_FIRST&&_gbAll;
-  const _gb=_sf?_gbAll:best[predOut];
+  let _gb=_sf?_gbAll:best[predOut];
   if(_sf) predOut=(_gb.i>_gb.j)?"H":((_gb.i===_gb.j)?"D":"A");
+  /* e210:大膽押和局 —— 當「最佳和局格」的加權機率 ≥ 1.3 × 看好方向的最佳格,就直接押和局比分,方向跟著改成和局。
+     489 場實測:全中 10.4%、方向命中 46.2% 都不變(bootstrap 差異為零),但會在約 9% 的場次押出和局,
+     而那些場次 35% 真的踢成和局(基準 26%)。門檻低於 1.3 就開始傷方向命中,高於 1.5 幾乎不觸發。 */
+  if(!_sf&&predOut!=="D"&&best.D&&best.D.pw!=null&&best[predOut]&&best[predOut].pw!=null&&best.D.pw>=1.3*best[predOut].pw){
+    predOut="D"; _gb=best.D; _drawBold=1;
+  }
   const si=_gb.i, sj=_gb.j;
   /* e207:Top-3 改為「看好方向 2 格 + 最佳和局格」。
      純模型時期 489 場實測:實際比分 26% 是和局(1-1 最常見,佔 10.4%),但「同方向 3 格」永遠碰不到和局,
@@ -1945,7 +1952,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
   // 信心分級同時看機率高度與資料品質:資料不足時不給「高」
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
   const pick = predOut==="H" ? homeName : predOut==="A" ? awayName : "和局";
-  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,sc3:_sc3,conf,pick,xi:_xi,mk:(!!mkt&&!PURE_MODE),mkAvail:!!mkt,pure:_pure,mkp:_mkp,mw:(PURE_MODE?0:_mw),h2s:_h2s,h2w:_h2w,h2:_h2,
+  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,sc3:_sc3,conf,pick,db:_drawBold,xi:_xi,mk:(!!mkt&&!PURE_MODE),mkAvail:!!mkt,pure:_pure,mkp:_mkp,mw:(PURE_MODE?0:_mw),h2s:_h2s,h2w:_h2w,h2:_h2,
           lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr,tier:_tierN,prc:_prc,prs:+_prs.toFixed(3),pw:PROC_W,plc:_plc,pls:_pls,plw:PL_W,wx:_wxc,wxf:+_wxf.toFixed(3)};
 }
 /* e145:列表上的一行比分理由(未完賽顯示;完賽由檢討行取代) */
