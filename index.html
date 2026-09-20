@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e207";
+const BUILD = "e208";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1868,7 +1868,13 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
     const k=i>j?"H":i===j?"D":"A";
     if(k==="H")H+=p;else if(k==="D")D+=p;else A+=p;
     _cells.push({p,i,j});
-    if(p>best[k].p) best[k]={p,i,j};}
+    /* e208:主比分挑選改用「機率 × (1+0.1×總進球)」而不是純機率。
+       Poisson 的眾數永遠低於平均,所以「方向內最高格」系統性押得太保守(2-1、1-0),
+       實際比賽卻常踢成 3-1、2-2 —— 489 場裡方向對比分錯的 178 場,118 場是「比預測多進球」。
+       加一點總進球權重把挑選往上推:全中 8.8% → 10.4%,bootstrap 改善機率 96%,5 段裡 3 勝 2 平無敗。
+       只影響主比分那一格(約 20% 場次會換格);方向、機率、Top-3 排序都不變。 */
+    const _pw=p*(1+0.10*(i+j));
+    if(_pw>(best[k].pw==null?-1:best[k].pw)) best[k]={p,i,j,pw:_pw};}
   const t=H+D+A; H=H/t*100;D=D/t*100;A=A/t*100;
   _cells.sort((x,y)=>y.p-x.p);   // e158:依機率排序,Top-3 波膽於方向決定後再挑(e168)
   // 和局錨定:Poisson 結構性低估和局(診斷實證)→ 拉向該聯賽近182天真實和局率
