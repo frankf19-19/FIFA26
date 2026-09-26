@@ -270,6 +270,39 @@ function buildTeamProfiles(){
     console.log("v26 球隊輪廓:"+Object.keys(out).length+" 隊 → teams.json");
   }catch(e){ console.log("v26 球隊輪廓失敗:", e.message); }
 }
+/* ===== v28:國家隊陣容強度(歐國聯)=====
+   國家隊一年只踢十場左右;但球員每週都在俱樂部比賽,我們有 31 萬筆逐場紀錄。
+   掃前後 3 週歐國聯賽程找出參賽國,抓名單,每位球員的俱樂部產出率(PR)排序取前 11 人加總 = 實力值 s。
+   不在 15 個聯賽的球員給保守底值 0.03。寫進 leagues["uefa.nations"].natT。 */
+async function buildNational(out){
+  try{
+    const PR=out.pr||{}, FLOOR=0.03, teams={};
+    const today=new Date();
+    for(let k=-21;k<=21;k++){
+      const d=new Date(today.getTime()+k*86400000);
+      try{ const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.nations/scoreboard?dates=${ymd(d)}`);
+        if(r.ok){ const j=await r.json();
+          for(const ev of (j.events||[])) for(const c of (((ev.competitions||[])[0]||{}).competitors||[])){ const t=c.team||{}; if(t.id) teams[t.id]=t.displayName||t.name||""; } }
+      }catch(e){}
+      await new Promise(r=>setTimeout(r,100));
+    }
+    const natT={}; let n=0;
+    for(const id in teams){
+      try{ const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.nations/teams/${id}/roster`);
+        if(!r.ok) continue; const j=await r.json();
+        const ath=(j.athletes||[]).flatMap(a=>a.items?a.items:[a]).filter(a=>a&&a.id);
+        if(!ath.length) continue;
+        const known=ath.filter(a=>PR[String(a.id)]!=null).length;
+        const rates=ath.map(a=>{ const v=PR[String(a.id)]; return v!=null?+v:FLOOR; }).sort((x,y)=>y-x);
+        natT[id]={s:+rates.slice(0,11).reduce((a,b)=>a+b,0).toFixed(3), cov:+(known/ath.length).toFixed(2), n:ath.length, nm:teams[id]};
+        n++;
+      }catch(e){}
+      await new Promise(r=>setTimeout(r,120));
+    }
+    if(n>0){ out.leagues["uefa.nations"]={nat:1, done:1, n:0, natT}; }
+    console.log("v28 國家隊陣容強度:"+n+" 隊");
+  }catch(e){ console.log("v28 國家隊失敗:", e.message); }
+}
 function buildPlayerIndex(){
   try{
     const shard={}; let rows=0;
@@ -715,6 +748,8 @@ function accProcess(T, hid, aid, hs, as, pr, w){
   try{ await understat(out); }catch(e){ console.log("understat 模組失敗:",e.message); }   // v17
   console.log("v23 逐場細節新增/更新 "+DET_N+" 場 → "+(DET_SEASON||"-"));
   detSave(); buildPlayerIndex(); buildTeamProfiles();   // v25/v26
-  buildXiBase(out); save(out, null);   // v16
+  buildXiBase(out);   // v16
+  await buildNational(out);   // v28
+  save(out, null);
   console.log("全部完成:", out.n, "場,", Object.keys(out.leagues).length, "個聯賽");
 })();
