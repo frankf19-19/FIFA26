@@ -316,6 +316,31 @@ async function buildNational(out){
     console.log("v28 國家隊陣容強度:"+n+" 隊");
   }catch(e){ console.log("v28 國家隊失敗:", e.message); }
 }
+/* ===== v30:精簡核心表 =====
+   前端 e212 的預期進球改由這張表算:每隊(依聯賽)120 天半衰期加權的 進球/失球/射正/被射正,以及聯賽場均與主場差。
+   與 463 場對照測試裡勝出的精簡模型完全同一套算法。 */
+function buildCore(out){
+  try{
+    const HALF=120, now=Date.now(), T={}, L={};
+    for(const id in MATCHES){ const M=MATCHES[id];
+      if(!M||M.hs==null||!M.d||!M.lg) continue;
+      const d=Date.parse(M.d+"T12:00:00Z"); if(!(d>0)) continue;
+      const w=Math.exp(-Math.LN2*((now-d)/86400000)/HALF);
+      const s=M.sot||[0,0], sh=+s[0]||0, sa=+s[1]||0, lg=M.lg;
+      const l=(L[lg]=L[lg]||[0,0,0,0]); l[0]+=w; l[1]+=w*(M.hs+M.as); l[2]+=w*(M.hs-M.as); l[3]++;
+      for(const [key,gf,ga,sf,sa2] of [[lg+"|"+M.hid,M.hs,M.as,sh,sa],[lg+"|"+M.aid,M.as,M.hs,sa,sh]]){
+        const t=(T[key]=T[key]||[0,0,0,0,0,0]); t[0]+=w*gf; t[1]+=w*ga; t[2]+=w*sf; t[3]+=w*sa2; t[4]+=w; t[5]++; }
+    }
+    const core={}; let nT=0;
+    for(const lg in L){ const l=L[lg]; if(l[3]<30) continue;
+      core[lg]={lgf:+(l[1]/l[0]/2).toFixed(4), lha:+(l[2]/l[0]/2).toFixed(4), t:{}}; }
+    for(const key in T){ const i=key.indexOf("|"), lg=key.slice(0,i), id=key.slice(i+1); const t=T[key];
+      if(!core[lg]||t[5]<5) continue;
+      core[lg].t[id]=[+(t[0]/t[4]).toFixed(4),+(t[1]/t[4]).toFixed(4),+(t[2]/t[4]).toFixed(4),+(t[3]/t[4]).toFixed(4),t[5]]; nT++; }
+    out.core=core;
+    console.log("v30 精簡核心表:"+Object.keys(core).length+" 聯賽、"+nT+" 隊");
+  }catch(e){ console.log("v30 核心表失敗:", e.message); }
+}
 function buildPlayerIndex(){
   try{
     const shard={}; let rows=0;
@@ -763,6 +788,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
   detSave(); buildPlayerIndex(); buildTeamProfiles();   // v25/v26
   buildXiBase(out);   // v16
   await buildNational(out);   // v28
+  buildCore(out);   // v30
   save(out, null);
   console.log("全部完成:", out.n, "場,", Object.keys(out.leagues).length, "個聯賽");
 })();
