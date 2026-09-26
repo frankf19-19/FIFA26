@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e210";
+const BUILD = "e211";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -759,6 +759,8 @@ const LEAGUES = [
   {id:"ned.1", zh:"荷甲", full:"荷蘭足球甲級聯賽", more:1},
   {id:"tur.1", zh:"土超", full:"土耳其足球超級聯賽", more:1},
   {id:"bel.1", zh:"比甲", full:"比利時足球甲級聯賽", more:1},
+  /* e211:歐國聯(國家隊)—— 用名單每位球員的俱樂部逐場產出評實力(calib v28 的 natT);結果記錄、評分,歸「另計」。 */
+  {id:"uefa.nations", zh:"歐國聯", full:"歐洲國家聯賽(國家隊)", more:1, nat:1},
 ];
 let curLeague = "usa.1";     // 預設美職聯(現在是賽季中;歐洲 8 月開賽後可自行切換)
 let curDate = new Date();
@@ -1645,7 +1647,7 @@ function cloudSquad(lg, tid, nm){
 /* 核心聯賽一律提供預測;僅非核心且 dq<0.2 才拒絕(目前清單全為核心) */
 function noPredGate(p,lg){
   const L0=LEAGUES.find(x=>x.id===lg);
-  if(L0&&(L0.core||L0.cup)) return false;
+  if(L0&&(L0.core||L0.cup||L0.nat)) return false;   // e211
   return p&&p.dq!=null&&p.dq<0.2;
 }
 let CLOUD_PRED=null;   // e140:雲端統一預測(cloud-pred.json):{sc, byKey}
@@ -1852,6 +1854,17 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
     const G=goalTuneOf(lg), S=gdScaleOf(lg);
     if(G!==1||S!==1){ const m=(lh+la)*G, r=Math.log(lh/la)*S; lh=m/(1+Math.exp(-r)); la=m-lh;
       lh=Math.max(0.2,Math.min(lh,4.2)); la=Math.max(0.2,Math.min(la,4.2)); } }
+  let _nat=null;      // e211
+  // e211:國家隊 —— 名單前 11 人的俱樂部產出率總和算實力比,覆蓋俱樂部模型
+  { const L0=LEAGUES.find(x=>x.id===lg);
+    const NT=L0&&L0.nat&&window.CLOUD&&window.CLOUD.leagues&&window.CLOUD.leagues[lg]&&window.CLOUD.leagues[lg].natT;
+    if(NT&&NT[String(hid)]&&NT[String(aid)]){
+      const th=NT[String(hid)], ta=NT[String(aid)];
+      const sh=Math.max(0.33,+th.s||0), sa=Math.max(0.33,+ta.s||0);
+      const r=Math.max(0.1,Math.min(10,sh/sa)), HA=1.12, B=1.30;
+      lh=Math.max(0.2,Math.min(4.2,B*Math.sqrt(r)*HA)); la=Math.max(0.2,Math.min(4.2,B/Math.sqrt(r)/HA));
+      _nat={h:+sh.toFixed(2),a:+sa.toFixed(2),ch:th.cov,ca:ta.cov};
+    } }
   let H=0,D=0,A=0;
   const best={H:{p:-1,i:1,j:0}, D:{p:-1,i:1,j:1}, A:{p:-1,i:0,j:1}};   // 各結果下最可能的單一比分
   // Dixon-Coles 低分修正:獨立卜瓦松會低估 0-0/1-1(和局),高估 1-0/0-1
@@ -1952,7 +1965,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
   // 信心分級同時看機率高度與資料品質:資料不足時不給「高」
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
   const pick = predOut==="H" ? homeName : predOut==="A" ? awayName : "和局";
-  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,sc3:_sc3,conf,pick,db:_drawBold,xi:_xi,mk:(!!mkt&&!PURE_MODE),mkAvail:!!mkt,pure:_pure,mkp:_mkp,mw:(PURE_MODE?0:_mw),h2s:_h2s,h2w:_h2w,h2:_h2,
+  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,sc3:_sc3,conf,pick,db:_drawBold,nat:_nat,xi:_xi,mk:(!!mkt&&!PURE_MODE),mkAvail:!!mkt,pure:_pure,mkp:_mkp,mw:(PURE_MODE?0:_mw),h2s:_h2s,h2w:_h2w,h2:_h2,
           lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr,tier:_tierN,prc:_prc,prs:+_prs.toFixed(3),pw:PROC_W,plc:_plc,pls:_pls,plw:PL_W,wx:_wxc,wxf:+_wxf.toFixed(3)};
 }
 /* e145:列表上的一行比分理由(未完賽顯示;完賽由檢討行取代) */
@@ -2228,6 +2241,7 @@ function analysisRows(hn,an,p,lg,hid,aid){
   rows.push(["結論", `${pickZh} 機率最高(${top.toFixed(1)}%),信心 ${p.conf}${p.conf==="低"?"(勢均力敵,參考性較低)":""}`]);
   const brain=brainRead(hn,an,p,lg);   // e195:把整張表想過一遍,放在最前面
   if(brain) rows.unshift(["🧠 AI 判讀", `<div style="line-height:1.75">${brain}</div>`]);
+  if(p.nat) rows.splice(1,0,["國家隊實力", `陣容強度 ${zhName(hn)} ${p.nat.h} · ${zhName(an)} ${p.nat.a}(名單前 11 人俱樂部逐場產出率總和;資料覆蓋 ${Math.round((p.nat.ch||0)*100)}% / ${Math.round((p.nat.ca||0)*100)}%,不在 15 個聯賽的球員以保守底值計)。國家隊預測歸「另計」,不進主統計。`]);
   return rows;
 }
 function reasonText(hn,an,p){
