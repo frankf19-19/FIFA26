@@ -93,6 +93,11 @@ async function understat(out){
 let UPR_HIT=0;
 const SHOTLOG={};   // v22:各聯賽射門座標覆蓋率(寫進 calib.json 的 shotLog)
 const PR_PRIOR=0.12, PR_K=6;   // v21:球員產出率收縮參數(聯盟平均約 0.12/場)
+/* v29:球員所屬聯賽(只給國家隊用)—— 同樣的場均產出,在英超和在土超代表的實力差很多。
+   俱樂部預測不受影響:先發強度是「今天的陣容 / 該隊平常的陣容」,同聯賽的係數會互相抵消。 */
+const PR_LG={};
+const LGF={"eng.1":1.00,"esp.1":0.95,"ger.1":0.92,"ita.1":0.92,"fra.1":0.85,"uefa.champions":1.00,"uefa.europa":0.85,
+  "por.1":0.70,"ned.1":0.70,"bel.1":0.62,"eng.2":0.62,"tur.1":0.60,"usa.1":0.58,"sco.1":0.55,"jpn.1":0.55};
 function buildXiBase(out){
   try{
     const PR={};
@@ -111,6 +116,7 @@ function buildXiBase(out){
           // v17:Understat 的 xG+xA 較不受幸運進球影響;有的話優先(依 名字|隊名 對應)
           try{ if(out.upr){ const tn=usNorm(nameOf.get(t)||""); const key=usNorm(a[1])+"|"+tn; if(out.upr[key]!=null){ v=out.upr[key]; UPR_HIT++; } } }catch(e){}
           PR[String(a[0])]=v;
+          if(!/^uefa\./.test(lg)||!PR_LG[String(a[0])]) PR_LG[String(a[0])]=lg;   // v29
         }
       }
     }
@@ -293,8 +299,15 @@ async function buildNational(out){
         const ath=(j.athletes||[]).flatMap(a=>a.items?a.items:[a]).filter(a=>a&&a.id);
         if(!ath.length) continue;
         const known=ath.filter(a=>PR[String(a.id)]!=null).length;
-        const rates=ath.map(a=>{ const v=PR[String(a.id)]; return v!=null?+v:FLOOR; }).sort((x,y)=>y-x);
-        natT[id]={s:+rates.slice(0,11).reduce((a,b)=>a+b,0).toFixed(3), cov:+(known/ath.length).toFixed(2), n:ath.length, nm:teams[id]};
+        /* v29:(1) 乘上球員所屬聯賽係數(英超 1.00 … 蘇超/日職 0.55);(2) 依位置組 XI:門將 1、後衛 4、中場 3、前鋒 3 */
+        const rt=a=>{ const v=PR[String(a.id)]; if(v==null) return FLOOR; return +v*(LGF[PR_LG[String(a.id)]]||0.7); };
+        const posOf=a=>{ const p=String(((a.position||{}).abbreviation)||((a.position||{}).name)||"").toUpperCase(); return p[0]==="G"?"G":p[0]==="D"?"D":p[0]==="M"?"M":(p[0]==="F"||p[0]==="A"||p[0]==="S")?"F":"M"; };
+        const pool={G:[],D:[],M:[],F:[]}; ath.forEach(a=>pool[posOf(a)].push(rt(a)));
+        for(const k in pool) pool[k].sort((x,y)=>y-x);
+        const need={G:1,D:4,M:3,F:3}; const xi=[], rest=[];
+        for(const k in pool){ xi.push(...pool[k].slice(0,need[k])); rest.push(...pool[k].slice(need[k])); }
+        rest.sort((x,y)=>y-x); while(xi.length<11&&rest.length) xi.push(rest.shift());
+        natT[id]={s:+xi.reduce((a,b)=>a+b,0).toFixed(3), cov:+(known/ath.length).toFixed(2), n:ath.length, nm:teams[id]};
         n++;
       }catch(e){}
       await new Promise(r=>setTimeout(r,120));
