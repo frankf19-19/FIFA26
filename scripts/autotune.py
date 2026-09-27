@@ -120,7 +120,65 @@ if gain>=0.0015:
     else: log_.append("未全過 → 維持現行")
 else:
     log_.append(f"保留改善只有 {gain:.4f} < 0.0015 → 維持現行")
+
+# ===== v4:比分挑選規則也自動調(目標 = 全中率,不是 Brier)=====
+#   sw:主比分挑選的進球權重(機率 × (1+sw×總進球))   dm:大膽押和局門檻(和局格 ≥ dm × 看好方向最佳格;99 = 關閉)
+#   閘門:保留區間全中率改善 ≥ 0.4 點、方向命中不得掉超過 0.3 點、時間 5 段至少 4 段不輸、bootstrap 改善機率 ≥ 85%
+def lam_rows(rows,xgw,shr,xik,hk):
+    out=[]
+    for v,(gfh,gah,sfh,sah),(gfa,gaa,sfa,saa),lgf,lha,rh,ra,d in rows:
+        afh=(1-xgw)*gfh+xgw*sfh*SC; adh=(1-xgw)*gah+xgw*sah*SC
+        afa=(1-xgw)*gfa+xgw*sfa*SC; ada=(1-xgw)*gaa+xgw*saa*SC
+        HK=(hk+0.5) if str(v.get('lg','')).startswith('uefa') else hk
+        lh=max(.15,lgf*exp(shr*(log(max(afh,.05)/lgf)+log(max(ada,.05)/lgf)))+lha*HK/2)
+        la=max(.15,lgf*exp(shr*(log(max(afa,.05)/lgf)+log(max(adh,.05)/lgf)))-lha*HK/2)
+        ap=lambda x: max(-.18,min(.18,xik*log(max(.4,min(1.8,x)))))
+        lh=max(.12,lh*exp(ap(rh))); la=max(.12,la*exp(ap(ra)))
+        M={(i,j):exp(pll(lh,i)+pll(la,j)) for i in range(8) for j in range(8)}
+        out.append((d,M,(min(v['hs'],7),min(v['as'],7))))
+    return out
+def _dir(i,j): return 'H' if i>j else ('D' if i==j else 'A')
+def pick(M,sw,dm):
+    H=sum(q for k,q in M.items() if k[0]>k[1]); D=sum(q for k,q in M.items() if k[0]==k[1]); A=sum(q for k,q in M.items() if k[0]<k[1])
+    pk='H' if H>=D and H>=A else ('A' if A>=D and A>=H else 'D')
+    W={k:q*(1+sw*(k[0]+k[1])) for k,q in M.items()}
+    same=max([(k,q) for k,q in W.items() if _dir(*k)==pk],key=lambda x:x[1])
+    if pk!='D':
+        bd=max([(k,q) for k,q in W.items() if k[0]==k[1]],key=lambda x:x[1])
+        if bd[1]>=dm*same[1]: return bd[0]
+    return same[0]
+try:
+    L=lam_rows(rows_for(best['half']),best['xgw'],best['shr'],best['xik'],best.get('hk',1.5))
+    HO=[x for x in L if x[0]>HOLD]
+    sel_cur={'sw':CUR.get('sw',0.10),'dm':CUR.get('dm',1.3)}
+    def sc(p,S): return [(1 if pick(M,p['sw'],p['dm'])==a else 0, 1 if _dir(*pick(M,p['sw'],p['dm']))==_dir(*a) else 0) for d,M,a in S]
+    base=sc(sel_cur,HO); be=sum(x[0] for x in base)/len(base); bh=sum(x[1] for x in base)/len(base)
+    cand=[]
+    for sw in [0.0,0.05,0.10,0.15,0.20]:
+        for dm in [1.2,1.3,1.4,99]:
+            p={'sw':sw,'dm':dm}
+            if p==sel_cur: continue
+            r=sc(p,HO); cand.append((sum(x[0] for x in r)/len(r), sum(x[1] for x in r)/len(r), p, r))
+    cand.sort(key=lambda c:-c[0]); ex,hh,pb,rb=cand[0]
+    log_.append(f"比分規則:現行 {sel_cur} 全中 {be:.1%} 方向 {bh:.1%};最佳 {pb} 全中 {ex:.1%} 方向 {hh:.1%}")
+    sel_best=dict(sel_cur); sel_changed=False
+    if ex-be>=0.004 and bh-hh<=0.003:
+        n=len(HO); seg=n//5; nl=0
+        for i in range(5):
+            a=base[i*seg:(i+1)*seg] if i<4 else base[4*seg:]; b=rb[i*seg:(i+1)*seg] if i<4 else rb[4*seg:]
+            if sum(x[0] for x in b)>=sum(x[0] for x in a): nl+=1
+        random.seed(5); w=0; pairs=list(zip(base,rb))
+        for _ in range(300):
+            S=[random.choice(pairs) for _ in range(n)]
+            if sum(y[0] for x,y in S)>sum(x[0] for x,y in S): w+=1
+        log_.append(f"比分規則閘門:全中 +{(ex-be)*100:.1f} 點、5 段不輸 {nl}/5、bootstrap {w/300:.0%}")
+        if nl>=4 and w/300>=0.85: sel_best=pb; sel_changed=True; log_.append("比分規則三關全過 → 更新")
+        else: log_.append("比分規則未全過 → 維持")
+    else: log_.append("比分規則:改善不足或傷到方向命中 → 維持")
+    best.update(sel_best); changed=changed or sel_changed
+except Exception as e:
+    log_.append("比分規則調參失敗:"+str(e)); best.setdefault('sw',CUR.get('sw',0.10)); best.setdefault('dm',CUR.get('dm',1.3))
 out={**best,'updated':datetime.datetime.now(datetime.timezone.utc).isoformat()[:16]+'Z','changed':changed,'holdout_n':len(hold_cur),'brier_cur':round(base_hold,4),'brier_best':round(top[1],4),'log':log_,
      'history':(CUR.get('history') or [])[-11:]+[{'t':datetime.datetime.now(datetime.timezone.utc).isoformat()[:10],'changed':changed,'cur':round(base_hold,4),'best':round(top[1],4),'p':top[2]}]}
 json.dump(out,open('tune.json','w'),ensure_ascii=False)
-print("\n".join(log_)); print("→",{k:best.get(k) for k in ('half','xgw','shr','xik','hk')},"changed" if changed else "unchanged")
+print("\n".join(log_)); print("→",{k:best.get(k) for k in ('half','xgw','shr','xik','hk','sw','dm')},"changed" if changed else "unchanged")

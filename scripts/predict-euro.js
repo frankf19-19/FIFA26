@@ -95,7 +95,9 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
 (async () => {
   try { const C = JSON.parse(fs.readFileSync("calib.json", "utf8"));
     for (const lg in (C.leagues || {})) { const T = C.leagues[lg] && C.leagues[lg].teams; if (!T) continue; for (const k in T) { const t = T[k]; if (t && t.$ && T[t.$]) T[k] = T[t.$]; } }   // v5:calib v12 別名還原
-    w.CLOUD = C; } catch (e) { console.log("calib.json 讀取失敗:", e.message); }
+    w.CLOUD = C;
+    try { w.TUNE = JSON.parse(fs.readFileSync("tune.json", "utf8")); } catch (e) { console.log("tune.json 讀取失敗:", e.message); }   // v14:雲端也套用每週自動調參(之前只有瀏覽器讀得到)
+  } catch (e) { console.log("calib.json 讀取失敗:", e.message); }
   // 雲端模式:關閉本機線上學習器以外的東西都照常;先用上次帳本算出學習參數
   try { m.computeTuning(); } catch (e) { console.log("computeTuning:", e.message); }
   // v9:傷停 API 對 18 個聯賽全部回傳 0 隊 0 人(實測 415 場鎖定快照無一場有傷停資料),每輪白打 18 次請求 → 停抓;先發名單層取代它
