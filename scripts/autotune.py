@@ -45,8 +45,11 @@ def build(half):
             for p in pl[side]:
                 if p[1]!=1 and not p[3]: continue
                 pw[p[0]]+=1; pv[p[0]]+=((p[G] or 0)+0.7*(p[A] or 0))
-        hist[kh].append((d,v['hs'],v['as'],(ts[0][SOT] or 0),(ts[1][SOT] or 0)))
-        hist[ka].append((d,v['as'],v['hs'],(ts[1][SOT] or 0),(ts[0][SOT] or 0)))
+        # v2:射正缺漏(雙 0)不能當 0(與 calib v31 同一修正)
+        s0,s1=(ts[0][SOT] or 0),(ts[1][SOT] or 0)
+        if s0+s1==0: s0,s1=v['hs']/SC,v['as']/SC
+        hist[kh].append((d,v['hs'],v['as'],s0,s1))
+        hist[ka].append((d,v['as'],v['hs'],s1,s0))
         lgh[lg].append((d,v['hs'],v['as']))
     return rows
 def brier_rows(rows,xgw,shr,xik):
@@ -54,8 +57,9 @@ def brier_rows(rows,xgw,shr,xik):
     for v,(gfh,gah,sfh,sah),(gfa,gaa,sfa,saa),lgf,lha,rh,ra,d in rows:
         afh=(1-xgw)*gfh+xgw*sfh*SC; adh=(1-xgw)*gah+xgw*sah*SC
         afa=(1-xgw)*gfa+xgw*sfa*SC; ada=(1-xgw)*gaa+xgw*saa*SC
-        lh=max(.15,lgf*exp(shr*(log(max(afh,.05)/lgf)+log(max(ada,.05)/lgf)))+lha/2)
-        la=max(.15,lgf*exp(shr*(log(max(afa,.05)/lgf)+log(max(adh,.05)/lgf)))-lha/2)
+        HK=2.0 if str(v.get('lg','')).startswith('uefa') else 1.5   # v2:與前端 e214 相同的主場加碼
+        lh=max(.15,lgf*exp(shr*(log(max(afh,.05)/lgf)+log(max(ada,.05)/lgf)))+lha*HK/2)
+        la=max(.15,lgf*exp(shr*(log(max(afa,.05)/lgf)+log(max(adh,.05)/lgf)))-lha*HK/2)
         ap=lambda x: max(-.18,min(.18,xik*log(max(.4,min(1.8,x)))))
         lh=max(.12,lh*exp(ap(rh))); la=max(.12,la*exp(ap(ra)))
         H=D=Aa=0
