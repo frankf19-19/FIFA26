@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e216";
+const BUILD = "e217";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1899,6 +1899,10 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
     if(i===1&&j===1) return Math.max(0.01, 1-RHO);
     return 1;
   };
+  /* e217:比分挑選兩個規則也交給每週自動調參(目標 = 全中率):sw 進球權重(0~0.3,預設 0.10)、dm 大膽和局門檻(1.1~99,預設 1.3;99 = 關閉) */
+  const _TT=window.TUNE||{};
+  const _SW=(_TT.sw!=null&&+_TT.sw>=0&&+_TT.sw<=0.3)?+_TT.sw:0.10;
+  const _DM=(_TT.dm!=null&&+_TT.dm>=1.1&&+_TT.dm<=99)?+_TT.dm:1.3;
   const _cells=[];                                          // e158:全部比分格,供 Top-3 波膽
   for(let i=0;i<8;i++)for(let j=0;j<8;j++){const p=poisson(i,lh)*poisson(j,la)*tau(i,j);
     const k=i>j?"H":i===j?"D":"A";
@@ -1909,7 +1913,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
        實際比賽卻常踢成 3-1、2-2 —— 489 場裡方向對比分錯的 178 場,118 場是「比預測多進球」。
        加一點總進球權重把挑選往上推:全中 8.8% → 10.4%,bootstrap 改善機率 96%,5 段裡 3 勝 2 平無敗。
        只影響主比分那一格(約 20% 場次會換格);方向、機率、Top-3 排序都不變。 */
-    const _pw=p*(1+0.10*(i+j));
+    const _pw=p*(1+_SW*(i+j));   // e217:進球權重由每週自動調參決定(tune.json 的 sw)
     if(_pw>(best[k].pw==null?-1:best[k].pw)) best[k]={p,i,j,pw:_pw};}
   const t=H+D+A; H=H/t*100;D=D/t*100;A=A/t*100;
   _cells.sort((x,y)=>y.p-x.p);   // e158:依機率排序,Top-3 波膽於方向決定後再挑(e168)
@@ -1971,7 +1975,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
   /* e210:大膽押和局 —— 當「最佳和局格」的加權機率 ≥ 1.3 × 看好方向的最佳格,就直接押和局比分,方向跟著改成和局。
      489 場實測:全中 10.4%、方向命中 46.2% 都不變(bootstrap 差異為零),但會在約 9% 的場次押出和局,
      而那些場次 35% 真的踢成和局(基準 26%)。門檻低於 1.3 就開始傷方向命中,高於 1.5 幾乎不觸發。 */
-  if(!_sf&&predOut!=="D"&&best.D&&best.D.pw!=null&&best[predOut]&&best[predOut].pw!=null&&best.D.pw>=1.3*best[predOut].pw){
+  if(!_sf&&predOut!=="D"&&best.D&&best.D.pw!=null&&best[predOut]&&best[predOut].pw!=null&&best.D.pw>=_DM*best[predOut].pw){   // e217:門檻 dm 自動調
     predOut="D"; _gb=best.D; _drawBold=1;
   }
   const si=_gb.i, sj=_gb.j;
