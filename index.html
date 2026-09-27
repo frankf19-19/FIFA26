@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e214";
+const BUILD = "e215";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1864,7 +1864,10 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
     if(CO&&th&&ta&&th[4]>=5&&ta[4]>=5){
       /* e214:主場優勢加碼 —— 9,067 場全帳本回測:核心預測主勝 40.7% vs 實際 43.5%(系統性低估);
          歐戰更明顯 42% vs 52%。國內 ×1.5、歐戰 ×2.0:時間切 6 段全勝,bootstrap 改善機率 100%。 */
-      const USE=0.7, SC=0.321, SHR=0.75, lgf=CO.lgf, lha=CO.lha*(/^uefa\./.test(lg)?2.0:1.5);
+      /* e215:射正權重與收縮改讀每週自動調參結果(tune.json 的 xgw / shr),大腦每週重驗後直接生效;限制在 0.5~0.9 / 0.6~0.9。 */
+      const _T=window.TUNE||{};
+      const USE=(+_T.xgw>=0.5&&+_T.xgw<=0.9)?+_T.xgw:0.7, SHR=(+_T.shr>=0.6&&+_T.shr<=0.9)?+_T.shr:0.75;
+      const SC=0.321, lgf=CO.lgf, lha=CO.lha*(/^uefa\./.test(lg)?2.0:1.5);
       const afh=(1-USE)*th[0]+USE*th[2]*SC, adh=(1-USE)*th[1]+USE*th[3]*SC;
       const afa=(1-USE)*ta[0]+USE*ta[2]*SC, ada=(1-USE)*ta[1]+USE*ta[3]*SC;
       let clh=Math.max(.15,lgf*Math.exp(SHR*(Math.log(Math.max(afh,.05)/lgf)+Math.log(Math.max(ada,.05)/lgf)))+lha/2);
@@ -3785,10 +3788,14 @@ function renderWeekly(){
   const lg=Object.entries(byl).filter(([k,v])=>v.length>=6).map(([k,v])=>[k,v.filter(s=>s.hit).length/v.length,v.length]).sort((a,b)=>a[1]-b[1]);
   if(lg.length) L.push(`<b>分聯賽</b>:最差 ${lgZh(lg[0][0])} ${pct(lg[0][1])}(${lg[0][2]} 場) · 最好 ${lgZh(lg[lg.length-1][0])} ${pct(lg[lg.length-1][1])}(${lg[lg.length-1][2]} 場)`);
   const T=window.TUNE;
+  const ce=cur.filter(s=>s.pred&&s.pred.core), oe=cur.filter(s=>s.pred&&!s.pred.core);   // e215:引擎對照
+  if(ce.length>=5) L.push(`<b>引擎對照</b>:精簡核心 ${ce.length} 場命中 ${pct(ce.filter(s=>s.hit).length/ce.length)}${oe.length>=5?` · 舊模型(資料不足退回)${oe.length} 場 ${pct(oe.filter(s=>s.hit).length/oe.length)}`:""} —— 全帳本回測核心為 50.9%`);
   const cand=[
-    ["自動調參(4 核心參數,54 組)", T?(T.changed?"本週已更新":"已驗證,現行最佳("+String(T.updated).slice(5,10)+")"):"等 tune.json"],
-    ["主場係數 30 天校正", Math.abs(worst[1])>=6&&worst[0]==="H"?"進行中,尚未收斂":"已收斂"],
-    ["比分挑選:進球權重 + Top-3 含和局", "已上線(e207/e208),觀察 200 場"],
+    ["精簡核心(取代 21 層疊加)", "已上線(e212);463 場對照 46.2%→49.2%"],
+    ["射正缺漏修正(英冠 42% 場次)", "已上線(calib v31);全帳本 49.5%→50.6%"],
+    ["主場加碼(國內 ×1.5、歐戰 ×2.0)", "已上線(e214);6 段全勝"],
+    ["自動調參 → 直接驅動核心", T?(T.changed?"本週已更新參數":"已驗證,現行最佳("+String(T.updated).slice(5,10)+")"):"等 tune.json"],
+    ["比分挑選:進球權重 + Top-3 含和局 + 大膽和局", "已上線(e207/e208/e210)"],
     ["球員逐場模型", "等資料:需每人 ≥50 場,現約 2,500 人達標"],
     ["射門/角球/控球/裁判/陣型/觀眾", "已測,無增量,不再納入"],
     ["市場賠率當特徵", "已排除(純模型原則);列表以「市場看好」標籤提示"]
