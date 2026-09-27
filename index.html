@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e215";
+const BUILD = "e216";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1867,7 +1867,9 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
       /* e215:射正權重與收縮改讀每週自動調參結果(tune.json 的 xgw / shr),大腦每週重驗後直接生效;限制在 0.5~0.9 / 0.6~0.9。 */
       const _T=window.TUNE||{};
       const USE=(+_T.xgw>=0.5&&+_T.xgw<=0.9)?+_T.xgw:0.7, SHR=(+_T.shr>=0.6&&+_T.shr<=0.9)?+_T.shr:0.75;
-      const SC=0.321, lgf=CO.lgf, lha=CO.lha*(/^uefa\./.test(lg)?2.0:1.5);
+      // e216:主場加碼也由每週自動調參決定(tune.json 的 hk,國內 hk、歐戰 hk+0.5;限 1.0~2.5,沒有就 1.5)
+      const HK=(+_T.hk>=1&&+_T.hk<=2.5)?+_T.hk:1.5;
+      const SC=0.321, lgf=CO.lgf, lha=CO.lha*(/^uefa\./.test(lg)?HK+0.5:HK);
       const afh=(1-USE)*th[0]+USE*th[2]*SC, adh=(1-USE)*th[1]+USE*th[3]*SC;
       const afa=(1-USE)*ta[0]+USE*ta[2]*SC, ada=(1-USE)*ta[1]+USE*ta[3]*SC;
       let clh=Math.max(.15,lgf*Math.exp(SHR*(Math.log(Math.max(afh,.05)/lgf)+Math.log(Math.max(ada,.05)/lgf)))+lha/2);
