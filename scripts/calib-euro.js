@@ -326,7 +326,11 @@ function buildCore(out){
       if(!M||M.hs==null||!M.d||!M.lg) continue;
       const d=Date.parse(M.d+"T12:00:00Z"); if(!(d>0)) continue;
       const w=Math.exp(-Math.LN2*((now-d)/86400000)/HALF);
-      const s=M.sot||[0,0], sh=+s[0]||0, sa=+s[1]||0, lg=M.lg;
+      /* v31:射正缺漏不能當成 0 —— 英冠 42% 的場次 ESPN 沒給射正(記成 0-0),比甲/蘇超也有缺。
+         當成 0 會把預期進球壓到谷底 → 英冠一律看好和局(預測和 46% vs 實際 27%)。
+         修正:缺漏時用該場實際進球代替。全帳本 9,067 場回測:命中 49.5% → 50.6%、Brier 0.6178 → 0.6062;英冠 36% → 45%。 */
+      const s0=M.sot, ok=Array.isArray(s0)&&((+s0[0]||0)+(+s0[1]||0))>0, SCv=0.321;
+      const sh=ok?(+s0[0]||0):M.hs/SCv, sa=ok?(+s0[1]||0):M.as/SCv, lg=M.lg;
       const l=(L[lg]=L[lg]||[0,0,0,0]); l[0]+=w; l[1]+=w*(M.hs+M.as); l[2]+=w*(M.hs-M.as); l[3]++;
       for(const [key,gf,ga,sf,sa2] of [[lg+"|"+M.hid,M.hs,M.as,sh,sa],[lg+"|"+M.aid,M.as,M.hs,sa,sh]]){
         const t=(T[key]=T[key]||[0,0,0,0,0,0]); t[0]+=w*gf; t[1]+=w*ga; t[2]+=w*sf; t[3]+=w*sa2; t[4]+=w; t[5]++; }
