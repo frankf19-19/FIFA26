@@ -17,7 +17,7 @@ END=dt(R[-1][1]['d']); HOLD=END-datetime.timedelta(days=120)
 SC=0.321; SOT=8; G,A=7,8; PRIOR=0.12; K=6
 try: CUR=json.load(open('tune.json'))
 except Exception: CUR={}
-cur={'half':CUR.get('half',120),'xgw':CUR.get('xgw',0.7),'shr':CUR.get('shr',0.75),'xik':CUR.get('xik',0.30)}
+cur={'half':CUR.get('half',120),'xgw':CUR.get('xgw',0.7),'shr':CUR.get('shr',0.75),'xik':CUR.get('xik',0.30),'hk':CUR.get('hk',1.5)}   # v3:主場加碼也自動調
 def pll(l,k): return -l+k*log(max(l,1e-9))-lgamma(k+1)
 def build(half):
     hist=collections.defaultdict(list); lgh=collections.defaultdict(list); xib=collections.defaultdict(list)
@@ -52,12 +52,12 @@ def build(half):
         hist[ka].append((d,v['as'],v['hs'],s1,s0))
         lgh[lg].append((d,v['hs'],v['as']))
     return rows
-def brier_rows(rows,xgw,shr,xik):
+def brier_rows(rows,xgw,shr,xik,hk=1.5):
     out=[]
     for v,(gfh,gah,sfh,sah),(gfa,gaa,sfa,saa),lgf,lha,rh,ra,d in rows:
         afh=(1-xgw)*gfh+xgw*sfh*SC; adh=(1-xgw)*gah+xgw*sah*SC
         afa=(1-xgw)*gfa+xgw*sfa*SC; ada=(1-xgw)*gaa+xgw*saa*SC
-        HK=2.0 if str(v.get('lg','')).startswith('uefa') else 1.5   # v2:與前端 e214 相同的主場加碼
+        HK=(hk+0.5) if str(v.get('lg','')).startswith('uefa') else hk   # v3:與前端 e214 相同的主場加碼
         lh=max(.15,lgf*exp(shr*(log(max(afh,.05)/lgf)+log(max(ada,.05)/lgf)))+lha*HK/2)
         la=max(.15,lgf*exp(shr*(log(max(afa,.05)/lgf)+log(max(adh,.05)/lgf)))-lha*HK/2)
         ap=lambda x: max(-.18,min(.18,xik*log(max(.4,min(1.8,x)))))
@@ -79,23 +79,24 @@ def rows_for(half):
     return rows_cache[half]
 def evaluate(params):
     rows=rows_for(params['half'])
-    b=brier_rows(rows,params['xgw'],params['shr'],params['xik'])
+    b=brier_rows(rows,params['xgw'],params['shr'],params['xik'],params.get('hk',1.5))
     hold=[x for x in b if x[0]>HOLD]; tune=[x for x in b if x[0]<=HOLD and x[0]>HOLD-datetime.timedelta(days=540)]
     return b,hold,tune
 b_cur,hold_cur,tune_cur=evaluate(cur)
 base_hold=sum(x[1] for x in hold_cur)/len(hold_cur)
 log_.append(f"現行 {cur} 保留區間 Brier {base_hold:.4f}(n={len(hold_cur)})")
-grid={'half':[90,120,150],'xgw':[0.6,0.7,0.8],'shr':[0.65,0.75,0.85],'xik':[0.2,0.3]}
+grid={'half':[90,120,150],'xgw':[0.6,0.7,0.8],'shr':[0.65,0.75,0.85],'xik':[0.2,0.3],'hk':[1.0,1.5,2.0]}
 cands=[]
 for h in grid['half']:
     for x in grid['xgw']:
         for s in grid['shr']:
             for k in grid['xik']:
-                p={'half':h,'xgw':x,'shr':s,'xik':k}
+              for hk in grid['hk']:
+                p={'half':h,'xgw':x,'shr':s,'xik':k,'hk':hk}
                 if p==cur: continue
                 b,hold,tune=evaluate(p)
                 cands.append((sum(x[1] for x in tune)/len(tune), sum(x[1] for x in hold)/len(hold), p))
-cands.sort()
+cands.sort(key=lambda c:c[0])
 top=cands[0]; log_.append(f"調參區間最佳 {top[2]} 調參 Brier {top[0]:.4f} 保留 {top[1]:.4f}")
 gain=base_hold-top[1]
 changed=False
@@ -122,4 +123,4 @@ else:
 out={**best,'updated':datetime.datetime.now(datetime.timezone.utc).isoformat()[:16]+'Z','changed':changed,'holdout_n':len(hold_cur),'brier_cur':round(base_hold,4),'brier_best':round(top[1],4),'log':log_,
      'history':(CUR.get('history') or [])[-11:]+[{'t':datetime.datetime.now(datetime.timezone.utc).isoformat()[:10],'changed':changed,'cur':round(base_hold,4),'best':round(top[1],4),'p':top[2]}]}
 json.dump(out,open('tune.json','w'),ensure_ascii=False)
-print("\n".join(log_)); print("→",{k:best[k] for k in ('half','xgw','shr','xik')},"changed" if changed else "unchanged")
+print("\n".join(log_)); print("→",{k:best.get(k) for k in ('half','xgw','shr','xik','hk')},"changed" if changed else "unchanged")

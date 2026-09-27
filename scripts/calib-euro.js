@@ -321,7 +321,9 @@ async function buildNational(out){
    與 463 場對照測試裡勝出的精簡模型完全同一套算法。 */
 function buildCore(out){
   try{
-    const HALF=120, now=Date.now(), T={}, L={};
+    // v32:半衰期由每週自動調參決定(tune.json 的 half,限 60~240 天,沒有就 120)
+    let HALF=120; try{ const tj=JSON.parse(fs.readFileSync("tune.json","utf8")); if(+tj.half>=60&&+tj.half<=240) HALF=+tj.half; }catch(e){}
+    const now=Date.now(), T={}, L={};
     for(const id in MATCHES){ const M=MATCHES[id];
       if(!M||M.hs==null||!M.d||!M.lg) continue;
       const d=Date.parse(M.d+"T12:00:00Z"); if(!(d>0)) continue;
