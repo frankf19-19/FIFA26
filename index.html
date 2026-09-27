@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e212";
+const BUILD = "e213";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2131,6 +2131,8 @@ function brainRead(hn,an,p,lg){
     if(p.ps){ const d=(p.ps.h-p.ps.a)*0.004; push(d, `球風:控球 ${hz} ${p.ps.h}%、${az} ${p.ps.a}%`); }
     if(p.mv) push(p.mv, `動機情境:${p.mv>0?hz:az} 這階段更有企圖`);
     if(p.eu) push(p.eu, `歐戰擁擠度:${p.eu>0?az:hz} 賽程較滿`);
+    // e213:精簡核心模式下,只有先發陣容真的影響預期進球;其他層不再進計算,不能拿來當「依據」
+    if(p.core){ for(let i=F.length-1;i>=0;i--) if(!/^先發陣容/.test(F[i].t)) F.splice(i,1); }
     F.sort((a,b)=>Math.abs(b.v)-Math.abs(a.v));
     if(brainRead._want){ brainRead._out=F; }   // e196:賽後複盤要用同一份排序
     const sign=dirK==="H"?1:(dirK==="A"?-1:0);
@@ -2138,6 +2140,7 @@ function brainRead(hn,an,p,lg){
     const con=F.filter(f=>sign===0?true:f.v*sign<0).slice(0,2);
     const L=[];
     const lvl = top>=60?"相當明確":(top>=48?"傾向":"沒有明顯優勢");
+    if(p.core) L.push(`<span style="color:var(--muted);font-size:12px">預測引擎:精簡核心(兩隊近期攻守 + 射正 xG + 收縮 + 120 天衰減${p.xi?" + 當日先發陣容":""})—— 463 場對照勝過舊的多層模型</span>`);
     L.push(`<b>主論點</b>:這場我看好 <b>${favZ}</b>(${top.toFixed(0)}%),${lvl}。預期進球 ${hz} ${p.lh}、${az} ${p.la},差距 ${edge.toFixed(2)} 球,總進球水位 ${tot.toFixed(2)}${tot>=3.2?"(偏高)":(tot<=2.4?"(偏低)":"")};在這個方向底下最可能的比分是 ${p.si}-${p.sj}。`);
     if(pro.length) L.push(`<b>主要依據</b>(依實際影響力排序):${pro.map((f,i)=>`${i+1}. ${f.t}(${f.v>0?"利主":"利客"} ${Math.abs(f.v).toFixed(2)} 球)`).join(" ｜ ")}`);
     if(con.length) L.push(`<b>反面因素</b>:${con.map(f=>`${f.t}(反向 ${Math.abs(f.v).toFixed(2)} 球)`).join(" ｜ ")} —— 這些與結論相反,已計入機率,不是被忽略。`);
@@ -2257,6 +2260,7 @@ function analysisRows(hn,an,p,lg,hid,aid){
   rows.push(["結論", `${pickZh} 機率最高(${top.toFixed(1)}%),信心 ${p.conf}${p.conf==="低"?"(勢均力敵,參考性較低)":""}`]);
   const brain=brainRead(hn,an,p,lg);   // e195:把整張表想過一遍,放在最前面
   if(brain) rows.unshift(["🧠 AI 判讀", `<div style="line-height:1.75">${brain}</div>`]);
+  if(p.core) rows.splice(1,0,["預測引擎", `<span style="color:var(--gold)">精簡核心</span>:預期進球只由「兩隊近 120 天攻守 + 射正 xG + 向聯賽均值收縮」算出,再套當日先發陣容。下方其餘各層<b>僅供參考,不影響本場預測</b> —— 同一批 463 場對照,多層疊加反而較差(46.2% vs 49.2%)。`]);   // e213
   if(p.nat) rows.splice(1,0,["國家隊實力", `陣容強度 ${zhName(hn)} ${p.nat.h} · ${zhName(an)} ${p.nat.a}(名單前 11 人俱樂部逐場產出率總和;資料覆蓋 ${Math.round((p.nat.ch||0)*100)}% / ${Math.round((p.nat.ca||0)*100)}%,不在 15 個聯賽的球員以保守底值計)。國家隊預測歸「另計」,不進主統計。`]);
   return rows;
 }
