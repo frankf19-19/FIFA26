@@ -5,7 +5,8 @@
 const { execSync } = require("child_process");
 const fs = require("fs");
 const LEAGUES = ["eng.1","esp.1","ita.1","ger.1","fra.1","uefa.champions","uefa.europa","usa.1","jpn.1","eng.2","sco.1",
-  "por.1","ned.1","tur.1","bel.1"];   // v12:葡超/荷甲/土超/比甲 —— 只為歐冠/歐霸對手提供球隊資料(前端不列賽程)
+  "por.1","ned.1","tur.1","bel.1",
+  "uefa.nations"];   // v33:歐國聯也進帳本 —— 賽果、逐場細節、每位國腳的國家隊出賽都要記錄(之前只算陣容強度,比賽本身沒存)
 const WEEKS = 26;
 /* v15:時間衰減半衰期 —— 原本 60 天。用 2279 場帳本做滾動回測(以最後 120 天為保留區間、
    完全不參與調參),60 天:Brier 0.6617/命中 44.8%;120 天:Brier 0.6356/命中 47.1%。
@@ -102,6 +103,7 @@ function buildXiBase(out){
   try{
     const PR={};
     for(const lg in (out.leagues||{})){
+      if(lg==="uefa.nations") continue;   // v33:國家隊出賽不算進球員的「俱樂部產出率」(那是國家隊實力用的輸入,不能循環)
       const T=(out.leagues[lg]||{}).teams||{};
       const nameOf=new Map(); for(const k in T){ if(k[0]!=="#"&&T[k]&&!T[k].$) nameOf.set(T[k],k); }   // v17:別名鍵 → 隊名
       for(const k in T){ const t=T[k];
@@ -312,7 +314,7 @@ async function buildNational(out){
       }catch(e){}
       await new Promise(r=>setTimeout(r,120));
     }
-    if(n>0){ out.leagues["uefa.nations"]={nat:1, done:1, n:0, natT}; }
+    if(n>0){ out.leagues["uefa.nations"]=Object.assign(out.leagues["uefa.nations"]||{done:1,n:0},{nat:1, natT}); }   // v33:合併,不覆蓋帳本算出的球隊資料
     console.log("v28 國家隊陣容強度:"+n+" 隊");
   }catch(e){ console.log("v28 國家隊失敗:", e.message); }
 }
