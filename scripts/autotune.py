@@ -85,7 +85,8 @@ def evaluate(params):
 b_cur,hold_cur,tune_cur=evaluate(cur)
 base_hold=sum(x[1] for x in hold_cur)/len(hold_cur)
 log_.append(f"現行 {cur} 保留區間 Brier {base_hold:.4f}(n={len(hold_cur)})")
-grid={'half':[90,120,150],'xgw':[0.6,0.7,0.8],'shr':[0.65,0.75,0.85],'xik':[0.2,0.3],'hk':[1.0,1.5,2.0]}
+# v5:格點外推 —— 上次選到的 half=150、shr=0.85 都在格點邊界,外推回測(3,751 場保留)Brier 持續改善、5 段全勝
+grid={'half':[120,150,180,210],'xgw':[0.5,0.6,0.7],'shr':[0.85,0.95,1.05,1.15],'xik':[0.2,0.3],'hk':[1.0,1.5,2.0]}
 cands=[]
 for h in grid['half']:
     for x in grid['xgw']:
