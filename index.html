@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e219";
+const BUILD = "e220";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2003,6 +2003,40 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
           lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr,tier:_tierN,prc:_prc,prs:+_prs.toFixed(3),pw:PROC_W,plc:_plc,pls:_pls,plw:PL_W,wx:_wxc,wxf:+_wxf.toFixed(3)};
 }
 /* e145:列表上的一行比分理由(未完賽顯示;完賽由檢討行取代) */
+/* e220:高比分押法(並列追蹤,不影響主比分與全中判定)。
+   規則:預期總進球 ≥3.0 時,改押「看好方向內、總進球 ≥4 的最可能比分」(3-1、3-2、4-1…;看好和局時押 2-2);否則與主比分相同。
+   完全由鎖定的 λ 與主比分推導,所以舊的鎖定紀錄也能回溯計算,兩種押法用同一批比賽比較。 */
+const HI_ALT_T=3.0;
+function hiAltPick(p){
+  try{
+    if(!p||p.lh==null||p.la==null||p.si==null||p.sj==null) return null;
+    const lh=+p.lh, la=+p.la; if(!(lh>0&&la>0)) return null;
+    if(lh+la<HI_ALT_T) return {i:+p.si,j:+p.sj,same:true};
+    const dir=p.si>p.sj?1:(p.si<p.sj?-1:0), f=k=>{let r=1;for(let q=2;q<=k;q++)r*=q;return r;};
+    let b=null,bp=-1;
+    for(let i=0;i<=7;i++)for(let j=0;j<=7;j++){ if(i+j<4) continue; const dd=i>j?1:(i<j?-1:0); if(dd!==dir) continue;
+      const pr=Math.exp(-lh)*Math.pow(lh,i)/f(i)*Math.exp(-la)*Math.pow(la,j)/f(j); if(pr>bp){bp=pr;b={i,j,p:pr};} }
+    if(!b) return {i:+p.si,j:+p.sj,same:true};
+    return {i:b.i,j:b.j,p:b.p,same:(b.i===+p.si&&b.j===+p.sj)};
+  }catch(e){ return null; }
+}
+function renderAltDuel(){
+  const S=Object.values(scGet()).filter(s=>s&&!s.void&&s.hs!=null&&s.fzT&&(s.fz||s.pred));
+  const rows=[]; let n=0,ex=0,ax=0,fired=0,fEx=0,fAx=0;
+  const W=7*86400000, now=Date.now(); let wn=0,wex=0,wax=0;
+  for(const s of S){ const P=s.fz||s.pred; const a=hiAltPick(P); if(!a) continue;
+    const e1=(+P.si===s.hs&&+P.sj===s.as), e2=(a.i===s.hs&&a.j===s.as);
+    n++; ex+=e1; ax+=e2; if(!a.same){ fired++; fEx+=e1; fAx+=e2; }
+    if(s.fzT>=now-W){ wn++; wex+=e1; wax+=e2; } }
+  if(n<10) return "";
+  const pc=(a,b)=>b?(a/b*100).toFixed(1)+"%":"—";
+  const lead=ax>ex?`<span style="color:var(--hit)">高比分押法領先 ${ax-ex} 場</span>`:(ax<ex?`<span style="color:var(--gold)">主比分押法領先 ${ex-ax} 場</span>`:"兩者打平");
+  return `<div style="margin:14px 0 6px"><div style="font-family:var(--cond);font-weight:700;letter-spacing:.06em;margin-bottom:6px">🎯 正確比分對決:主比分 vs 高比分押法<span style="font-weight:normal;color:var(--muted);font-size:11px;margin-left:8px">自動統計 · 同一批鎖定比賽</span></div>
+  <div style="font-size:12.5px;line-height:1.8">全部 ${n} 場:主比分全中 <b>${ex}</b> 場(${pc(ex,n)}) · 高比分押法全中 <b>${ax}</b> 場(${pc(ax,n)}) —— ${lead}<br>
+  兩者押不同比分的 ${fired} 場(預期總進球 ≥${HI_ALT_T}):主比分中 ${fEx} · 高比分中 ${fAx}<br>
+  近 7 天 ${wn} 場:主比分中 ${wex} · 高比分中 ${wax}<br>
+  <span style="color:var(--muted);font-size:11px">高比分押法 = 預期總進球 ≥${HI_ALT_T} 時押看好方向裡總進球 ≥4 的最可能比分(3-1、3-2、4-1…);歷史回測 9,463 場約每 100 場少中 1 場。若實戰持續領先,會改為主比分押法。</span></div></div>`;
+}
 /* e219:進球水位 —— 模型對「這場會進幾球」的判斷。單一比分天生集中在 1-1/2-1/1-0(球越多、組合越多、每格越薄),
    但模型其實知道哪場會是大比分局,這一行把它講出來:總進球預期、3/4 球以上機率,以及大比分時最可能的高比分。
    3,786 場驗證:模型說「4 球以上 ≥40%」的場次,實際 46~58% 踢出 4 球以上;有把握時(≥65% 或 ≤35%)大小 2.5 方向準 71%。 */
@@ -2020,7 +2054,8 @@ function goalLevelLine(p){
       cells.sort((a,b)=>b[2]-a[2]);
       hc=` · 高比分候選(客-主) ${cells.slice(0,3).map(c=>`${c[1]}-${c[0]} ${(c[2]*100).toFixed(1)}%`).join(" / ")}`;
     }
-    return `<span style="color:${col}">⚽ 進球水位 ${t.toFixed(1)} 球(${lab})</span> · 3 球以上 ${Math.round(p3*100)}% · 4 球以上 ${Math.round(p4*100)}%${hc}`;
+    const _al=hiAltPick(p); const altTxt=(_al&&!_al.same)?` · <b style="color:var(--gold)">🎯 高比分押法 ${_al.j}-${_al.i}</b>(客-主)`:"";
+    return `<span style="color:${col}">⚽ 進球水位 ${t.toFixed(1)} 球(${lab})</span> · 3 球以上 ${Math.round(p3*100)}% · 4 球以上 ${Math.round(p4*100)}%${altTxt}${hc}`;
   }catch(e){ return ""; }
 }
 function scoreReasonLine(p,hz,az){
@@ -4020,7 +4055,7 @@ function renderInsights(){
     <div style="margin-top:6px">${CLOUD_PRED?`<span id="cloudPredTag" style="color:var(--hit)">☁ 雲端統一預測 · 更新 ${String(CLOUD_PRED.updated||"").replace("T"," ").slice(5,16)} · 帳本 ${CLOUD_PRED.n||0} 筆</span> —— 預測與學習參數由雲端每 30 分鐘統一計算,手機與電腦數字一致`:`<span style="color:var(--gold)">尚未取得雲端統一預測(cloud-pred.json),目前用本機學習:已學習 ${n} 場,各裝置可能不同</span>`}</div></div></div>`;
   { const low=Object.values(scGet()).filter(s=>s&&s.vr==="lowdq"&&s.hs!=null);   // e204
     if(low.length) html+=`<div style="margin-top:10px;font-size:12px;color:var(--muted)">資料不足場次(另計,不進主命中率):${low.length} 場 · 命中 ${Math.round(low.filter(s=>s.hit).length/low.length*100)}% · Brier ${(low.reduce((a,s)=>a+(s.brier||0),0)/low.length).toFixed(3)} —— 這些球隊的比賽結果已持續累積進資料庫,資料夠了就會自動轉入主統計。</div>`; }
-  box.innerHTML=renderCoverage()+renderTWSL()+renderCalib()+renderWeekly()+renderEras()+renderByLeague()+html;
+  box.innerHTML=renderCoverage()+renderTWSL()+renderCalib()+renderWeekly()+renderAltDuel()+renderEras()+renderByLeague()+html;
   // e139:跨裝置同步 —— 匯出/匯入所有學習資料(帳本、評級校準、攻防乘數、市場權重、聯賽審核)
   const KEYS=["euroSC","euroADJ","euroAD","euroMKTW","euroLGD","euroDYN","euroTWSLN","euroTWSLL","euroADv2"];
   const ex=document.getElementById("expSC");
