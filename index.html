@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e221";
+const BUILD = "e222";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2012,11 +2012,19 @@ function hiAltPick(p){
     if(!p||p.lh==null||p.la==null||p.si==null||p.sj==null) return null;
     const lh=+p.lh, la=+p.la; if(!(lh>0&&la>0)) return null;
     if(lh+la<HI_ALT_T&&!p._force) return {i:+p.si,j:+p.sj,same:true};
+    /* e222:不再只取 Poisson 最高格(那樣幾乎永遠是 3-1)。依 9,463 場實際賽果,看好方向內大比分的實際分佈會隨兩隊預期進球改變:
+         落後方預期 ≥1.4 球(兩隊都會進)→ 實際 3-2 最多(6.5% vs 3-1 3.6%)
+         落後方 <1.0 且領先方 2~2.5 → 4-0 最多(8.3% vs 3-1 6.6%)
+         領先方 ≥3.0 → 4-1;其餘 → 3-1。
+       前後兩半時間各自驗證:高比分押法全中 8.7%→9.4%、5.9%→6.7%,兩段都進步。看好和局時押 2-2(兩隊都 ≥1.8 球時押 3-3 不划算,維持 2-2)。 */
     const dir=p.si>p.sj?1:(p.si<p.sj?-1:0), f=k=>{let r=1;for(let q=2;q<=k;q++)r*=q;return r;};
-    let b=null,bp=-1;
-    for(let i=0;i<=7;i++)for(let j=0;j<=7;j++){ if(i+j<4) continue; const dd=i>j?1:(i<j?-1:0); if(dd!==dir) continue;
-      const pr=Math.exp(-lh)*Math.pow(lh,i)/f(i)*Math.exp(-la)*Math.pow(la,j)/f(j); if(pr>bp){bp=pr;b={i,j,p:pr};} }
-    if(!b) return {i:+p.si,j:+p.sj,same:true};
+    const pr=(i,j)=>Math.exp(-lh)*Math.pow(lh,i)/f(i)*Math.exp(-la)*Math.pow(la,j)/f(j);
+    let b;
+    if(dir===0) b={i:2,j:2};
+    else { const w=dir>0?lh:la, l=dir>0?la:lh; let c;
+      if(l>=1.4) c=[3,2]; else if(l<1.0&&w>=2.0&&w<2.5) c=[4,0]; else if(w>=3.0) c=[4,1]; else c=[3,1];
+      b=dir>0?{i:c[0],j:c[1]}:{i:c[1],j:c[0]}; }
+    b.p=pr(b.i,b.j);
     return {i:b.i,j:b.j,p:b.p,same:(b.i===+p.si&&b.j===+p.sj)};
   }catch(e){ return null; }
 }
@@ -2035,7 +2043,7 @@ function renderAltDuel(){
   <div style="font-size:12.5px;line-height:1.8">全部 ${n} 場:主比分全中 <b>${ex}</b> 場(${pc(ex,n)}) · 高比分押法全中 <b>${ax}</b> 場(${pc(ax,n)}) —— ${lead}<br>
   兩者押不同比分的 ${fired} 場(預期總進球 ≥${HI_ALT_T}):主比分中 ${fEx} · 高比分中 ${fAx}<br>
   近 7 天 ${wn} 場:主比分中 ${wex} · 高比分中 ${wax}<br>
-  <span style="color:var(--muted);font-size:11px">高比分押法 = 預期總進球 ≥${HI_ALT_T} 時押看好方向裡總進球 ≥4 的最可能比分(3-1、3-2、4-1…);歷史回測 9,463 場約每 100 場少中 1 場。若實戰持續領先,會改為主比分押法。</span></div></div>`;
+  <span style="color:var(--muted);font-size:11px">高比分押法 = 預期總進球 ≥${HI_ALT_T} 時依兩隊預期進球押 3-2 / 4-0 / 4-1 / 3-1(看好和局押 2-2);歷史回測 9,463 場約每 100 場少中 1 場。若實戰持續領先,會改為主比分押法。</span></div></div>`;
 }
 /* e219:進球水位 —— 模型對「這場會進幾球」的判斷。單一比分天生集中在 1-1/2-1/1-0(球越多、組合越多、每格越薄),
    但模型其實知道哪場會是大比分局,這一行把它講出來:總進球預期、3/4 球以上機率,以及大比分時最可能的高比分。
@@ -2055,7 +2063,7 @@ function goalLevelLine(p){
       hc=` · 高比分候選(客-主) ${cells.slice(0,3).map(c=>`${c[1]}-${c[0]} ${(c[2]*100).toFixed(1)}%`).join(" / ")}`;
     }
     const _al=hiAltPick(p); let altTxt="";
-    if(_al&&!_al.same) altTxt=` · <b style="color:var(--gold)">🎯 高比分押法 ${_al.j}-${_al.i}</b>(客-主,${(_al.p*100).toFixed(1)}%)`;
+    if(_al&&!_al.same) altTxt=` · <b style="color:var(--gold)">🎯 高比分押法 ${_al.j}-${_al.i}</b>(客-主,依實際賽果分佈挑選)`;
     else if(_al){ const _hx=hiAltPick({lh:p.lh,la:p.la,si:p.si,sj:p.sj,_force:1});
       altTxt=` · <span style="color:var(--muted)">🎯 高比分押法 同主比分 ${p.sj}-${p.si}(預期 ${t.toFixed(1)} 球,未達 ${HI_ALT_T})${_hx&&!_hx.same?`;若打成大比分最可能 ${_hx.j}-${_hx.i}(${(_hx.p*100).toFixed(1)}%)`:""}</span>`; }
     return `<span style="color:${col}">⚽ 進球水位 ${t.toFixed(1)} 球(${lab})</span> · 3 球以上 ${Math.round(p3*100)}% · 4 球以上 ${Math.round(p4*100)}%${altTxt}${hc}`;
