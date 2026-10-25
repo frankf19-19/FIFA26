@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e220";
+const BUILD = "e221";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2011,7 +2011,7 @@ function hiAltPick(p){
   try{
     if(!p||p.lh==null||p.la==null||p.si==null||p.sj==null) return null;
     const lh=+p.lh, la=+p.la; if(!(lh>0&&la>0)) return null;
-    if(lh+la<HI_ALT_T) return {i:+p.si,j:+p.sj,same:true};
+    if(lh+la<HI_ALT_T&&!p._force) return {i:+p.si,j:+p.sj,same:true};
     const dir=p.si>p.sj?1:(p.si<p.sj?-1:0), f=k=>{let r=1;for(let q=2;q<=k;q++)r*=q;return r;};
     let b=null,bp=-1;
     for(let i=0;i<=7;i++)for(let j=0;j<=7;j++){ if(i+j<4) continue; const dd=i>j?1:(i<j?-1:0); if(dd!==dir) continue;
@@ -2054,7 +2054,10 @@ function goalLevelLine(p){
       cells.sort((a,b)=>b[2]-a[2]);
       hc=` · 高比分候選(客-主) ${cells.slice(0,3).map(c=>`${c[1]}-${c[0]} ${(c[2]*100).toFixed(1)}%`).join(" / ")}`;
     }
-    const _al=hiAltPick(p); const altTxt=(_al&&!_al.same)?` · <b style="color:var(--gold)">🎯 高比分押法 ${_al.j}-${_al.i}</b>(客-主)`:"";
+    const _al=hiAltPick(p); let altTxt="";
+    if(_al&&!_al.same) altTxt=` · <b style="color:var(--gold)">🎯 高比分押法 ${_al.j}-${_al.i}</b>(客-主,${(_al.p*100).toFixed(1)}%)`;
+    else if(_al){ const _hx=hiAltPick({lh:p.lh,la:p.la,si:p.si,sj:p.sj,_force:1});
+      altTxt=` · <span style="color:var(--muted)">🎯 高比分押法 同主比分 ${p.sj}-${p.si}(預期 ${t.toFixed(1)} 球,未達 ${HI_ALT_T})${_hx&&!_hx.same?`;若打成大比分最可能 ${_hx.j}-${_hx.i}(${(_hx.p*100).toFixed(1)}%)`:""}</span>`; }
     return `<span style="color:${col}">⚽ 進球水位 ${t.toFixed(1)} 球(${lab})</span> · 3 球以上 ${Math.round(p3*100)}% · 4 球以上 ${Math.round(p4*100)}%${altTxt}${hc}`;
   }catch(e){ return ""; }
 }
