@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e222";
+const BUILD = "e223";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2030,10 +2030,11 @@ function hiAltPick(p){
 }
 function renderAltDuel(){
   const S=Object.values(scGet()).filter(s=>s&&!s.void&&s.hs!=null&&s.fzT&&(s.fz||s.pred));
-  const rows=[]; let n=0,ex=0,ax=0,fired=0,fEx=0,fAx=0;
+  const rows=[]; let n=0,ex=0,ax=0,fired=0,fEx=0,fAx=0,t5n=0,t5h=0,t3h=0;
   const W=7*86400000, now=Date.now(); let wn=0,wex=0,wax=0;
   for(const s of S){ const P=s.fz||s.pred; const a=hiAltPick(P); if(!a) continue;
     const e1=(+P.si===s.hs&&+P.sj===s.as), e2=(a.i===s.hs&&a.j===s.as);
+    if(+P.lh>0&&+P.la>0){ const tb=scoreTable(+P.lh,+P.la); const rk=tb.findIndex(x=>x[0]===s.hs&&x[1]===s.as); t5n++; if(rk>=0&&rk<5) t5h++; if(rk>=0&&rk<3) t3h++; }
     n++; ex+=e1; ax+=e2; if(!a.same){ fired++; fEx+=e1; fAx+=e2; }
     if(s.fzT>=now-W){ wn++; wex+=e1; wax+=e2; } }
   if(n<10) return "";
@@ -2043,7 +2044,42 @@ function renderAltDuel(){
   <div style="font-size:12.5px;line-height:1.8">全部 ${n} 場:主比分全中 <b>${ex}</b> 場(${pc(ex,n)}) · 高比分押法全中 <b>${ax}</b> 場(${pc(ax,n)}) —— ${lead}<br>
   兩者押不同比分的 ${fired} 場(預期總進球 ≥${HI_ALT_T}):主比分中 ${fEx} · 高比分中 ${fAx}<br>
   近 7 天 ${wn} 場:主比分中 ${wex} · 高比分中 ${wax}<br>
+  完整比分分佈:實際比分落在模型最可能前 3 名 ${pc(t3h,t5n)}、前 5 名 <b>${pc(t5h,t5n)}</b>(${t5n} 場;歷史回測約 31% / 47%)<br>
   <span style="color:var(--muted);font-size:11px">高比分押法 = 預期總進球 ≥${HI_ALT_T} 時依兩隊預期進球押 3-2 / 4-0 / 4-1 / 3-1(看好和局押 2-2);歷史回測 9,463 場約每 100 場少中 1 場。若實戰持續領先,會改為主比分押法。</span></div></div>`;
+}
+/* e223:完整比分預測面板。
+   研究(9,463 場、時間切分 5,677 訓練 / 3,786 測試):各種比分機率修正(整體格校正、情境格校正、雙變量相關、負二項、λ 縮放)
+   全部無法穩定提升單一比分全中(11.5~11.8%,雜訊內),上限在預期進球本身。但模型的比分機率是準的:
+   最高一格平均 11.5% → 實際 11.5%;前 5 個比分合計平均 48.5% → 實際 48.3%。
+   所以完整呈現整張比分分佈:最可能 5 個比分(約一半比賽的實際比分會落在這 5 個裡)+ 0~4 球機率格。 */
+function scorePanel(p,g,done){
+  try{
+    if(p==null||!(+p.lh>0)||!(+p.la>0)) return "";
+    const tab=scoreTable(+p.lh,+p.la);               // [主,客,%] 由高到低
+    const top5=tab.slice(0,5), cov=top5.reduce((a,x)=>a+x[2],0);
+    const P={}; tab.forEach(x=>P[x[0]+"-"+x[1]]=x[2]);
+    const hd=(p.si!=null&&p.sj!=null)?p.si+"-"+p.sj:null;
+    let res="", act=null;
+    if(done&&g&&g.hs!=null&&g.as!=null){
+      act=g.hs+"-"+g.as; const rk=tab.findIndex(x=>x[0]===+g.hs&&x[1]===+g.as)+1;
+      res=rk>0&&rk<=5?` <b style="color:var(--hit)">✓ 實際 ${g.as}-${g.hs} 在第 ${rk} 名</b>`:` <span style="color:var(--miss)">✗ 實際 ${g.as}-${g.hs} 排第 ${rk>0?rk:"64+"} 名(${rk>0?tab[rk-1][2].toFixed(1):"<0.1"}%)</span>`;
+    }
+    const chip=x=>{ const k=x[0]+"-"+x[1]; const isH=k===hd, isA=k===act;
+      return `<span style="display:inline-block;margin:1px 3px 1px 0;padding:0 5px;border-radius:4px;border:1px solid ${isA?"var(--hit)":(isH?"rgba(230,190,90,.7)":"rgba(255,255,255,.15)")};${isH?"color:var(--gold);":""}">${isH?"★":""}${x[1]}-${x[0]} <span style="color:var(--muted)">${x[2].toFixed(1)}%</span></span>`; };
+    const mx=tab[0][2];
+    let grid=`<table style="border-collapse:collapse;font-family:var(--mono);font-size:11px;margin-top:6px"><tr><td style="padding:2px 5px;color:var(--muted)">主＼客</td>${[0,1,2,3,4].map(j=>`<td style="padding:2px 6px;text-align:center;color:var(--muted)">${j}</td>`).join("")}</tr>`;
+    for(let i=0;i<=4;i++){
+      grid+=`<tr><td style="padding:2px 5px;text-align:center;color:var(--muted)">${i}</td>`;
+      for(let j=0;j<=4;j++){ const v=P[i+"-"+j]||0, k=i+"-"+j, a=Math.min(.75,v/mx*.7);
+        grid+=`<td title="客 ${j} - 主 ${i}:${v.toFixed(1)}%" style="padding:2px 6px;text-align:center;background:rgba(230,190,90,${a.toFixed(2)});${k===hd?"outline:2px solid var(--gold);":""}${k===act?"box-shadow:inset 0 0 0 2px var(--hit);":""}">${v>=0.95?v.toFixed(0):v.toFixed(1)}</td>`; }
+      grid+=`</tr>`;
+    }
+    grid+=`</table>`;
+    const big=100-tab.filter(x=>x[0]<=4&&x[1]<=4).reduce((a,x)=>a+x[2],0);
+    const hp=hd&&P[hd]!=null?P[hd]:null;
+    const note=`<div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.6">格子 = 每個比分的機率(%),★/金框 = 主比分${act?",綠框 = 實際比分":""};任一隊 5 球以上合計 ${big.toFixed(1)}%。${hp!=null?`主比分 ${p.sj}-${p.si} 機率 ${hp.toFixed(1)}%;`:""}歷史驗證:模型給的比分機率與實際命中一致(最高格 11.5% ↔ 實際 11.5%),前 5 個比分合計約涵蓋 48% 的比賽。</div>`;
+    return `<details class="tg-rv" style="font-size:12px;border-left-color:rgba(120,200,160,.4)"><summary style="cursor:pointer;list-style:none">📊 完整比分預測(客-主) ${top5.map(chip).join("")}<span style="color:var(--muted)">前 5 合計 ${cov.toFixed(0)}%</span>${res} <span style="color:var(--muted);font-size:10.5px">▾ 機率格</span></summary>${grid}${note}</details>`;
+  }catch(e){ return ""; }
 }
 /* e219:進球水位 —— 模型對「這場會進幾球」的判斷。單一比分天生集中在 1-1/2-1/1-0(球越多、組合越多、每格越薄),
    但模型其實知道哪場會是大比分局,這一行把它講出來:總進球預期、3/4 球以上機率,以及大比分時最可能的高比分。
@@ -3027,7 +3063,7 @@ function renderTodaySection(){
           <button class="an-btn" data-an="${g.id}">詳細分析 ▾</button>
         </div>
         ${h2hStrip(snap, g)}
-        ${(()=>{ const gl=goalLevelLine(p); return gl?`<div class="tg-rv" style="font-size:12px;border-left-color:rgba(230,190,90,.35)">${gl}</div>`:""; })()}
+        ${scorePanel(p,g,done)}${(()=>{ const gl=goalLevelLine(p); return gl?`<div class="tg-rv" style="font-size:12px;border-left-color:rgba(230,190,90,.35)">${gl}</div>`:""; })()}
         ${(()=>{ if(!done){ const sr=scoreReasonLine(p,zhName(g.hn),zhName(g.an));   // e145:未完賽 → 顯示比分理由
             return sr?`<div class="tg-rv" style="color:var(--muted)">💡 ${sr}</div>`:""; }
           const rv=(typeof makeReview==="function")?makeReview(g):null;
