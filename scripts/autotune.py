@@ -177,9 +177,40 @@ try:
         else: log_.append("比分規則未全過 → 維持")
     else: log_.append("比分規則:改善不足或傷到方向命中 → 維持")
     best.update(sel_best); changed=changed or sel_changed
+    # v6:Top-3 高比分門檻 t3h 也自動調(目標 = Top-3 命中率):預期總進球 ≥ t3h 時,第三格換成看好方向內 ≥4 球的最高格
+    def top3(M,lam,sw,t3h):
+        H=sum(q for k,q in M.items() if k[0]>k[1]); D=sum(q for k,q in M.items() if k[0]==k[1]); A=sum(q for k,q in M.items() if k[0]<k[1])
+        pk='H' if H>=D and H>=A else ('A' if A>=D and A>=H else 'D')
+        W={k:q*(1+sw*(k[0]+k[1])) for k,q in M.items()}
+        same=sorted([k for k in W if _dir(*k)==pk],key=W.get,reverse=True)
+        if pk=='D': return same[:3]
+        bd=max([k for k in W if k[0]==k[1]],key=W.get); t=same[:2]+[bd]
+        if lam>=t3h:
+            hc=[k for k in same if sum(k)>=4 and k not in t[:2]]
+            if hc: t=t[:2]+[hc[0]]
+        return t
+    LH=[(d,M,a,sum(k[0]*q for k,q in M.items())/sum(M.values())+sum(k[1]*q for k,q in M.items())/sum(M.values())) for d,M,a in HO]
+    t3_cur=CUR.get('t3h',3.2)
+    def t3s(th): return [1 if a in top3(M,lam,best.get('sw',0.10),th) else 0 for d,M,a,lam in LH]
+    b3=t3s(t3_cur); bt=sum(b3)/len(b3); c3=[]
+    for th in [2.8,3.0,3.2,3.4,3.6,99]:
+        if th==t3_cur: continue
+        r=t3s(th); c3.append((sum(r)/len(r),th,r))
+    c3.sort(key=lambda c:-c[0]); bx,bth,br=c3[0]
+    log_.append(f"Top-3 高比分門檻:現行 {t3_cur} Top-3 {bt:.1%};最佳 {bth} {bx:.1%}")
+    best['t3h']=t3_cur
+    if bx-bt>=0.004:
+        n=len(LH); seg=n//5; nl=sum(1 for i in range(5) if sum(br[i*seg:(i+1)*seg] if i<4 else br[4*seg:])>=sum(b3[i*seg:(i+1)*seg] if i<4 else b3[4*seg:]))
+        random.seed(6); w=0; pr=list(zip(b3,br))
+        for _ in range(300):
+            S=[random.choice(pr) for _ in range(n)]
+            if sum(y for x,y in S)>sum(x for x,y in S): w+=1
+        if nl>=4 and w/300>=0.85: best['t3h']=bth; changed=True; log_.append(f"Top-3 門檻三關全過(段 {nl}/5、bootstrap {w/300:.0%})→ 更新")
+        else: log_.append(f"Top-3 門檻未全過(段 {nl}/5、bootstrap {w/300:.0%})→ 維持")
+    else: log_.append("Top-3 門檻:改善不足 → 維持")
 except Exception as e:
     log_.append("比分規則調參失敗:"+str(e)); best.setdefault('sw',CUR.get('sw',0.10)); best.setdefault('dm',CUR.get('dm',1.3))
 out={**best,'updated':datetime.datetime.now(datetime.timezone.utc).isoformat()[:16]+'Z','changed':changed,'holdout_n':len(hold_cur),'brier_cur':round(base_hold,4),'brier_best':round(top[1],4),'log':log_,
      'history':(CUR.get('history') or [])[-11:]+[{'t':datetime.datetime.now(datetime.timezone.utc).isoformat()[:10],'changed':changed,'cur':round(base_hold,4),'best':round(top[1],4),'p':top[2]}]}
 json.dump(out,open('tune.json','w'),ensure_ascii=False)
-print("\n".join(log_)); print("→",{k:best.get(k) for k in ('half','xgw','shr','xik','hk','sw','dm')},"changed" if changed else "unchanged")
+print("\n".join(log_)); print("→",{k:best.get(k) for k in ('half','xgw','shr','xik','hk','sw','dm','t3h')},"changed" if changed else "unchanged")

@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e218";
+const BUILD = "e219";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1986,7 +1986,14 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
   const _dirOf=c=>(c.i>c.j?"H":c.i===c.j?"D":"A");
   const _same=_cells.filter(c=>_dirOf(c)===predOut);
   const _bestDraw=_cells.find(c=>c.i===c.j);
-  const _pick3=(predOut!=="D"&&_bestDraw)?_same.slice(0,2).concat([_bestDraw]):_same.slice(0,3);
+  let _pick3=(predOut!=="D"&&_bestDraw)?_same.slice(0,2).concat([_bestDraw]):_same.slice(0,3);
+  /* e219:高水位場次,Top-3 第三格改成「看好方向內進球 ≥4 的最高格」(3-1、4-1、3-2…),取代和局格。
+     3,786 場時間保留區間:預期總進球 ≥3.2 時這樣換,Top-3 命中 30.9% → 30.7%(−0.2,雜訊範圍),
+     但有 14% 的比賽會在 Top-3 裡看到高比分。門檻由每週自動調參決定(tune.json 的 t3h,預設 3.2)。
+     主比分不動:實測若主比分直接押 3-1,全中率確定下降 0.6 點(90% 區間 −0.9~−0.3)。 */
+  { const _TT2=window.TUNE||{}; const _T3H=(_TT2.t3h!=null&&+_TT2.t3h>=2.8)?+_TT2.t3h:3.2;
+    if(predOut!=="D"&&(lh+la)>=_T3H){ const hc=_same.filter(c=>c.i+c.j>=4&&!_pick3.slice(0,2).includes(c));
+      if(hc.length) _pick3=_pick3.slice(0,2).concat([hc[0]]); } }
   const _sc3=_pick3.map(c=>({i:c.i,j:c.j,p:+(c.p/t*100).toFixed(1)}));
   const top=Math.max(H,D,A);
   // 信心分級同時看機率高度與資料品質:資料不足時不給「高」
@@ -1996,6 +2003,26 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
           lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr,tier:_tierN,prc:_prc,prs:+_prs.toFixed(3),pw:PROC_W,plc:_plc,pls:_pls,plw:PL_W,wx:_wxc,wxf:+_wxf.toFixed(3)};
 }
 /* e145:列表上的一行比分理由(未完賽顯示;完賽由檢討行取代) */
+/* e219:進球水位 —— 模型對「這場會進幾球」的判斷。單一比分天生集中在 1-1/2-1/1-0(球越多、組合越多、每格越薄),
+   但模型其實知道哪場會是大比分局,這一行把它講出來:總進球預期、3/4 球以上機率,以及大比分時最可能的高比分。
+   3,786 場驗證:模型說「4 球以上 ≥40%」的場次,實際 46~58% 踢出 4 球以上;有把握時(≥65% 或 ≤35%)大小 2.5 方向準 71%。 */
+function goalLevelLine(p){
+  try{
+    if(p==null||p.lh==null||p.la==null) return "";
+    const lh=+p.lh, la=+p.la, t=lh+la, f=k=>{let r=1;for(let i=2;i<=k;i++)r*=i;return r;};
+    const pt=k=>Math.exp(-t)*Math.pow(t,k)/f(k);
+    const p3=1-pt(0)-pt(1)-pt(2), p4=p3-pt(3);
+    const lab=t>=3.6?"大比分局":(t>=3.1?"對攻":(t<=2.3?"悶戰":"中等節奏"));
+    const col=t>=3.6?"var(--gold)":(t>=3.1?"var(--chalk)":"var(--muted)");
+    let hc="";
+    if(p4>=0.35){
+      const cells=[]; for(let i=0;i<=7;i++)for(let j=0;j<=7;j++) if(i+j>=4) cells.push([i,j,Math.exp(-lh)*Math.pow(lh,i)/f(i)*Math.exp(-la)*Math.pow(la,j)/f(j)]);
+      cells.sort((a,b)=>b[2]-a[2]);
+      hc=` · 高比分候選(客-主) ${cells.slice(0,3).map(c=>`${c[1]}-${c[0]} ${(c[2]*100).toFixed(1)}%`).join(" / ")}`;
+    }
+    return `<span style="color:${col}">⚽ 進球水位 ${t.toFixed(1)} 球(${lab})</span> · 3 球以上 ${Math.round(p3*100)}% · 4 球以上 ${Math.round(p4*100)}%${hc}`;
+  }catch(e){ return ""; }
+}
 function scoreReasonLine(p,hz,az){
   try{
     if(p==null||p.lh==null||p.la==null) return "";
@@ -2954,6 +2981,7 @@ function renderTodaySection(){
           <button class="an-btn" data-an="${g.id}">詳細分析 ▾</button>
         </div>
         ${h2hStrip(snap, g)}
+        ${(()=>{ const gl=goalLevelLine(p); return gl?`<div class="tg-rv" style="font-size:12px;border-left-color:rgba(230,190,90,.35)">${gl}</div>`:""; })()}
         ${(()=>{ if(!done){ const sr=scoreReasonLine(p,zhName(g.hn),zhName(g.an));   // e145:未完賽 → 顯示比分理由
             return sr?`<div class="tg-rv" style="color:var(--muted)">💡 ${sr}</div>`:""; }
           const rv=(typeof makeReview==="function")?makeReview(g):null;
