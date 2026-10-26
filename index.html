@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e223";
+const BUILD = "e224";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2078,7 +2078,7 @@ function scorePanel(p,g,done){
     const big=100-tab.filter(x=>x[0]<=4&&x[1]<=4).reduce((a,x)=>a+x[2],0);
     const hp=hd&&P[hd]!=null?P[hd]:null;
     const note=`<div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.6">格子 = 每個比分的機率(%),★/金框 = 主比分${act?",綠框 = 實際比分":""};任一隊 5 球以上合計 ${big.toFixed(1)}%。${hp!=null?`主比分 ${p.sj}-${p.si} 機率 ${hp.toFixed(1)}%;`:""}歷史驗證:模型給的比分機率與實際命中一致(最高格 11.5% ↔ 實際 11.5%),前 5 個比分合計約涵蓋 48% 的比賽。</div>`;
-    return `<details class="tg-rv" style="font-size:12px;border-left-color:rgba(120,200,160,.4)"><summary style="cursor:pointer;list-style:none">📊 完整比分預測(客-主) ${top5.map(chip).join("")}<span style="color:var(--muted)">前 5 合計 ${cov.toFixed(0)}%</span>${res} <span style="color:var(--muted);font-size:10.5px">▾ 機率格</span></summary>${grid}${note}</details>`;
+    return `<details class="tg-rv sp-panel" onclick="event.stopPropagation()" style="font-size:12px;border-left-color:rgba(120,200,160,.4)"><summary style="cursor:pointer;list-style:none">📊 完整比分預測(客-主) ${top5.map(chip).join("")}<span style="color:var(--muted)">前 5 合計 ${cov.toFixed(0)}%</span>${res} <span style="color:var(--muted);font-size:10.5px">▾ 機率格</span></summary>${grid}${note}</details>`;
   }catch(e){ return ""; }
 }
 /* e219:進球水位 —— 模型對「這場會進幾球」的判斷。單一比分天生集中在 1-1/2-1/1-0(球越多、組合越多、每格越薄),
@@ -3088,7 +3088,7 @@ function renderTodaySection(){
     if(window.switchLeague) window.switchLeague(el.dataset.golg); });
   // 比賽列 → 直接開該場比賽詳情
   box.querySelectorAll(".tg-row[data-gid]").forEach(el=>el.onclick=(ev)=>{
-    if(ev.target.closest(".an-btn")||ev.target.closest(".an-box")||ev.target.closest(".bell-btn")) return;
+    if(ev.target.closest(".an-btn")||ev.target.closest(".an-box")||ev.target.closest(".bell-btn")||ev.target.closest(".sp-panel")) return;
     const g=GAMES_BY_ID[el.dataset.gid];
     if(g && window.showGame) showGame(g);
   });
