@@ -6,6 +6,7 @@ on:
       - goal-benchmark.js
       - multiwindow-benchmark.js
       - injury-shadow-audit.js
+      - factor-audit.js
       - predict-euro.js
       - .github/workflows/score-audit.yml
   workflow_dispatch:
@@ -20,7 +21,7 @@ jobs:
         with:
           node-version: "22"
       - name: Check audit and benchmark syntax
-        run: node --check score-audit.js && node --check goal-benchmark.js && node --check multiwindow-benchmark.js && node --check injury-shadow-audit.js && node --check predict-euro.js
+        run: node --check score-audit.js && node --check goal-benchmark.js && node --check multiwindow-benchmark.js && node --check injury-shadow-audit.js && node --check factor-audit.js && node --check predict-euro.js
       - name: Audit immutable prematch scores without changing model data
         run: node score-audit.js cloud-pred.json
       - name: Run read-only chronological goals benchmark
@@ -29,3 +30,5 @@ jobs:
         run: node multiwindow-benchmark.js cloud-pred.json
       - name: Audit prospective frozen injury shadow predictions
         run: node injury-shadow-audit.js cloud-pred.json
+      - name: Audit frozen team-player-match factor provenance
+        run: node factor-audit.js cloud-pred.json
