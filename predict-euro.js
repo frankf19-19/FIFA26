@@ -56,7 +56,7 @@ js += `\n;window.__FEED={sb:{},st:{},inj:{}};
     }catch(e){}
     return j; };
 })();`;
-js += "\n;window.__m={predict,parseEvents,gradeFinished,computeTuning,loadInjuries,loadStandFor,espnScore,jget,scGet,scSet,noPredGate,LEAGUES,adjGet,adGet,mktWGet,ymd,isoDate};";
+js += "\n;window.__m={predict,parseEvents,gradeFinished,computeTuning,loadInjuries,loadStandFor,loadLineup,espnScore,jget,scGet,scSet,noPredGate,LEAGUES,adjGet,adGet,mktWGet,ymd,isoDate};";
 w.eval(js);
 const m = w.__m;
 
@@ -122,11 +122,29 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
           if (ex && ex.pred && !ex.fz) { ex.fz = { ...ex.pred }; ex.fzT = ex.tU || ex.t || Date.now(); ex.lg = ex.lg || l.id; changed = true; nLock++; }   // 鎖定時間 = 最後一次「賽前」預測時間
           continue;                                   // 已開賽:不再改預測(誠信)
         }
-        const pp = m.predict(g.hn, g.an, g.odds, l.id, g.hid, g.aid);
+        // Only fetch published starting elevens shortly before kickoff; never from finished matches.
+        // Passing g.id is essential: predictLocal reads XI_CACHE[gameId], not team IDs.
+        let lineup=null;
+        if(kick>0 && kick>Date.now() && kick-Date.now()<=125*60000){
+          try { lineup=await m.loadLineup(l.id,g.id,g.hid,g.aid); } catch(e) {}
+        }
+        const pp = m.predict(g.hn, g.an, g.odds, l.id, g.hid, g.aid, g.id);
         if (m.noPredGate(pp, l.id) || !((pp.dq || 0) >= 0.2)) continue;
         if (ex && ex.hs != null) continue;              // 已評分不動
+        // Freeze data lineage with the exact forecast, so the contribution of
+        // players, lineups, xG and team statistics can be checked after kickoff.
+        const factors={
+          mode:pp.core?'compact-core':'full-model',
+          lineup:pp.xi||null, lineupFetchedAt:lineup&&lineup.t||null,
+          injuries:pp.plc||null, injuryImpact:pp.pls??null, injuryWeight:pp.plw??null,
+          squad:pp.sq||null, xg:pp.xg||null,
+          rest:pp.rest||null, process:pp.prc||null, headToHead:pp.h2||null,
+          weather:pp.wx||null, weatherFactor:pp.wxf??null,
+          tier:pp.tier||null, source:'calib+ESPN',
+          capturedAt:new Date().toISOString()
+        };
         sc[g.id] = { ...(ex || {}),
-          pred: { H: pp.H, D: pp.D, A: pp.A, si: pp.si, sj: pp.sj, sc3: pp.sc3, rho: pp.rho, conf: pp.conf, pick: pp.pick, lh: pp.lh, la: pp.la, prs: pp.prs, pw: pp.pw, pls: pp.pls, plw: pp.plw,
+          pred: { H: pp.H, D: pp.D, A: pp.A, si: pp.si, sj: pp.sj, sc3: pp.sc3, rho: pp.rho, factors, conf: pp.conf, pick: pp.pick, lh: pp.lh, la: pp.la, prs: pp.prs, pw: pp.pw, pls: pp.pls, plw: pp.plw,
             ...(injuryShadow(pp)?{shadowInjury:injuryShadow(pp)}:{}), ...(pp.pure?{pure:pp.pure}:{}), ...(pp.mkp?{mkp:pp.mkp}:{}), ...(pp.mw!=null?{mw:pp.mw}:{}) },   // v2:對戰莊家原料(純模型/市場/權重)
           odds: (g.odds || (ex && ex.odds) || null), odds0: ((ex && ex.odds0) || g.odds || null),
           dq: pp.dq, t: (ex && ex.t) || Date.now(), tU: Date.now(), v: 2, locked: 1, lg: l.id,
