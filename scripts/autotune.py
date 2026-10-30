@@ -15,6 +15,7 @@ R=[(k,v) for k,v in m.items() if v.get('hs') is not None and k in det and det[k]
 R.sort(key=lambda x:x[1]['d'])
 def dt(s): return datetime.date.fromisoformat(s)
 END=dt(R[-1][1]['d']); HOLD=END-datetime.timedelta(days=120)
+TRAIN_END=HOLD-datetime.timedelta(days=2)
 SC=0.321; SOT=8; G,A=7,8; PRIOR=0.12; K=6
 try: CUR=json.load(open('tune.json'))
 except Exception: CUR={}
@@ -88,7 +89,7 @@ def rows_for(half):
 def evaluate(params):
     rows=rows_for(params['half'])
     b=brier_rows(rows,params['xgw'],params['shr'],params['xik'],params.get('hk',1.5))
-    hold=[x for x in b if x[0]>HOLD]; tune=[x for x in b if x[0]<=HOLD and x[0]>HOLD-datetime.timedelta(days=540)]
+    hold=[x for x in b if x[0]>HOLD]; tune=[x for x in b if x[0]<=TRAIN_END and x[0]>HOLD-datetime.timedelta(days=540)]
     return b,hold,tune
 b_cur,hold_cur,tune_cur=evaluate(cur)
 base_hold=sum(x[1] for x in hold_cur)/len(hold_cur)
@@ -160,7 +161,7 @@ try:
     if changed: raise RuntimeError('本輪核心參數已通過保留測試；不在同一保留區再升級比分規則')
     L=lam_rows(rows_for(best['half']),best['xgw'],best['shr'],best['xik'],best.get('hk',1.5))
     HO=[x for x in L if x[0]>HOLD]
-    TR=[x for x in L if HOLD-datetime.timedelta(days=540)<x[0]<=HOLD]
+    TR=[x for x in L if HOLD-datetime.timedelta(days=540)<x[0]<=TRAIN_END]
     sel_cur={'sw':CUR.get('sw',0.10),'dm':CUR.get('dm',1.3)}
     def sc(p,S): return [(1 if pick(M,p['sw'],p['dm'])==a else 0, 1 if _dir(*pick(M,p['sw'],p['dm']))==_dir(*a) else 0) for d,M,a in S]
     base=sc(sel_cur,HO); be=sum(x[0] for x in base)/len(base); bh=sum(x[1] for x in base)/len(base)
@@ -170,7 +171,7 @@ try:
             p={'sw':sw,'dm':dm}
             if p==sel_cur: continue
             cand.append(p)
-    pb=choose_on_training([sel_cur]+cand,TR,HOLD,lambda p,S:[x[0] for x in sc(p,S)])
+    pb=choose_on_training([sel_cur]+cand,TR,TRAIN_END,lambda p,S:[x[0] for x in sc(p,S)])
     rb=sc(pb,HO); ex=sum(x[0] for x in rb)/len(rb); hh=sum(x[1] for x in rb)/len(rb)
     log_.append(f"比分規則(候選僅由訓練區選出):現行 {sel_cur} 全中 {be:.1%} 方向 {bh:.1%};最佳 {pb} 全中 {ex:.1%} 方向 {hh:.1%}")
     sel_best=dict(sel_cur); sel_changed=False
@@ -208,7 +209,7 @@ try:
     for th in [2.8,3.0,3.2,3.4,3.6,99]:
         if th==t3_cur: continue
         c3.append(th)
-    bth=choose_on_training([t3_cur]+c3,LH_T,HOLD,lambda th,S:t3s(th,S))
+    bth=choose_on_training([t3_cur]+c3,LH_T,TRAIN_END,lambda th,S:t3s(th,S))
     br=t3s(bth,LH); bx=sum(br)/len(br)
     log_.append(f"Top-3 高比分門檻(訓練選參、現行 sw):現行 {t3_cur} Top-3 {bt:.1%};最佳 {bth} {bx:.1%}")
     best['t3h']=t3_cur
