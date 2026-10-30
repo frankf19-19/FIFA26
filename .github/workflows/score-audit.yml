@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - score-audit.js
+      - goal-benchmark.js
       - .github/workflows/score-audit.yml
   workflow_dispatch:
 permissions:
@@ -15,7 +16,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Check audit script syntax
-        run: node --check score-audit.js
+      - name: Check audit and benchmark syntax
+        run: node --check score-audit.js && node --check goal-benchmark.js
       - name: Audit immutable prematch scores without changing model data
         run: node score-audit.js cloud-pred.json
+      - name: Run read-only chronological goals benchmark
+        run: node goal-benchmark.js cloud-pred.json
