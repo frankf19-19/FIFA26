@@ -1,0 +1,16 @@
+{
+  "version": "opponent-adjusted-distributions-v1",
+  "sourceRevision": "e6744429ee395bc86f247348c6184bb08d4eb361",
+  "warmup": ["2020-07-01", "2022-06-30"],
+  "development": ["2022-07-01", "2025-06-28"],
+  "confirmation": ["2025-07-01", "2026-06-30"],
+  "halfLifeDays": 365,
+  "refitBlockDays": 28,
+  "resultEmbargoDays": 2,
+  "ridgePenalties": [2, 10, 30],
+  "families": ["dc-rho-minus-0.05", "negative-binomial-alpha-0.1", "negative-binomial-alpha-0.25", "shared-pace-mixture-plus-minus-0.25"],
+  "selectionObjectives": ["exact-score-log-loss", "top1-with-log-loss-tiebreak"],
+  "baseline": "previously-fixed-team-shrinkage-365-prior5-rho-minus-0.05",
+  "promotion": "No production promotion from this retrospective experiment; paired weekly intervals and prospective comparison required.",
+  "limitations": ["Current archive with unknown original availability/revision times", "No xG, player or bookmaker features", "The previously inspected 2024-25 season is development data here"]
+}

@@ -16,6 +16,7 @@
    無前視:開賽後的比賽只保留最後一次賽前鎖定值,完賽評分用的是鎖定值。 */
 const fs = require("fs");
 const {exactShadow}=require("./exact-shadow");
+const {xgShadow}=require("./xg-shadow");
 const crypto = require("node:crypto");
 const inputVersions=Object.fromEntries(['calib.json','tune.json'].map(file=>[file,
   fs.existsSync(file)?crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex'):null]));
@@ -194,7 +195,7 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
           // Fetch time is observation time, not a claim about source publication time.
           sourcePublishedAt:null,inputVersions};
         sc[g.id] = { ...(ex || {}),
-          pred: { rho: pp.rho, factors, shadowExact:exactShadow(pp), shadowInjury:injuryShadow(pp), H: pp.H, D: pp.D, A: pp.A, si: pp.si, sj: pp.sj, conf: pp.conf, pick: pp.pick, lh: pp.lh, la: pp.la, prs: pp.prs, pw: pp.pw, pls: pp.pls, plw: pp.plw,
+          pred: { rho: pp.rho, factors, shadowExact:exactShadow(pp), shadowXg:xgShadow(pp,l.id), shadowInjury:injuryShadow(pp), H: pp.H, D: pp.D, A: pp.A, si: pp.si, sj: pp.sj, conf: pp.conf, pick: pp.pick, lh: pp.lh, la: pp.la, prs: pp.prs, pw: pp.pw, pls: pp.pls, plw: pp.plw,
             ...(pp.sc3?{sc3:pp.sc3}:{}), ...(pp.h2s!=null?{h2s:pp.h2s,h2w:pp.h2w}:{}), ...(pp.h2?{h2:pp.h2}:{}), ...(h2l?{h2l}:{}), ...(pp.xi?{xi:pp.xi}:{}), ...(pp.xg?{xg:pp.xg}:{}),   // v10:存 xG 來源(real=Understat 射門級)，純記錄，供事後拆解貢獻
             ...(pp.pure?{pure:pp.pure}:{}), ...(pp.mkp?{mkp:pp.mkp}:{}), ...(pp.mw!=null?{mw:pp.mw}:{}), ...(pp.core?{core:1}:{}), ...(pp.nat?{nat:pp.nat}:{}), ...(pp.db?{db:1}:{}) },   // v13:記錄預測引擎,供上線後拆解驗證   // v2:對戰莊家原料(純模型/市場/權重)
           odds: (g.odds || (ex && ex.odds) || null), odds0: ((ex && ex.odds0) || g.odds || null),

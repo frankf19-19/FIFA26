@@ -32,7 +32,7 @@ test('production workflow executes the instrumented entry point',()=>{
  const workflow=fs.readFileSync('.github/workflows/cloud-pred.yml','utf8');
  assert.match(workflow,/node scripts\/predict-euro.js/);
  const active=fs.readFileSync('scripts/predict-euro.js','utf8');
- assert.match(active,/shadowExact:exactShadow\(pp\)/);assert.match(active,/rho: pp.rho, factors/);
+ assert.match(active,/shadowExact:exactShadow\(pp\)/);assert.match(active,/shadowXg:xgShadow\(pp,l.id\)/);assert.match(active,/rho: pp.rho, factors/);
  assert.match(active,/if\(capturedAt>=kick\)continue/);
 });
 test('walk-forward excludes outcomes unavailable at earliest test snapshot',()=>{

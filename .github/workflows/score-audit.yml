@@ -5,6 +5,7 @@ on:
       - scripts/**
       - index.html
       - tests/**
+      - xg-shadow-audit.js
       - exact-shadow-audit.js
       - score-audit.js
       - goal-benchmark.js
@@ -28,10 +29,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - run: python -m pip install numpy==2.4.2
       - run: python -m unittest discover -s tests -p "test_*.py"
       - run: python -m py_compile scripts/autotune.py scripts/external-score-benchmark.py
       - run: node --test tests/*.test.js
       - run: node exact-shadow-audit.js
+      - run: node xg-shadow-audit.js
       - name: Check audit and benchmark syntax
         run: node --check score-audit.js && node --check goal-benchmark.js && node --check multiwindow-benchmark.js && node --check injury-shadow-audit.js && node --check factor-audit.js && node --check predict-euro.js && node --check scripts/predict-euro.js
       - name: Audit immutable prematch scores without changing model data
