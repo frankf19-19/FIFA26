@@ -93,7 +93,7 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
         if (m.noPredGate(pp, l.id) || !((pp.dq || 0) >= 0.2)) continue;
         if (ex && ex.hs != null) continue;              // 已評分不動
         sc[g.id] = { ...(ex || {}),
-          pred: { H: pp.H, D: pp.D, A: pp.A, si: pp.si, sj: pp.sj, conf: pp.conf, pick: pp.pick, lh: pp.lh, la: pp.la, prs: pp.prs, pw: pp.pw, pls: pp.pls, plw: pp.plw,
+          pred: { H: pp.H, D: pp.D, A: pp.A, si: pp.si, sj: pp.sj, sc3: pp.sc3, rho: pp.rho, conf: pp.conf, pick: pp.pick, lh: pp.lh, la: pp.la, prs: pp.prs, pw: pp.pw, pls: pp.pls, plw: pp.plw,
             ...(pp.pure?{pure:pp.pure}:{}), ...(pp.mkp?{mkp:pp.mkp}:{}), ...(pp.mw!=null?{mw:pp.mw}:{}) },   // v2:對戰莊家原料(純模型/市場/權重)
           odds: (g.odds || (ex && ex.odds) || null), odds0: ((ex && ex.odds0) || g.odds || null),
           dq: pp.dq, t: (ex && ex.t) || Date.now(), tU: Date.now(), v: 2, locked: 1, lg: l.id,
