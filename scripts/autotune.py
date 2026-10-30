@@ -6,6 +6,7 @@
      3. bootstrap 200 次重抽,改善機率 ≥ 85%
    任何一關沒過 → 維持現行,並把證據寫進 tune.json 的 log。"""
 import json,math,collections,datetime,random,glob,sys
+from temporal_selection import choose_on_training
 from math import exp,log,lgamma
 det={}
 for f in glob.glob('details-*.json'): det.update(json.load(open(f)))
@@ -23,24 +24,13 @@ def build(half):
     hist=collections.defaultdict(list); lgh=collections.defaultdict(list); xib=collections.defaultdict(list)
     pw=collections.defaultdict(float); pv=collections.defaultdict(float)
     rows=[]
-    for k,v in R:
-        d=dt(v['d']); lg=v['lg']; kh=lg+'|'+str(v['hid']); ka=lg+'|'+str(v['aid'])
-        ts=det[k]['ts']; pl=det[k]['pl']; Hh,Ha,L=hist[kh],hist[ka],lgh[lg]
-        def strength(side):
-            vals=[(pv[p[0]]+PRIOR*K)/(pw[p[0]]+K) for p in pl[side] if p[1]==1]
-            return sum(sorted(vals,reverse=True)[:11]) if len(vals)>=8 else None
-        sh_,sa_=strength(0),strength(1)
-        if len(Hh)>=8 and len(Ha)>=8 and len(L)>=40 and sh_ and sa_ and len(xib[kh])>=5 and len(xib[ka])>=5:
-            wt=lambda x: math.exp(-math.log(2)*(d-x[0]).days/half)
-            wl=[wt(x) for x in L]; sw=sum(wl)
-            lgf=sum(w*(x[1]+x[2]) for w,x in zip(wl,L))/sw/2; lha=sum(w*(x[1]-x[2]) for w,x in zip(wl,L))/sw/2
-            def agg(H,f):
-                w=[wt(x) for x in H]; s=sum(w); return sum(a*f(x) for a,x in zip(w,H))/s
-            def side_(H): return (agg(H,lambda x:x[1]),agg(H,lambda x:x[2]),agg(H,lambda x:x[3]),agg(H,lambda x:x[4]))
-            bh=sum(xib[kh][-12:])/len(xib[kh][-12:]); ba=sum(xib[ka][-12:])/len(xib[ka][-12:])
-            rows.append((v,side_(Hh),side_(Ha),lgf,lha, sh_/bh if bh>0 else 1, sa_/ba if ba>0 else 1, d))
+    def strength(pl,side):
+        vals=[(pv[p[0]]+PRIOR*K)/(pw[p[0]]+K) for p in pl[side] if p[1]==1]
+        return sum(sorted(vals,reverse=True)[:11]) if len(vals)>=8 else None
+    def observe(k,v,d):
+        ts=det[k]['ts']; pl=det[k]['pl']; lg=v['lg']; kh=lg+'|'+str(v['hid']); ka=lg+'|'+str(v['aid'])
         for side,key in ((0,kh),(1,ka)):
-            s=strength(side)
+            s=strength(pl,side)
             if s: xib[key].append(s)
             for p in pl[side]:
                 if p[1]!=1 and not p[3]: continue
@@ -51,6 +41,24 @@ def build(half):
         hist[kh].append((d,v['hs'],v['as'],s0,s1))
         hist[ka].append((d,v['as'],v['hs'],s1,s0))
         lgh[lg].append((d,v['hs'],v['as']))
+    pending=collections.deque()
+    for k,v in R:
+        d=dt(v['d'])
+        while pending and pending[0][2]<=d-datetime.timedelta(days=2):
+            observe(*pending.popleft())
+        lg=v['lg']; kh=lg+'|'+str(v['hid']); ka=lg+'|'+str(v['aid'])
+        ts=det[k]['ts']; pl=det[k]['pl']; Hh,Ha,L=hist[kh],hist[ka],lgh[lg]
+        sh_,sa_=strength(pl,0),strength(pl,1)
+        if len(Hh)>=8 and len(Ha)>=8 and len(L)>=40 and sh_ and sa_ and len(xib[kh])>=5 and len(xib[ka])>=5:
+            wt=lambda x: math.exp(-math.log(2)*(d-x[0]).days/half)
+            wl=[wt(x) for x in L]; sw=sum(wl)
+            lgf=sum(w*(x[1]+x[2]) for w,x in zip(wl,L))/sw/2; lha=sum(w*(x[1]-x[2]) for w,x in zip(wl,L))/sw/2
+            def agg(H,f):
+                w=[wt(x) for x in H]; s=sum(w); return sum(a*f(x) for a,x in zip(w,H))/s
+            def side_(H): return (agg(H,lambda x:x[1]),agg(H,lambda x:x[2]),agg(H,lambda x:x[3]),agg(H,lambda x:x[4]))
+            bh=sum(xib[kh][-12:])/len(xib[kh][-12:]); ba=sum(xib[ka][-12:])/len(xib[ka][-12:])
+            rows.append((v,side_(Hh),side_(Ha),lgf,lha, sh_/bh if bh>0 else 1, sa_/ba if ba>0 else 1, d))
+        pending.append((k,v,d))
     return rows
 def brier_rows(rows,xgw,shr,xik,hk=1.5):
     out=[]
@@ -149,8 +157,10 @@ def pick(M,sw,dm):
         if bd[1]>=dm*same[1]: return bd[0]
     return same[0]
 try:
+    if changed: raise RuntimeError('本輪核心參數已通過保留測試；不在同一保留區再升級比分規則')
     L=lam_rows(rows_for(best['half']),best['xgw'],best['shr'],best['xik'],best.get('hk',1.5))
     HO=[x for x in L if x[0]>HOLD]
+    TR=[x for x in L if HOLD-datetime.timedelta(days=540)<x[0]<=HOLD]
     sel_cur={'sw':CUR.get('sw',0.10),'dm':CUR.get('dm',1.3)}
     def sc(p,S): return [(1 if pick(M,p['sw'],p['dm'])==a else 0, 1 if _dir(*pick(M,p['sw'],p['dm']))==_dir(*a) else 0) for d,M,a in S]
     base=sc(sel_cur,HO); be=sum(x[0] for x in base)/len(base); bh=sum(x[1] for x in base)/len(base)
@@ -159,9 +169,10 @@ try:
         for dm in [1.2,1.3,1.4,99]:
             p={'sw':sw,'dm':dm}
             if p==sel_cur: continue
-            r=sc(p,HO); cand.append((sum(x[0] for x in r)/len(r), sum(x[1] for x in r)/len(r), p, r))
-    cand.sort(key=lambda c:-c[0]); ex,hh,pb,rb=cand[0]
-    log_.append(f"比分規則:現行 {sel_cur} 全中 {be:.1%} 方向 {bh:.1%};最佳 {pb} 全中 {ex:.1%} 方向 {hh:.1%}")
+            cand.append(p)
+    pb=choose_on_training([sel_cur]+cand,TR,HOLD,lambda p,S:[x[0] for x in sc(p,S)])
+    rb=sc(pb,HO); ex=sum(x[0] for x in rb)/len(rb); hh=sum(x[1] for x in rb)/len(rb)
+    log_.append(f"比分規則(候選僅由訓練區選出):現行 {sel_cur} 全中 {be:.1%} 方向 {bh:.1%};最佳 {pb} 全中 {ex:.1%} 方向 {hh:.1%}")
     sel_best=dict(sel_cur); sel_changed=False
     if ex-be>=0.004 and bh-hh<=0.003:
         n=len(HO); seg=n//5; nl=0
@@ -191,15 +202,17 @@ try:
         return t
     LH=[(d,M,a,sum(k[0]*q for k,q in M.items())/sum(M.values())+sum(k[1]*q for k,q in M.items())/sum(M.values())) for d,M,a in HO]
     t3_cur=CUR.get('t3h',3.2)
-    def t3s(th): return [1 if a in top3(M,lam,best.get('sw',0.10),th) else 0 for d,M,a,lam in LH]
-    b3=t3s(t3_cur); bt=sum(b3)/len(b3); c3=[]
+    LH_T=[(d,M,a,sum(k[0]*q for k,q in M.items())/sum(M.values())+sum(k[1]*q for k,q in M.items())/sum(M.values())) for d,M,a in TR]
+    def t3s(th,S): return [1 if a in top3(M,lam,sel_cur['sw'],th) else 0 for d,M,a,lam in S]
+    b3=t3s(t3_cur,LH); bt=sum(b3)/len(b3); c3=[]
     for th in [2.8,3.0,3.2,3.4,3.6,99]:
         if th==t3_cur: continue
-        r=t3s(th); c3.append((sum(r)/len(r),th,r))
-    c3.sort(key=lambda c:-c[0]); bx,bth,br=c3[0]
-    log_.append(f"Top-3 高比分門檻:現行 {t3_cur} Top-3 {bt:.1%};最佳 {bth} {bx:.1%}")
+        c3.append(th)
+    bth=choose_on_training([t3_cur]+c3,LH_T,HOLD,lambda th,S:t3s(th,S))
+    br=t3s(bth,LH); bx=sum(br)/len(br)
+    log_.append(f"Top-3 高比分門檻(訓練選參、現行 sw):現行 {t3_cur} Top-3 {bt:.1%};最佳 {bth} {bx:.1%}")
     best['t3h']=t3_cur
-    if bx-bt>=0.004:
+    if not sel_changed and bx-bt>=0.004:
         n=len(LH); seg=n//5; nl=sum(1 for i in range(5) if sum(br[i*seg:(i+1)*seg] if i<4 else br[4*seg:])>=sum(b3[i*seg:(i+1)*seg] if i<4 else b3[4*seg:]))
         random.seed(6); w=0; pr=list(zip(b3,br))
         for _ in range(300):
@@ -209,7 +222,7 @@ try:
         else: log_.append(f"Top-3 門檻未全過(段 {nl}/5、bootstrap {w/300:.0%})→ 維持")
     else: log_.append("Top-3 門檻:改善不足 → 維持")
 except Exception as e:
-    log_.append("比分規則調參失敗:"+str(e)); best.setdefault('sw',CUR.get('sw',0.10)); best.setdefault('dm',CUR.get('dm',1.3))
+    log_.append("比分規則調參失敗:"+str(e)); best.setdefault('sw',CUR.get('sw',0.10)); best.setdefault('dm',CUR.get('dm',1.3)); best.setdefault('t3h',CUR.get('t3h',3.2))
 out={**best,'updated':datetime.datetime.now(datetime.timezone.utc).isoformat()[:16]+'Z','changed':changed,'holdout_n':len(hold_cur),'brier_cur':round(base_hold,4),'brier_best':round(top[1],4),'log':log_,
      'history':(CUR.get('history') or [])[-11:]+[{'t':datetime.datetime.now(datetime.timezone.utc).isoformat()[:10],'changed':changed,'cur':round(base_hold,4),'best':round(top[1],4),'p':top[2]}]}
 json.dump(out,open('tune.json','w'),ensure_ascii=False)
