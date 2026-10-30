@@ -3,7 +3,8 @@
 const fs=require('node:fs');
 const input=process.argv[2]||'cloud-pred.json';
 const data=JSON.parse(fs.readFileSync(input,'utf8'));
-const rows=Object.values(data.sc||{}).filter(s=>s&&s.hs!=null&&s.as!=null&&!s.void&&s.fzT&&s.fz&&s.fz.si!=null&&s.fz.sj!=null);
+const evidence=require('./scripts/prematch-evidence').collect(data);
+const rows=evidence.rows.filter(s=>s.fz.si!=null&&s.fz.sj!=null);
 const pct=(a,n)=>n?+(100*a/n).toFixed(2):null;
 const brier=(p,s)=>['H','D','A'].reduce((v,k)=>v+((+p[k]/100)-(k===(s.hs>s.as?'H':s.hs<s.as?'A':'D')?1:0))**2,0);
 const poisson=(k,lam)=>{let f=1;for(let i=2;i<=k;i++)f*=i;return Math.exp(-lam)*lam**k/f};
@@ -33,7 +34,7 @@ for(const s of rows){
  out.matrixTop5+=+c.slice(0,5).some(v=>v.i===+s.hs&&v.j===+s.as);
  out.logLossSum+=-Math.log(Math.max(1e-12,c.find(v=>v.i===+s.hs&&v.j===+s.as)?.prob||0))}
 }
-const result={source:input,eligibleLocked:out.eligible,top1Pct:pct(out.exact,out.eligible),lockedTop3Pct:pct(out.top3LockedHit,out.top3LockedN),lockedTop3N:out.top3LockedN,matrixTop3Pct:pct(out.matrixTop3,out.matrixN),matrixTop5Pct:pct(out.matrixTop5,out.matrixN),matrixN:out.matrixN,exactScoreLogLoss:out.matrixN?+(out.logLossSum/out.matrixN).toFixed(4):null,leagues:Object.fromEntries(Object.entries(out.leagues).map(([k,v])=>[k,{n:v.n,top1Pct:pct(v.exact,v.n)}]))};
+const result={source:input,rejected:evidence.rejected,eligibleLocked:out.eligible,top1Pct:pct(out.exact,out.eligible),lockedTop3Pct:pct(out.top3LockedHit,out.top3LockedN),lockedTop3N:out.top3LockedN,matrixTop3Pct:pct(out.matrixTop3,out.matrixN),matrixTop5Pct:pct(out.matrixTop5,out.matrixN),matrixN:out.matrixN,exactScoreLogLoss:out.matrixN?+(out.logLossSum/out.matrixN).toFixed(4):null,leagues:Object.fromEntries(Object.entries(out.leagues).map(([k,v])=>[k,{n:v.n,top1Pct:pct(v.exact,v.n)}]))};
 console.log(JSON.stringify(result,null,2));
 if(process.env.GITHUB_STEP_SUMMARY)fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,'### FIFA26 e226 賽前鎖定比分稽核\n\n'+
  '| 樣本 | Top 1 | 鎖定 Top 3 | 矩陣 Top 3 | 矩陣 Top 5 | Log Loss |\n|---:|---:|---:|---:|---:|---:|\n'+

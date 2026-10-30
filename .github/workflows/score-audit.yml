@@ -2,6 +2,10 @@ name: 正確比分賽前快照稽核
 on:
   pull_request:
     paths:
+      - scripts/**
+      - index.html
+      - tests/**
+      - exact-shadow-audit.js
       - score-audit.js
       - goal-benchmark.js
       - multiwindow-benchmark.js
@@ -20,8 +24,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - run: npm install --no-save jsdom@24
+      - run: node --test tests/*.test.js
+      - run: node exact-shadow-audit.js
       - name: Check audit and benchmark syntax
-        run: node --check score-audit.js && node --check goal-benchmark.js && node --check multiwindow-benchmark.js && node --check injury-shadow-audit.js && node --check factor-audit.js && node --check predict-euro.js
+        run: node --check score-audit.js && node --check goal-benchmark.js && node --check multiwindow-benchmark.js && node --check injury-shadow-audit.js && node --check factor-audit.js && node --check predict-euro.js && node --check scripts/predict-euro.js
       - name: Audit immutable prematch scores without changing model data
         run: node score-audit.js cloud-pred.json
       - name: Run read-only chronological goals benchmark

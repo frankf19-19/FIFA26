@@ -5,20 +5,21 @@
  */
 'use strict';
 const fs=require('node:fs');
+const evidence=require('./scripts/prematch-evidence');
 const path=process.argv[2]||'cloud-pred.json';
 const data=JSON.parse(fs.readFileSync(path,'utf8'));
 const MAX=10, MIN_TRAIN=120, MIN_TEST=25;
 const MULT=[0.85,0.90,0.95,1,1.05,1.10,1.15];
 const logfac=Array.from({length:MAX+1},(_,i)=>{let n=0;for(let j=2;j<=i;j++)n+=Math.log(j);return n});
 function parseMatch(s){
- if(!s||s.void||!s.fz||!s.fzT)return null;
+ if(evidence.rejection(s))return null;
  const p=s.fz, kick=Date.parse(s.date||'');
  const frozen=Number(s.fzT);
  if(!Number.isFinite(kick)||!Number.isFinite(frozen)||frozen>=kick)return null;
  const hs=Number(s.hs),as=Number(s.as),lh=Number(p.lh),la=Number(p.la);
  if(!Number.isInteger(hs)||!Number.isInteger(as)||hs<0||as<0||hs>MAX||as>MAX
  ||!Number.isFinite(lh)||!Number.isFinite(la)||lh<=0||la<=0)return null;
- return {kick,hs,as,lh,la,rho:Number.isFinite(Number(p.rho))?Number(p.rho):0,lg:s.lg||'unknown'};
+ return {date:s.date,resultObservedAt:s.resultObservedAt,frozen, kick,hs,as,lh,la,rho:Number.isFinite(Number(p.rho))?Number(p.rho):0,lg:s.lg||'unknown'};
 }
 const rows=Object.values(data.sc||{}).map(parseMatch).filter(Boolean).sort((a,b)=>a.kick-b.kick);
 function tau(i,j,lh,la,r){
@@ -63,7 +64,7 @@ function evaluate(set){
   // If kickoff timestamps tie at boundary, keep tied matches in the test window.
   // Training cutoff must be strictly before first evaluated kickoff.
   const test=set.slice(start,end);
-  const train=set.slice(0,start).filter(s=>s.kick<test[0].kick);
+  const train=set.slice(0,start).filter(s=>s.kick<Math.min(...test.map(t=>t.frozen))&&evidence.availableBefore(s,Math.min(...test.map(t=>t.frozen))));
   if(train.length<MIN_TRAIN)continue;
   let best={mh:1,ma:1,loss:Infinity};
   for(const mh of MULT)for(const ma of MULT){
@@ -73,7 +74,7 @@ function evaluate(set){
   }
   const baseline=score(test,1,1),challenger=score(test,best.mh,best.ma);
   folds.push({period:[new Date(test[0].kick).toISOString().slice(0,10),new Date(test[test.length-1].kick).toISOString().slice(0,10)],
-   trainN:train.length,testN:test.length,selected:{home:best.mh,away:best.ma},
+   decisionAt:new Date(Math.min(...test.map(t=>t.frozen))).toISOString(),trainN:train.length,testN:test.length,selected:{home:best.mh,away:best.ma},
    baseline,challenger,deltaLogLoss:+(challenger.logLoss-baseline.logLoss).toFixed(5),
    deltaTop1Pct:+(challenger.top1Pct-baseline.top1Pct).toFixed(2)});
  }
@@ -88,7 +89,7 @@ function evaluate(set){
   note:'Research signal only. Holdout has now been inspected; no automatic production promotion.'};
 }
 const byLeague=Object.fromEntries([...new Set(rows.map(r=>r.lg))].sort().map(l=>[l,evaluate(rows.filter(r=>r.lg===l))]));
-const report={source:path,method:'expanding-window 4 nonoverlapping forward periods',prematchEligible:rows.length,
+const report={source:path,method:'expanding-window 4 nonoverlapping forward periods',rejected:evidence.collect(data).rejected,prematchEligible:rows.length,
  global:evaluate(rows),byLeague};
 console.log(JSON.stringify(report,null,2));
 if(process.env.GITHUB_STEP_SUMMARY){

@@ -4,18 +4,19 @@
  */
 'use strict';
 const fs=require('node:fs');
+const evidence=require('./scripts/prematch-evidence');
 const data=JSON.parse(fs.readFileSync(process.argv[2]||'cloud-pred.json','utf8'));
 const lambdaGrid=[0.85,0.9,0.95,1,1.05,1.1,1.15];
 const maxGoals=12;
 const safeNum=n=>Number.isFinite(+n)?+n:null;
 function valid(s){
   const p=s&&s.fz;
-  return s&&!s.void&&s.fzT&&p&&safeNum(p.lh)>0&&safeNum(p.la)>0&&
+  return !evidence.rejection(s)&&p&&safeNum(p.lh)>0&&safeNum(p.la)>0&&
    Number.isInteger(+s.hs)&&Number.isInteger(+s.as)&&+s.hs>=0&&+s.as>=0&&
    +s.hs<=maxGoals&&+s.as<=maxGoals;
 }
 const rows=Object.values(data.sc||{}).filter(valid).map(s=>({
- league:s.lg||'unknown',
+ league:s.lg||'unknown',resultObservedAt:s.resultObservedAt,frozen:+s.fzT,
  date:Date.parse(s.date||'')||+s.fzT,
  hs:+s.hs,as:+s.as,lh:+s.fz.lh,la:+s.fz.la,
  rho:Number.isFinite(+s.fz.rho)?+s.fz.rho:0
@@ -54,7 +55,10 @@ function evaluate(set,mh,ma){
 }
 function run(set){
  if(set.length<100)return {n:set.length,note:'Fewer than 100 qualifying frozen results: no model comparison'};
- const split=Math.floor(set.length*0.7),train=set.slice(0,split),test=set.slice(split);
+ const split=Math.floor(set.length*0.7),test=set.slice(split);
+ const cutoff=Math.min(...test.map(s=>s.frozen));
+ const train=set.slice(0,split).filter(s=>s.date<cutoff&&evidence.availableBefore({...s,date:new Date(s.date).toISOString()},cutoff));
+ if(train.length<70)return {n:set.length,trainN:train.length,note:"Insufficient results observed before test forecast time"};
  // Select parameters ONLY on older training games; compare on untouched newer games.
  const candidates=[];
  for(const mh of lambdaGrid)for(const ma of lambdaGrid)

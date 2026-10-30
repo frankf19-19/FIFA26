@@ -15,6 +15,11 @@
    瀏覽器開站時先吃 cloud-pred.json → 手機、電腦、任何人看到的預測數字與學習參數完全一致。
    無前視:開賽後的比賽只保留最後一次賽前鎖定值,完賽評分用的是鎖定值。 */
 const fs = require("fs");
+const {exactShadow}=require("./exact-shadow");
+const crypto = require("node:crypto");
+const inputVersions=Object.fromEntries(['calib.json','tune.json'].map(file=>[file,
+  fs.existsSync(file)?crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex'):null]));
+const modelVersion = crypto.createHash("sha256").update(fs.readFileSync("index.html")).digest("hex");
 const { JSDOM } = require("jsdom");
 
 const OUT = "cloud-pred.json";
@@ -67,6 +72,36 @@ js += `\n;window.__FEED={sb:{},st:{},inj:{}};
 js += "\n;window.__m={predict,parseEvents,gradeFinished,computeTuning,loadInjuries,loadStandFor,espnScore,jget,scGet,scSet,noPredGate,LEAGUES,adjGet,adGet,mktWGet,ymd,isoDate,loadH2H,loadLineup,XI_CACHE};";
 w.eval(js);
 const m = w.__m;
+
+function injuryShadow(p) {
+  if (!p || !p.core || !(+p.lh>0) || !(+p.la>0) ||
+      !(+p.plw>0) || !Number.isFinite(+p.pls) || Math.abs(+p.pls)<0.005) return null;
+  const raw=(+p.plw)*(+p.pls)/2;
+  const shift=Math.max(-0.10,Math.min(0.10,raw));
+  const lh=+p.lh*Math.exp(shift),la=+p.la*Math.exp(-shift),r=Number.isFinite(+p.rho)?+p.rho:0;
+  const px=(k,l)=>{let f=1;for(let n=2;n<=k;n++)f*=n;return Math.exp(-l)*l**k/f;};
+  const cells=[];
+  for(let i=0;i<=9;i++)for(let j=0;j<=9;j++){
+    let tau=1;
+    if(i===0&&j===0)tau=1-lh*la*r;
+    else if(i===0&&j===1)tau=1+lh*r;
+    else if(i===1&&j===0)tau=1+la*r;
+    else if(i===1&&j===1)tau=1-r;
+    cells.push({i,j,p:px(i,lh)*px(j,la)*Math.max(0.01,tau)});
+  }
+  // Keep the production score-selection objective and the original
+  // predicted direction, so the shadow comparison isolates injury impacts.
+  const direction=Math.sign((+p.si)-(+p.sj));
+  const sw=(w.TUNE&&Number.isFinite(+w.TUNE.sw))?Math.max(0,Math.min(.3,+w.TUNE.sw)):.10;
+  const eligible=cells.filter(c=>Math.sign(c.i-c.j)===direction);
+  eligible.sort((a,b)=>(b.p*(1+sw*(b.i+b.j)))-(a.p*(1+sw*(a.i+a.j)))||a.i-b.i||a.j-b.j);
+  const top=eligible[0];
+  return {kind:"core-injury-shadow-v1",si:top.i,sj:top.j,
+    lh:+lh.toFixed(4),la:+la.toFixed(4),rho:r,
+    shift:+shift.toFixed(4),playerImpact:+(+p.pls).toFixed(4),
+    playerWeight:+(+p.plw).toFixed(4)};
+}
+
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -137,15 +172,33 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
         if (g.hid && g.aid && kick > 0 && mins > -5 && mins < 125) {
           try { await m.loadLineup(l.id, g.id, g.hid, g.aid); await sleep(150); } catch (e) {}
         }
+        if (!(kick > Date.now())) continue;
         const pp = m.predict(g.hn, g.an, g.odds, l.id, g.hid, g.aid, g.id);
         if (m.noPredGate(pp, l.id)) continue;   // v12:資料不足也建快照(low 標記),評分時另計 —— 結果都要記進資料庫
         if (ex && ex.hs != null) continue;              // 已評分不動
+        // Network calls can cross kickoff. Do not stamp a post-kick forecast as prematch.
+        const capturedAt=Date.now();
+        if(capturedAt>=kick)continue;
+        const xi=m.XI_CACHE[g.id]||null;
+        const factors={mode:pp.core?'compact-core':'full-model',
+          lineup:pp.xi||null,lineupFetchedAt:xi&&xi.t||null,
+          homePlayerIds:xi&&xi.homePlayerIds||null,awayPlayerIds:xi&&xi.awayPlayerIds||null,
+          completeStartingXI:!!(xi&&xi.homePlayerIds?.length===11&&xi.awayPlayerIds?.length===11),
+          injuries:pp.plc||null,injuryImpact:pp.pls??null,injuryWeight:pp.plw??null,
+          injuryStatus:'ESPN injury fetch disabled: no reliable coverage',
+          squad:pp.sq||null,xg:pp.xg||null,rest:pp.rest||null,process:pp.prc||null,
+          headToHead:pp.h2||null,weather:pp.wx||null,tier:pp.tier||null,
+          capturedAt:new Date(capturedAt).toISOString(),source:'calib+ESPN',
+          calibUpdated:w.CLOUD&&w.CLOUD.updated||null,modelVersion,
+          oddsObservedAt:g.odds?capturedAt:null,
+          // Fetch time is observation time, not a claim about source publication time.
+          sourcePublishedAt:null,inputVersions};
         sc[g.id] = { ...(ex || {}),
-          pred: { H: pp.H, D: pp.D, A: pp.A, si: pp.si, sj: pp.sj, conf: pp.conf, pick: pp.pick, lh: pp.lh, la: pp.la, prs: pp.prs, pw: pp.pw, pls: pp.pls, plw: pp.plw,
+          pred: { rho: pp.rho, factors, shadowExact:exactShadow(pp), shadowInjury:injuryShadow(pp), H: pp.H, D: pp.D, A: pp.A, si: pp.si, sj: pp.sj, conf: pp.conf, pick: pp.pick, lh: pp.lh, la: pp.la, prs: pp.prs, pw: pp.pw, pls: pp.pls, plw: pp.plw,
             ...(pp.sc3?{sc3:pp.sc3}:{}), ...(pp.h2s!=null?{h2s:pp.h2s,h2w:pp.h2w}:{}), ...(pp.h2?{h2:pp.h2}:{}), ...(h2l?{h2l}:{}), ...(pp.xi?{xi:pp.xi}:{}), ...(pp.xg?{xg:pp.xg}:{}),   // v10:存 xG 來源(real=Understat 射門級)，純記錄，供事後拆解貢獻
             ...(pp.pure?{pure:pp.pure}:{}), ...(pp.mkp?{mkp:pp.mkp}:{}), ...(pp.mw!=null?{mw:pp.mw}:{}), ...(pp.core?{core:1}:{}), ...(pp.nat?{nat:pp.nat}:{}), ...(pp.db?{db:1}:{}) },   // v13:記錄預測引擎,供上線後拆解驗證   // v2:對戰莊家原料(純模型/市場/權重)
           odds: (g.odds || (ex && ex.odds) || null), odds0: ((ex && ex.odds0) || g.odds || null),
-          dq: pp.dq, low: ((pp.dq || 0) < 0.2) ? 1 : 0, t: (ex && ex.t) || Date.now(), tU: Date.now(), v: 2, locked: 1, lg: l.id,
+          dq: pp.dq, low: ((pp.dq || 0) < 0.2) ? 1 : 0, t: (ex && ex.t) || Date.now(), tU: capturedAt, v: 2, locked: 1, lg: l.id,
           hn: g.hn, an: g.an, hid: g.hid, aid: g.aid, date: g.date, cl: 1 };
         changed = true; nPred++;
       }

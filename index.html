@@ -3655,7 +3655,7 @@ function scGet(){
    本機有多條路徑會「讀出整份帳本 → 改一筆 → 整份寫回」(開賽鎖定、本機預測、自動刷新),
    若讀出的是雲端合併前的舊版,寫回時就把雲端剛合併進來的評分(hs/hit/…)洗掉,
    畫面上完場的比賽就一直卡在「待評分」。這裡在每次寫回時,把雲端已有的欄位重新蓋回去。 */
-const CLOUD_KEEP=["hs","as","hit","brier","score","s3","hz","az","fz","fzT","locked","lg","void","vr","adj","mc","out","pp","homePick","draw","cal","rg"];
+const CLOUD_KEEP=["hs","as","hit","brier","score","s3","hz","az","fz","fzT","date","resultObservedAt","hid","aid","locked","lg","void","vr","adj","mc","out","pp","homePick","draw","cal","rg"];
 function scSet(o){
   try{ const C=(typeof CLOUD_PRED!=="undefined"&&CLOUD_PRED&&CLOUD_PRED.sc)||null;
     if(C&&o){ for(const id in C){ const c=C[id]; if(!c||!o[id]) continue;
@@ -3720,6 +3720,10 @@ async function gradeFinished(games){
       brier:(ex&&ex.brier!=null)?ex.brier:+brier.toFixed(3),
       score:(ex&&ex.score!=null)?ex.score:(predOut===realOut&&sp0.si!=null&&sp0.si===g.hs&&sp0.sj===g.as),   // e168:全中 = 方向對 + 比分對(方向錯就是未中,即使比分巧合相同)
       s3:(ex&&ex.s3!=null)?ex.s3:(Array.isArray(sp0.sc3)&&sp0.sc3.some(c=>c.i===g.hs&&c.j===g.as)),   // e158:Top-3 波膽命中
+      // Preserve event identity and first observed final-result time for chronological research.
+      date:(ex&&ex.date)||g.date, hid:(ex&&ex.hid)||g.hid, aid:(ex&&ex.aid)||g.aid,
+      hn:(ex&&ex.hn)||g.hn, an:(ex&&ex.an)||g.an,
+      resultObservedAt:(ex&&ex.resultObservedAt)||Date.now(),
       hs:g.hs, as:g.as, hz:zhName(g.hn), az:zhName(g.an),
       hnk:norm(g.hn), ank:norm(g.an), t:(ex&&ex.t)||Date.now(), v:ex?(ex.v||1):2,
       homePick:sp0.pick===g.hn, draw:g.hs===g.as, cal:!!(ex&&ex.cal),
@@ -4618,7 +4622,7 @@ async function loadLineup(lg,gameId,hid,aid){
     const ih=pick(hid), ia=pick(aid); if(!ih||!ia) return null;
     const rh=xiRatioOf(lg,hid,ih), ra=xiRatioOf(lg,aid,ia);
     if(rh==null&&ra==null) return null;
-    XI_CACHE[gameId]={h:rh,a:ra,t:Date.now()};
+    XI_CACHE[gameId]={h:rh,a:ra,t:Date.now(),homePlayerIds:ih,awayPlayerIds:ia};
     return XI_CACHE[gameId];
   }catch(e){ return null; }
 }

@@ -8,7 +8,7 @@ const fs=require('node:fs');
 const f=process.argv[2]||'cloud-pred.json';
 const raw=JSON.parse(fs.readFileSync(f,'utf8'));
 const rows=Object.values(raw.sc||{}).filter(s=>{
- if(!s||s.void||!s.fz||!s.fzT||!s.fz.shadowInjury)return false;
+ if(require('./scripts/prematch-evidence').rejection(s)||!s.fz.shadowInjury)return false;
  const t=Date.parse(s.date||'');
  if(!Number.isFinite(t)||+s.fzT>=t)return false;
  const p=s.fz,alt=p.shadowInjury;

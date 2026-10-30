@@ -10,10 +10,10 @@ const rows=Object.values(data.sc||{}).filter(s=>s&&s.fz&&s.fzT);
 const out={source:file,frozenRows:rows.length,
  withFactors:0,strictPrematch:0,withPublishedLineup:0,withInjuryContext:0,byField:Object.fromEntries(fields.map(x=>[x,0])),byLeague:{}};
 for(const s of rows){
- const p=s.fz, f=p.factors;if(!f)continue;
+ const p=s.fz, f=p.factors;if(!f||require('./scripts/prematch-evidence').rejection({...s,hs:0,as:0}))continue;
  out.withFactors++;
  const kickoff=Date.parse(s.date||'');
- if(Number.isFinite(kick)&&+s.fzT<kick)out.strictPrematch++;
+ if(Number.isFinite(kickoff)&&+s.fzT<kickoff)out.strictPrematch++;
  const league=s.lg||'unknown';
  const L=out.byLeague[league]||(out.byLeague[league]={withFactors:0,lineups:0,injuries:0});
  L.withFactors++;
