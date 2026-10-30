@@ -1,0 +1,21 @@
+name: 正確比分賽前快照稽核
+on:
+  pull_request:
+    paths:
+      - score-audit.js
+      - .github/workflows/score-audit.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  score-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check audit script syntax
+        run: node --check score-audit.js
+      - name: Audit immutable prematch scores without changing model data
+        run: node score-audit.js cloud-pred.json
