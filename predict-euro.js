@@ -80,8 +80,13 @@ function injuryShadow(p) {
     else if(i===1&&j===1)tau=1-r;
     cells.push({i,j,p:px(i,lh)*px(j,la)*Math.max(0.01,tau)});
   }
-  cells.sort((a,b)=>b.p-a.p||a.i-b.i||a.j-b.j);
-  const top=cells[0];
+  // Keep the production score-selection objective and the original
+  // predicted direction, so the shadow comparison isolates injury impacts.
+  const direction=Math.sign((+p.si)-(+p.sj));
+  const sw=(w.TUNE&&Number.isFinite(+w.TUNE.sw))?Math.max(0,Math.min(.3,+w.TUNE.sw)):.10;
+  const eligible=cells.filter(c=>Math.sign(c.i-c.j)===direction);
+  eligible.sort((a,b)=>(b.p*(1+sw*(b.i+b.j)))-(a.p*(1+sw*(a.i+a.j)))||a.i-b.i||a.j-b.j);
+  const top=eligible[0];
   return {kind:"core-injury-shadow-v1",si:top.i,sj:top.j,
     lh:+lh.toFixed(4),la:+la.toFixed(4),rho:r,
     shift:+shift.toFixed(4),playerImpact:+(+p.pls).toFixed(4),
