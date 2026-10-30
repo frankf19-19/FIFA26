@@ -1731,7 +1731,11 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
       la*=C((0.75*xa2.xg.xf+0.25*xa2.gf)/Math.max(xa2.gf,0.3)); // 客隊攻
       la*=C((0.75*xh.xg.xa+0.25*xh.ga)/Math.max(xh.ga,0.3));    // 主隊防(xGA)
       lh*=C((0.75*xa2.xg.xa+0.25*xa2.ga)/Math.max(xa2.ga,0.3)); // 客隊防
-      _xg={h:xh.xg.xf,a:xa2.xg.xf,real:(xh.real&&xa2.real)?1:0};
+      _xg={h:xh.xg.xf,a:xa2.xg.xf,real:(xh.real&&xa2.real)?1:0,
+        nH:xh.xg.n,nA:xa2.xg.n,hXga:xh.xg.xa,aXga:xa2.xg.xa,
+        hGf:xh.gf,aGf:xa2.gf,hGa:xh.ga,aGa:xa2.ga,
+        hFactor:C((.75*xh.xg.xf+.25*xh.gf)/Math.max(xh.gf,.3))*C((.75*xa2.xg.xa+.25*xa2.ga)/Math.max(xa2.ga,.3)),
+        aFactor:C((.75*xa2.xg.xf+.25*xa2.gf)/Math.max(xa2.gf,.3))*C((.75*xh.xg.xa+.25*xh.ga)/Math.max(xh.ga,.3))};
     }
   }catch(e){}
   // ② 歐戰夾縫:近 4 天內踢過歐冠/歐霸 → 輪換與疲勞折扣(-3%)

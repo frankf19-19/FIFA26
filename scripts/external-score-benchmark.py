@@ -20,6 +20,14 @@ TEST = dt.date(2024, 7, 1).toordinal()
 GRID = [(h, p, r) for h in [120, 240, 365] for p in [5, 15, 30] for r in [0, -.05, -.1]]
 
 
+def final_score(match):
+    score=match.get('score')
+    # Empty lists are used for unplayed fixtures in newer source seasons.
+    if isinstance(score,dict):return score.get('ft')
+    if isinstance(score,list) and len(score)==2:return score
+    return None
+
+
 def load(root):
     rows, manifest, seen = [], [], set()
     for season in SEASONS:
@@ -29,9 +37,9 @@ def load(root):
             manifest.append({'path': str(path.relative_to(root)), 'sha256': hashlib.sha256(raw).hexdigest()})
             matches=json.loads(raw)['matches']
             manifest[-1]['scheduled']=len(matches)
-            manifest[-1]['missingFinal']=sum(not isinstance(m.get('score',{}).get('ft'),list) for m in matches)
+            manifest[-1]['missingFinal']=sum(not isinstance(final_score(m),list) for m in matches)
             for m in matches:
-                score = m.get('score', {}).get('ft')
+                score = final_score(m)
                 if not isinstance(score, list) or len(score) != 2:
                     continue
                 if any(type(x) is not int or x < 0 for x in score):
