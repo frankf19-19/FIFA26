@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e224";
+const BUILD = "e225";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1477,7 +1477,7 @@ function isoDate(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2
 function poisson(k,l){let e=Math.exp(-l),f=1;for(let i=2;i<=k;i++)f*=i;return e*Math.pow(l,k)/f;}
 /* e144:給「比分依據」用 —— 依 λ 重建比分矩陣(與 predict 同一套 Poisson + Dixon-Coles),回傳排序後的比分機率 */
 function scoreTable(lh,la,rho){
-  const RHO=(rho!=null)?rho:-0.13;
+  const RHO=(rho!=null)?rho:0;
   const tau=(i,j)=>{ if(i===0&&j===0) return Math.max(0.01,1-lh*la*RHO); if(i===0&&j===1) return Math.max(0.01,1+lh*RHO);
     if(i===1&&j===0) return Math.max(0.01,1+la*RHO); if(i===1&&j===1) return Math.max(0.01,1-RHO); return 1; };
   const out=[]; let t=0;
@@ -1657,7 +1657,7 @@ function predict(homeName,awayName,mkt,lg,hid,aid,gid){
     const id=CLOUD_PRED.byKey[lg+"|"+hid+"|"+aid]; const s=id&&CLOUD_PRED.sc[id];
     const cp=s&&(s.fz||s.pred);
     if(cp&&cp.H!=null&&Math.abs(Date.now()-(s.tU||s.t||0))<4*86400000){   // 4 天內的雲端預測才採用
-      return {...loc, H:cp.H, D:cp.D, A:cp.A, si:cp.si, sj:cp.sj, sc3:(cp.sc3||((loc.sc3&&loc.sc3[0]&&loc.sc3[0].i===cp.si&&loc.sc3[0].j===cp.sj)?loc.sc3:null)), xi:(cp.xi!==undefined?cp.xi:loc.xi), h2:(cp.h2!==undefined?cp.h2:loc.h2), h2s:(cp.h2s!=null?cp.h2s:loc.h2s), conf:cp.conf, pick:cp.pick, lh:cp.lh!=null?cp.lh:loc.lh, la:cp.la!=null?cp.la:loc.la,
+      return {...loc, H:cp.H, D:cp.D, A:cp.A, si:cp.si, sj:cp.sj, rho:cp.rho!=null?cp.rho:loc.rho, sc3:(cp.sc3||((loc.sc3&&loc.sc3[0]&&loc.sc3[0].i===cp.si&&loc.sc3[0].j===cp.sj)?loc.sc3:null)), xi:(cp.xi!==undefined?cp.xi:loc.xi), h2:(cp.h2!==undefined?cp.h2:loc.h2), h2s:(cp.h2s!=null?cp.h2s:loc.h2s), conf:cp.conf, pick:cp.pick, lh:cp.lh!=null?cp.lh:loc.lh, la:cp.la!=null?cp.la:loc.la,
         prs:cp.prs!=null?cp.prs:loc.prs, pw:cp.pw!=null?cp.pw:loc.pw, pls:cp.pls!=null?cp.pls:loc.pls, plw:cp.plw!=null?cp.plw:loc.plw, dq:s.dq!=null?s.dq:loc.dq, cloud:1};
     } } }catch(e){}
   return loc;
@@ -2000,7 +2000,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
   const pick = predOut==="H" ? homeName : predOut==="A" ? awayName : "和局";
   return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,sc3:_sc3,conf,pick,db:_drawBold,nat:_nat,core:_core,xi:_xi,mk:(!!mkt&&!PURE_MODE),mkAvail:!!mkt,pure:_pure,mkp:_mkp,mw:(PURE_MODE?0:_mw),h2s:_h2s,h2w:_h2w,h2:_h2,
-          lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr,tier:_tierN,prc:_prc,prs:+_prs.toFixed(3),pw:PROC_W,plc:_plc,pls:_pls,plw:PL_W,wx:_wxc,wxf:+_wxf.toFixed(3)};
+          rho:RHO,lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr,tier:_tierN,prc:_prc,prs:+_prs.toFixed(3),pw:PROC_W,plc:_plc,pls:_pls,plw:PL_W,wx:_wxc,wxf:+_wxf.toFixed(3)};
 }
 /* e145:列表上的一行比分理由(未完賽顯示;完賽由檢討行取代) */
 /* e220:高比分押法(並列追蹤,不影響主比分與全中判定)。
@@ -2034,7 +2034,7 @@ function renderAltDuel(){
   const W=7*86400000, now=Date.now(); let wn=0,wex=0,wax=0;
   for(const s of S){ const P=s.fz||s.pred; const a=hiAltPick(P); if(!a) continue;
     const e1=(+P.si===s.hs&&+P.sj===s.as), e2=(a.i===s.hs&&a.j===s.as);
-    if(+P.lh>0&&+P.la>0){ const tb=scoreTable(+P.lh,+P.la); const rk=tb.findIndex(x=>x[0]===s.hs&&x[1]===s.as); t5n++; if(rk>=0&&rk<5) t5h++; if(rk>=0&&rk<3) t3h++; }
+    if(+P.lh>0&&+P.la>0){ const tb=scoreTable(+P.lh,+P.la,P.rho); const rk=tb.findIndex(x=>x[0]===s.hs&&x[1]===s.as); t5n++; if(rk>=0&&rk<5) t5h++; if(rk>=0&&rk<3) t3h++; }
     n++; ex+=e1; ax+=e2; if(!a.same){ fired++; fEx+=e1; fAx+=e2; }
     if(s.fzT>=now-W){ wn++; wex+=e1; wax+=e2; } }
   if(n<10) return "";
@@ -2055,7 +2055,7 @@ function renderAltDuel(){
 function scorePanel(p,g,done){
   try{
     if(p==null||!(+p.lh>0)||!(+p.la>0)) return "";
-    const tab=scoreTable(+p.lh,+p.la);               // [主,客,%] 由高到低
+    const tab=scoreTable(+p.lh,+p.la,p.rho);               // [主,客,%] 由高到低
     const top5=tab.slice(0,5), cov=top5.reduce((a,x)=>a+x[2],0);
     const P={}; tab.forEach(x=>P[x[0]+"-"+x[1]]=x[2]);
     const hd=(p.si!=null&&p.sj!=null)?p.si+"-"+p.sj:null;
