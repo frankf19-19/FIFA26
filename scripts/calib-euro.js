@@ -349,6 +349,44 @@ function buildCore(out){
     console.log("v30 精簡核心表:"+Object.keys(core).length+" 聯賽、"+nT+" 隊");
   }catch(e){ console.log("v30 核心表失敗:", e.message); }
 }
+/* ===== v34:對手強度校正的攻守評分 =====
+   核心表用的是原始進失球(沒看對手是誰):連踢三支弱隊進很多球就會被高估。
+   這裡每個聯賽用時間衰減 Poisson 模型同時解出每隊「攻擊力 / 防守力」(依對手強度互相校正,250 天半衰期、先驗 3 場)。
+   9,556 場時間序回測:與核心表 30% 混合 → Brier 5 段全勝、勝負方向命中 5 段全勝(+0.3~0.9 點)。
+   前端 e225 依 tune.json 的 adw 權重混合(沒有就 0.3)。 */
+function buildAdj(out){
+  try{
+    if(!out.core) return;
+    let USE=0.6; try{ const tj=JSON.parse(fs.readFileSync("tune.json","utf8")); if(+tj.xgw>=0.3&&+tj.xgw<=0.9) USE=+tj.xgw; }catch(e){}
+    const HALF=250, PRI=3, SCv=0.321, now=Date.now(), BY={};
+    for(const id in MATCHES){ const M=MATCHES[id];
+      if(!M||M.hs==null||!M.d||!M.lg||!out.core[M.lg]) continue;
+      const d=Date.parse(M.d+"T12:00:00Z"); if(!(d>0)) continue;
+      const s0=M.sot, ok=Array.isArray(s0)&&((+s0[0]||0)+(+s0[1]||0))>0;
+      const sh=ok?(+s0[0]||0):M.hs/SCv, sa=ok?(+s0[1]||0):M.as/SCv;
+      (BY[M.lg]=BY[M.lg]||[]).push([String(M.hid),String(M.aid),(1-USE)*M.hs+USE*sh*SCv,(1-USE)*M.as+USE*sa*SCv,Math.exp(-Math.LN2*((now-d)/86400000)/HALF)]);
+    }
+    let nT=0;
+    for(const lg in BY){ const X=BY[lg]; if(X.length<30) continue;
+      const att={}, de={}; X.forEach(x=>{ att[x[0]]=att[x[1]]=0; de[x[0]]=de[x[1]]=0; });
+      let sw=0,sy=0,syh=0,sya=0; X.forEach(x=>{ sw+=x[4]; sy+=x[4]*(x[2]+x[3]); syh+=x[4]*x[2]; sya+=x[4]*x[3]; });
+      const mu=Math.log(sy/sw/2), hm=Math.log(syh/Math.max(1e-6,sya))/2;
+      for(let it=0; it<25; it++){
+        let num={}, den={};
+        X.forEach(([h,a,yh,ya,w])=>{ num[h]=(num[h]||0)+w*yh; num[a]=(num[a]||0)+w*ya;
+          den[h]=(den[h]||0)+w*Math.exp(mu+hm+de[a]); den[a]=(den[a]||0)+w*Math.exp(mu-hm+de[h]); });
+        for(const t in att) att[t]=Math.log(((num[t]||0)+PRI)/((den[t]||0)+PRI));
+        num={}; den={};
+        X.forEach(([h,a,yh,ya,w])=>{ num[a]=(num[a]||0)+w*yh; num[h]=(num[h]||0)+w*ya;
+          den[a]=(den[a]||0)+w*Math.exp(mu+hm+att[h]); den[h]=(den[h]||0)+w*Math.exp(mu-hm+att[a]); });
+        for(const t in de) de[t]=Math.log(((num[t]||0)+PRI)/((den[t]||0)+PRI));
+      }
+      const t={}; for(const k in att){ t[k]=[+att[k].toFixed(4),+de[k].toFixed(4)]; nT++; }
+      out.core[lg].adj={mu:+mu.toFixed(4), hm:+hm.toFixed(4), t};
+    }
+    console.log("v34 對手校正評分:"+nT+" 隊");
+  }catch(e){ console.log("v34 對手校正失敗:", e.message); }
+}
 function buildPlayerIndex(){
   try{
     const shard={}; let rows=0;
@@ -797,6 +835,7 @@ function accProcess(T, hid, aid, hs, as, pr, w){
   buildXiBase(out);   // v16
   await buildNational(out);   // v28
   buildCore(out);   // v30
+  buildAdj(out);    // v34
   save(out, null);
   console.log("全部完成:", out.n, "場,", Object.keys(out.leagues).length, "個聯賽");
 })();

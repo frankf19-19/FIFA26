@@ -167,7 +167,7 @@ try:
     base=sc(sel_cur,HO); be=sum(x[0] for x in base)/len(base); bh=sum(x[1] for x in base)/len(base)
     cand=[]
     for sw in [0.0,0.05,0.10,0.15,0.20]:
-        for dm in [1.2,1.3,1.4,99]:
+        for dm in [1.0,1.1,1.2,1.3,1.4,99]:   # v7:正確比分優先 → 加入 1.0/1.1
             p={'sw':sw,'dm':dm}
             if p==sel_cur: continue
             cand.append(p)
@@ -175,7 +175,8 @@ try:
     rb=sc(pb,HO); ex=sum(x[0] for x in rb)/len(rb); hh=sum(x[1] for x in rb)/len(rb)
     log_.append(f"比分規則(候選僅由訓練區選出):現行 {sel_cur} 全中 {be:.1%} 方向 {bh:.1%};最佳 {pb} 全中 {ex:.1%} 方向 {hh:.1%}")
     sel_best=dict(sel_cur); sel_changed=False
-    if ex-be>=0.004 and bh-hh<=0.003:
+    # v7:Frank 11/1 決定「正確比分優先」—— 不再因方向命中下降而擋下(仍記錄在 log)
+    if ex-be>=0.004:
         n=len(HO); seg=n//5; nl=0
         for i in range(5):
             a=base[i*seg:(i+1)*seg] if i<4 else base[4*seg:]; b=rb[i*seg:(i+1)*seg] if i<4 else rb[4*seg:]
@@ -187,7 +188,7 @@ try:
         log_.append(f"比分規則閘門:全中 +{(ex-be)*100:.1f} 點、5 段不輸 {nl}/5、bootstrap {w/300:.0%}")
         if nl>=4 and w/300>=0.85: sel_best=pb; sel_changed=True; log_.append("比分規則三關全過 → 更新")
         else: log_.append("比分規則未全過 → 維持")
-    else: log_.append("比分規則:改善不足或傷到方向命中 → 維持")
+    else: log_.append("比分規則:全中改善不足 → 維持")
     best.update(sel_best); changed=changed or sel_changed
     # v6:Top-3 高比分門檻 t3h 也自動調(目標 = Top-3 命中率):預期總進球 ≥ t3h 時,第三格換成看好方向內 ≥4 球的最高格
     def top3(M,lam,sw,t3h):
@@ -224,7 +225,88 @@ try:
     else: log_.append("Top-3 門檻:改善不足 → 維持")
 except Exception as e:
     log_.append("比分規則調參失敗:"+str(e)); best.setdefault('sw',CUR.get('sw',0.10)); best.setdefault('dm',CUR.get('dm',1.3)); best.setdefault('t3h',CUR.get('t3h',3.2))
+
+# ===== v7:對手強度校正混合權重 adw(前端 e225 / calib v34)=====
+#   每個聯賽用時間衰減 Poisson 同時解出各隊攻擊/防守(依對手強弱互相校正,250 天半衰期、先驗 3 場、只用賽前資料),
+#   與核心 λ 以對數混合。候選 0 / 0.3 / 0.5,只用訓練區挑選,保留區過三關(Brier ≥0.0015、5 段 ≥4 勝、bootstrap ≥85%)才換。
+try:
+    import numpy as np
+    def adj_map(xgw,HALF=250,PRI=3.0):
+        by=collections.defaultdict(list)
+        for k,v in sorted(m.items(),key=lambda x:x[1].get('d') or ''):
+            if v.get('hs') is None or not v.get('d') or not v.get('lg'): continue
+            s=v.get('sot'); ok=bool(s) and ((s[0] or 0)+(s[1] or 0))>0
+            sh=(s[0] or 0) if ok else v['hs']/SC; sa=(s[1] or 0) if ok else v['as']/SC
+            by[v['lg']].append((dt(v['d']),str(v['hid']),str(v['aid']),(1-xgw)*v['hs']+xgw*sh*SC,(1-xgw)*v['as']+xgw*sa*SC,id(v)))
+        out={}
+        for lg,Mx in by.items():
+            teams=sorted({x[1] for x in Mx}|{x[2] for x in Mx}); ix={t:i for i,t in enumerate(teams)}; T=len(teams)
+            D=np.array([(x[0]-Mx[0][0]).days for x in Mx]); H=np.array([ix[x[1]] for x in Mx]); Aw=np.array([ix[x[2]] for x in Mx])
+            YH=np.array([x[3] for x in Mx]); YA=np.array([x[4] for x in Mx]); att=np.zeros(T); de=np.zeros(T); last=None; cur_=None
+            for q,x in enumerate(Mx):
+                d=D[q]
+                if last!=d:
+                    past=D<d
+                    if past.sum()>=30:
+                        w=np.exp(-math.log(2)*(d-D[past])/HALF); h=H[past]; a_=Aw[past]; yh=YH[past]; ya=YA[past]
+                        mu=math.log((w*(yh+ya)).sum()/w.sum()/2); hm=math.log((w*yh).sum()/max(1e-9,(w*ya).sum()))/2
+                        for it in range(25):
+                            num=np.bincount(h,w*yh,T)+np.bincount(a_,w*ya,T); den=np.bincount(h,w*np.exp(mu+hm+de[a_]),T)+np.bincount(a_,w*np.exp(mu-hm+de[h]),T)
+                            att=np.log((num+PRI)/(den+PRI))
+                            num=np.bincount(a_,w*yh,T)+np.bincount(h,w*ya,T); den=np.bincount(a_,w*np.exp(mu+hm+att[h]),T)+np.bincount(h,w*np.exp(mu-hm+att[a_]),T)
+                            de=np.log((num+PRI)/(den+PRI))
+                        cur_=(mu,hm)
+                    else: cur_=None
+                    last=d
+                if cur_ is not None:
+                    i,j=ix[x[1]],ix[x[2]]; out[x[5]]=(cur_[0],cur_[1],float(att[i]+de[j]),float(att[j]+de[i]))
+        return out
+    AJ=adj_map(best['xgw'])
+    def brier_adj(rows,p,adw):
+        res=[]
+        for v,(gfh,gah,sfh,sah),(gfa,gaa,sfa,saa),lgf,lha,rh,ra,d in rows:
+            xgw,shr,xik,hk=p['xgw'],p['shr'],p['xik'],p.get('hk',1.5)
+            afh=(1-xgw)*gfh+xgw*sfh*SC; adh=(1-xgw)*gah+xgw*sah*SC; afa=(1-xgw)*gfa+xgw*sfa*SC; ada=(1-xgw)*gaa+xgw*saa*SC
+            HK=(hk+0.5) if str(v.get('lg','')).startswith('uefa') else hk
+            lh=max(.15,lgf*exp(shr*(log(max(afh,.05)/lgf)+log(max(ada,.05)/lgf)))+lha*HK/2)
+            la=max(.15,lgf*exp(shr*(log(max(afa,.05)/lgf)+log(max(adh,.05)/lgf)))-lha*HK/2)
+            z=AJ.get(id(v))
+            if z and adw>0:
+                alh=exp(z[0]+z[1]*HK+1.15*z[2]); ala=exp(z[0]-z[1]*HK+1.15*z[3])
+                if .05<alh<6 and .05<ala<6: lh=exp((1-adw)*log(lh)+adw*log(alh)); la=exp((1-adw)*log(la)+adw*log(ala))
+            ap=lambda x: max(-.18,min(.18,xik*log(max(.4,min(1.8,x)))))
+            lh=max(.12,lh*exp(ap(rh))); la=max(.12,la*exp(ap(ra)))
+            Hh=Dd=Aa=0
+            for i in range(8):
+                for j in range(8):
+                    q=exp(pll(lh,i)+pll(la,j))
+                    if i>j: Hh+=q
+                    elif i==j: Dd+=q
+                    else: Aa+=q
+            t=Hh+Dd+Aa; P={'H':Hh/t,'D':Dd/t,'A':Aa/t}
+            real='H' if v['hs']>v['as'] else ('A' if v['hs']<v['as'] else 'D')
+            res.append((d,sum((P[k2]-(1 if k2==real else 0))**2 for k2 in 'HDA')))
+        return res
+    RW=rows_for(best['half']); adw_cur=CUR.get('adw',0.3)
+    def split(b): return [x for x in b if x[0]>HOLD],[x for x in b if HOLD-datetime.timedelta(days=540)<x[0]<=TRAIN_END]
+    BR={w:brier_adj(RW,best,w) for w in sorted({0.0,0.3,0.5,adw_cur})}
+    trm={w:sum(x[1] for x in split(b)[1])/max(1,len(split(b)[1])) for w,b in BR.items()}
+    wb=min(trm,key=trm.get); hc=split(BR[adw_cur])[0]; hn=split(BR[wb])[0]
+    g=sum(x[1] for x in hc)/len(hc)-sum(x[1] for x in hn)/len(hn)
+    log_.append(f"對手校正權重 adw:現行 {adw_cur} 保留 Brier {sum(x[1] for x in hc)/len(hc):.4f};訓練區最佳 {wb} 保留 {sum(x[1] for x in hn)/len(hn):.4f}")
+    best['adw']=adw_cur
+    if wb!=adw_cur and g>=0.0015:
+        n=len(hc); seg=n//5; sw_=sum(1 for i in range(5) if sum(x[1] for x in (hn[i*seg:(i+1)*seg] if i<4 else hn[4*seg:]))<sum(x[1] for x in (hc[i*seg:(i+1)*seg] if i<4 else hc[4*seg:])))
+        random.seed(7); wn=0; pr=list(zip([x[1] for x in hc],[x[1] for x in hn]))
+        for _ in range(200):
+            S=[random.choice(pr) for _ in range(n)]
+            if sum(y for x,y in S)<sum(x for x,y in S): wn+=1
+        if sw_>=4 and wn/200>=0.85: best['adw']=wb; changed=True; log_.append(f"adw 三關全過(段 {sw_}/5、bootstrap {wn/200:.0%})→ 更新為 {wb}")
+        else: log_.append(f"adw 未全過(段 {sw_}/5、bootstrap {wn/200:.0%})→ 維持")
+    else: log_.append("adw:改善不足 → 維持")
+except Exception as e:
+    log_.append("adw 調參失敗:"+str(e)); best.setdefault('adw',CUR.get('adw',0.3))
 out={**best,'updated':datetime.datetime.now(datetime.timezone.utc).isoformat()[:16]+'Z','changed':changed,'holdout_n':len(hold_cur),'brier_cur':round(base_hold,4),'brier_best':round(top[1],4),'log':log_,
      'history':(CUR.get('history') or [])[-11:]+[{'t':datetime.datetime.now(datetime.timezone.utc).isoformat()[:10],'changed':changed,'cur':round(base_hold,4),'best':round(top[1],4),'p':top[2]}]}
 json.dump(out,open('tune.json','w'),ensure_ascii=False)
-print("\n".join(log_)); print("→",{k:best.get(k) for k in ('half','xgw','shr','xik','hk','sw','dm','t3h')},"changed" if changed else "unchanged")
+print("\n".join(log_)); print("→",{k:best.get(k) for k in ('half','xgw','shr','xik','hk','sw','dm','t3h','adw')},"changed" if changed else "unchanged")

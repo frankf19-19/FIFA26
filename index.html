@@ -1862,7 +1862,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
      同一批 463 場對照:線上 21 層模型命中 46.2% / Brier 0.6196,精簡核心 49.2% / 0.6102(時間切 5 段贏 4 段;bootstrap 命中較高機率 97%)。
      預期進球改由精簡核心算(calib v30 的 core 表),只把驗證過有效的「先發陣容」加回來;
      和局錨定、和局補正、資料量收縮在核心模式下關閉。任一隊在該聯賽不足 5 場時退回完整模型。 */
-  let _core=0;
+  let _core=0, _adj=null;
   { const CO=window.CLOUD&&window.CLOUD.core&&window.CLOUD.core[lg];
     const th=CO&&CO.t&&CO.t[String(hid)], ta=CO&&CO.t&&CO.t[String(aid)];
     if(CO&&th&&ta&&th[4]>=5&&ta[4]>=5){
@@ -1878,6 +1878,14 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
       const afa=(1-USE)*ta[0]+USE*ta[2]*SC, ada=(1-USE)*ta[1]+USE*ta[3]*SC;
       let clh=Math.max(.15,lgf*Math.exp(SHR*(Math.log(Math.max(afh,.05)/lgf)+Math.log(Math.max(ada,.05)/lgf)))+lha/2);
       let cla=Math.max(.15,lgf*Math.exp(SHR*(Math.log(Math.max(afa,.05)/lgf)+Math.log(Math.max(adh,.05)/lgf)))-lha/2);
+      /* e225:對手強度校正 —— calib v34 每個聯賽用時間衰減 Poisson 同時解出各隊攻擊/防守力(依對手強弱互相校正)。
+         核心表只看原始進失球,連踢弱隊的球隊會被高估;兩者以對數混合(權重 tune.json 的 adw,預設 0.3)。
+         9,556 場時間序回測:Brier 5 段全勝、勝負方向命中 5 段全勝(+0.3~0.9 點)。 */
+      { const AD=CO.adj, ah=AD&&AD.t&&AD.t[String(hid)], aa=AD&&AD.t&&AD.t[String(aid)];
+        const ADW=(_T.adw!=null&&+_T.adw>=0&&+_T.adw<=0.8)?+_T.adw:0.3;
+        if(ah&&aa&&ADW>0){ const HKx=/^uefa\./.test(lg)?HK+0.5:HK;
+          const alh=Math.exp(AD.mu+AD.hm*HKx+1.15*(ah[0]+aa[1])), ala=Math.exp(AD.mu-AD.hm*HKx+1.15*(aa[0]+ah[1]));
+          if(alh>0.05&&ala>0.05&&alh<6&&ala<6){ clh=Math.exp((1-ADW)*Math.log(clh)+ADW*Math.log(alh)); cla=Math.exp((1-ADW)*Math.log(cla)+ADW*Math.log(ala)); _adj={w:ADW,h:+alh.toFixed(2),a:+ala.toFixed(2)}; } } }
       if(_xi&&_xi.dh!=null){ clh*=Math.exp(_xi.dh); cla*=Math.exp(_xi.da); }
       lh=clh; la=cla; _core=1;
     } }
@@ -1906,7 +1914,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
   /* e217:比分挑選兩個規則也交給每週自動調參(目標 = 全中率):sw 進球權重(0~0.3,預設 0.10)、dm 大膽和局門檻(1.1~99,預設 1.3;99 = 關閉) */
   const _TT=window.TUNE||{};
   const _SW=(_TT.sw!=null&&+_TT.sw>=0&&+_TT.sw<=0.3)?+_TT.sw:0.10;
-  const _DM=(_TT.dm!=null&&+_TT.dm>=1.1&&+_TT.dm<=99)?+_TT.dm:1.3;
+  const _DM=(_TT.dm!=null&&+_TT.dm>=1.0&&+_TT.dm<=99)?+_TT.dm:1.1;   // e225:正確比分優先(Frank 11/1 決定):預設 1.3→1.1,9,556 場回測全中 11.4%→12.1%(5 段 4 勝),代價是方向命中 49%→42%、約一半場次押和局
   const _cells=[];                                          // e158:全部比分格,供 Top-3 波膽
   for(let i=0;i<8;i++)for(let j=0;j<8;j++){const p=poisson(i,lh)*poisson(j,la)*tau(i,j);
     const k=i>j?"H":i===j?"D":"A";
@@ -2003,7 +2011,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
   // 信心分級同時看機率高度與資料品質:資料不足時不給「高」
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
   const pick = predOut==="H" ? homeName : predOut==="A" ? awayName : "和局";
-  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,sc3:_sc3,conf,pick,db:_drawBold,nat:_nat,core:_core,xi:_xi,mk:(!!mkt&&!PURE_MODE),mkAvail:!!mkt,pure:_pure,mkp:_mkp,mw:(PURE_MODE?0:_mw),h2s:_h2s,h2w:_h2w,h2:_h2,
+  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,sc3:_sc3,conf,pick,db:_drawBold,nat:_nat,core:_core,adj:_adj,xi:_xi,mk:(!!mkt&&!PURE_MODE),mkAvail:!!mkt,pure:_pure,mkp:_mkp,mw:(PURE_MODE?0:_mw),h2s:_h2s,h2w:_h2w,h2:_h2,
           rho:RHO,lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr,tier:_tierN,prc:_prc,prs:+_prs.toFixed(3),pw:PROC_W,plc:_plc,pls:_pls,plw:PL_W,wx:_wxc,wxf:+_wxf.toFixed(3)};
 }
 /* e145:列表上的一行比分理由(未完賽顯示;完賽由檢討行取代) */
@@ -3921,6 +3929,8 @@ function renderWeekly(){
     ["主場加碼(國內 ×1.5、歐戰 ×2.0)", "已上線(e214);6 段全勝"],
     ["自動調參 → 直接驅動核心", T?(T.changed?"本週已更新參數":"已驗證,現行最佳("+String(T.updated).slice(5,10)+")"):"等 tune.json"],
     ["比分挑選:進球權重 + Top-3 含和局 + 大膽和局", "已上線(e207/e208/e210)"],
+    ["對手強度校正(攻守依對手互相校正)", (T&&T.adw!=null)?("已上線(e225),權重 "+T.adw+",每週自動驗證"):"已上線(e225),預設權重 0.3"],
+    ["正確比分優先:放寬押和局門檻", (T&&T.dm!=null)?("已上線(e225),門檻 "+T.dm+";回測全中 11.4%→12.1%、方向 49%→42%"):"已上線(e225)"],
     ["球員逐場模型", "等資料:需每人 ≥50 場,現約 2,500 人達標"],
     ["射門/角球/控球/裁判/陣型/觀眾", "已測,無增量,不再納入"],
     ["市場賠率當特徵", "已排除(純模型原則);列表以「市場看好」標籤提示"]
