@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e225";
+const BUILD = "e226";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1902,6 +1902,21 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
     } }
   let H=0,D=0,A=0;
   const best={H:{p:-1,i:1,j:0}, D:{p:-1,i:1,j:1}, A:{p:-1,i:0,j:1}};   // 各結果下最可能的單一比分
+  /* e226:混入市場強弱判斷(Frank 11/9 決定:正確比分優先,放寬純模型原則)。
+     作法:總進球維持模型的 λh+λa,只把「兩隊強弱差」調到與市場 1X2(主勝−客勝)一致,再與模型 λ 以對數混合(權重 tune.json 的 mkw,預設 0.7)。
+     網站已鎖定的 1,409 場實戰預測:全中 9.5% → 10.5%(4 個時段都沒變差)、勝負方向 43.5% → 46.5%、Brier 0.592 → 0.574。
+     沒有賠率的場次維持純模型。混合前的 λ 存成 lh0/la0,供每週自動調參重新驗證權重。 */
+  const _lh0=lh, _la0=la; let _mkb=null;
+  { const _TM=window.TUNE||{}; const MKW=(_TM.mkw!=null&&+_TM.mkw>=0&&+_TM.mkw<=1)?+_TM.mkw:0.7;
+    if(mkt&&MKW>0&&+mkt.h>0&&+mkt.a>0&&+mkt.d>0){
+      const ts=(+mkt.h)+(+mkt.d)+(+mkt.a), tgt=(+mkt.h-(+mkt.a))/ts, T=lh+la;
+      const sup=(x,y)=>{ let pH=0,pA=0,tt=0; for(let i=0;i<9;i++)for(let j=0;j<9;j++){ const q=poisson(i,x)*poisson(j,y); tt+=q; if(i>j)pH+=q; else if(i<j)pA+=q; } return (pH-pA)/tt; };
+      let lo=-T*0.95, hi=T*0.95, mid=0;
+      for(let it=0; it<36; it++){ mid=(lo+hi)/2; if(sup((T+mid)/2,(T-mid)/2)<tgt) lo=mid; else hi=mid; }
+      const mh=Math.max(0.1,(T+mid)/2), ma=Math.max(0.1,(T-mid)/2);
+      lh=Math.exp((1-MKW)*Math.log(lh)+MKW*Math.log(mh)); la=Math.exp((1-MKW)*Math.log(la)+MKW*Math.log(ma));
+      _mkb={w:MKW,mh:+mh.toFixed(2),ma:+ma.toFixed(2)};
+    } }
   // Dixon-Coles 低分修正:獨立卜瓦松會低估 0-0/1-1(和局),高估 1-0/0-1
   const RHO=(cl&&cl.rho!=null)?cl.rho:0;   // e160:calib v13 起雲端逐聯賽最大概似擬合 rho(樣本收縮);過去寫死 -0.13 是猜的,實測 1975 場合併僅約 -0.01,寫死的負值把 1-1 灌水約 13%,造成精準比分過度集中 1-1 → 無實測值時改用 0(標準卜瓦松)
   const tau=(i,j)=>{
@@ -2011,7 +2026,7 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
   // 信心分級同時看機率高度與資料品質:資料不足時不給「高」
   const conf = (top>=55&&dq>=0.5)?"高" : (top>=44&&dq>=0.3)?"中" : "低";
   const pick = predOut==="H" ? homeName : predOut==="A" ? awayName : "和局";
-  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,sc3:_sc3,conf,pick,db:_drawBold,nat:_nat,core:_core,adj:_adj,xi:_xi,mk:(!!mkt&&!PURE_MODE),mkAvail:!!mkt,pure:_pure,mkp:_mkp,mw:(PURE_MODE?0:_mw),h2s:_h2s,h2w:_h2w,h2:_h2,
+  return {H:+H.toFixed(1),D:+D.toFixed(1),A:+A.toFixed(1),si,sj,sc3:_sc3,conf,pick,db:_drawBold,nat:_nat,core:_core,adj:_adj,mkb:_mkb,lh0:+_lh0.toFixed(3),la0:+_la0.toFixed(3),xi:_xi,mk:(!!mkt&&!PURE_MODE),mkAvail:!!mkt,pure:_pure,mkp:_mkp,mw:(PURE_MODE?0:_mw),h2s:_h2s,h2w:_h2w,h2:_h2,
           rho:RHO,lh:+lh.toFixed(2),la:+la.toFixed(2),dq:+dq.toFixed(2),prior:_prior,sq:_sq,rest:_rest,xg:_xg,eu:_eu,mv:_mv,ps:(_psH!=null&&_psA!=null?{h:_psH,a:_psA}:null),tdr:_tdr,tier:_tierN,prc:_prc,prs:+_prs.toFixed(3),pw:PROC_W,plc:_plc,pls:_pls,plw:PL_W,wx:_wxc,wxf:+_wxf.toFixed(3)};
 }
 /* e145:列表上的一行比分理由(未完賽顯示;完賽由檢討行取代) */
@@ -2342,7 +2357,8 @@ function analysisRows(hn,an,p,lg,hid,aid){
   rows.push(["主場加成", `係數 ${((((window.CLOUD||{}).leagues||{})[lg]||{}).ha??0.24).toFixed(2)}${HA_TUNE?` ${HA_TUNE>0?"+":""}${HA_TUNE.toFixed(3)}(近 30 天帳本校正)`:""}` + (Math.abs(HA_TUNE)>0.005
     ? `(依實際主勝率自動校準,基準 0.24)`
     : `<span style="color:var(--muted);font-size:11px">(全站通用基準值,尚未依此聯賽校準)</span>`)]);
-  if(PURE_MODE&&p.mkp) rows.push(["市場賠率", `<span style="color:var(--gold)">純模型模式:預測完全不採用賠率</span> —— 本場市場報價 主 ${p.mkp.H}% · 和 ${p.mkp.D}% · 客 ${p.mkp.A}%,僅作為對照與「對戰莊家」計分,不影響預測`]);
+  if(p.mkb) rows.push(["市場賠率", `<span style="color:var(--gold)">已混入市場強弱判斷 ${Math.round(p.mkb.w*100)}%(e226)</span> —— 市場報價 主 ${p.mkp?p.mkp.H:"?"}% · 和 ${p.mkp?p.mkp.D:"?"}% · 客 ${p.mkp?p.mkp.A:"?"}%;總進球維持模型,只把兩隊強弱差往市場靠。混合前預期進球 ${p.lh0}/${p.la0} → 混合後 ${p.lh}/${p.la}`]);
+  else if(PURE_MODE&&p.mkp) rows.push(["市場賠率", `<span style="color:var(--gold)">純模型模式:預測完全不採用賠率</span> —— 本場市場報價 主 ${p.mkp.H}% · 和 ${p.mkp.D}% · 客 ${p.mkp.A}%,僅作為對照與「對戰莊家」計分,不影響預測`]);
   else if(PURE_MODE) rows.push(["市場賠率", `<span style="color:var(--gold)">純模型模式:預測完全不採用賠率</span>`]);
   else if(p.mk&&p.mkp) rows.push(["市場賠率", `市場 主 ${p.mkp.H}% · 和 ${p.mkp.D}% · 客 ${p.mkp.A}% ｜ 純模型 主 ${p.pure.H}% · 和 ${p.pure.D}% · 客 ${p.pure.A}%(融合:模型 ${Math.round((1-(p.mw||MKT_W))*100)}% + 市場 ${Math.round((p.mw||MKT_W)*100)}%,該聯賽實測最佳)`]);
   else if(p.mk) rows.push(["市場賠率", `已融合 ESPN 賠率(模型 ${Math.round((1-MKT_W)*100)}% + 市場 ${Math.round(MKT_W*100)}%)`]);
@@ -2977,7 +2993,7 @@ function renderTodaySection(){
           try{ const sc0=scGet(); const ex0=sc0[g.id];
             if(!ex0 || (ex0.locked && ex0.hs==null)){        // 賽前:滾動更新(吸收陣容/名單變化);已開賽或已評分:碰都不碰
               sc0[g.id]={ ...(ex0||{}),
-                pred:{H:pp.H,D:pp.D,A:pp.A,si:pp.si,sj:pp.sj,conf:pp.conf,pick:pp.pick,lh:pp.lh,la:pp.la,prs:pp.prs,pw:pp.pw,pls:pp.pls,plw:pp.plw,pure:pp.pure,mkp:pp.mkp,mw:pp.mw},
+                pred:{H:pp.H,D:pp.D,A:pp.A,si:pp.si,sj:pp.sj,conf:pp.conf,pick:pp.pick,lh:pp.lh,la:pp.la,lh0:pp.lh0,la0:pp.la0,mkb:pp.mkb,prs:pp.prs,pw:pp.pw,pls:pp.pls,plw:pp.plw,pure:pp.pure,mkp:pp.mkp,mw:pp.mw},
                 odds:(g.odds||(ex0&&ex0.odds)||null), low:((pp.dq||0)<0.2)?1:0,
                 odds0:((ex0&&ex0.odds0)||g.odds||null),
                 dq:pp.dq, t:(ex0&&ex0.t)||Date.now(), tU:Date.now(), v:2, locked:1, lg:l.id };

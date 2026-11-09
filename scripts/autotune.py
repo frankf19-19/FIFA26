@@ -306,7 +306,66 @@ try:
     else: log_.append("adw:改善不足 → 維持")
 except Exception as e:
     log_.append("adw 調參失敗:"+str(e)); best.setdefault('adw',CUR.get('adw',0.3))
+
+# ===== v8:市場強弱混合權重 mkw(前端 e226)=====
+#   用網站自己鎖定的實戰預測(cloud-pred.json):混合前 λ(lh0/la0,舊紀錄即 lh/la)+ 賽前賠率 + 賽果。
+#   目標 = 主比分全中(同網站挑法:sw/dm)。候選 0~1;前 70% 時間挑選、後 30% 驗證:全中 +0.4 點、4 段不輸、bootstrap ≥85% 才換。
+try:
+    import numpy as np
+    from math import factorial as _fac
+    cp=json.load(open('cloud-pred.json')).get('sc',{})
+    LG=[s for s in cp.values() if isinstance(s,dict) and s.get('pred') and s.get('hs') is not None and not s.get('void') and s.get('odds')
+        and (s['pred'].get('lh0') or s['pred'].get('lh'))]
+    LG.sort(key=lambda s:s.get('fzT') or s.get('t') or 0)
+    Kc=9; facv=np.array([_fac(k) for k in range(Kc)],float); I_,J_=np.meshgrid(np.arange(Kc),np.arange(Kc),indexing='ij')
+    def g_(lh,la,rho):
+        g=np.outer(np.exp(-lh)*lh**np.arange(Kc)/facv,np.exp(-la)*la**np.arange(Kc)/facv)
+        g[0,0]*=max(.01,1-lh*la*rho); g[0,1]*=max(.01,1+lh*rho); g[1,0]*=max(.01,1+la*rho); g[1,1]*=max(.01,1-rho); return g/g.sum()
+    def mfit(T,o):
+        ts=o['h']+o['d']+o['a']; tgt=(o['h']-o['a'])/ts; lo,hi=-T*.95,T*.95
+        for _ in range(36):
+            mid=(lo+hi)/2; g=g_((T+mid)/2,(T-mid)/2,0)
+            if g[I_>J_].sum()-g[I_<J_].sum()<tgt: lo=mid
+            else: hi=mid
+        return max(.1,(T+mid)/2),max(.1,(T-mid)/2)
+    swc,dmc=best.get('sw',0.10),best.get('dm',1.1)
+    def pk(g):
+        p=[g[I_>J_].sum(),g[I_==J_].sum(),g[I_<J_].sum()]; k=int(np.argmax(p)); W=g*(1+swc*(I_+J_)); M=[I_>J_,I_==J_,I_<J_][k]
+        b=np.unravel_index(np.argmax(np.where(M,W,-1)),W.shape)
+        if k!=1:
+            bd=np.unravel_index(np.argmax(np.where(I_==J_,W,-1)),W.shape)
+            if W[bd]>=dmc*W[b]: return bd
+        return b
+    PRE=[]
+    for s in LG:
+        P=s['pred']; lh=P.get('lh0') or P['lh']; la=P.get('la0') or P['la']; o=s['odds']
+        if not (o.get('h') and o.get('d') and o.get('a')): continue
+        PRE.append((lh,la,mfit(lh+la,o),P.get('rho') or 0,s['hs'],s['as']))
+    def hits(w,S):
+        out=[]
+        for lh,la,(mh,ma),rho,h,a in S:
+            bh=exp((1-w)*log(lh)+w*log(mh)); ba=exp((1-w)*log(la)+w*log(ma)); i,j=pk(g_(bh,ba,rho)); out.append(1 if (int(i)==h and int(j)==a) else 0)
+        return out
+    mk_cur=CUR.get('mkw',0.7); best['mkw']=mk_cur
+    if len(PRE)>=300:
+        cut=int(len(PRE)*0.7); TRn,HOn=PRE[:cut],PRE[cut:]
+        cands=[0.0,0.3,0.5,0.7,0.9,1.0]
+        trs={w:sum(hits(w,TRn))/len(TRn) for w in cands}; wb=max(trs,key=lambda w:(trs[w],-abs(w-mk_cur)))
+        hc=hits(mk_cur,HOn); hn=hits(wb,HOn); ec=sum(hc)/len(hc); en=sum(hn)/len(hn)
+        log_.append(f"市場權重 mkw(實戰 {len(PRE)} 場):現行 {mk_cur} 驗證全中 {ec:.1%};訓練最佳 {wb} 驗證 {en:.1%}")
+        if wb!=mk_cur and en-ec>=0.004:
+            n=len(hc); seg=n//4; nl=sum(1 for i in range(4) if sum(hn[i*seg:(i+1)*seg] if i<3 else hn[3*seg:])>=sum(hc[i*seg:(i+1)*seg] if i<3 else hc[3*seg:]))
+            random.seed(8); wn=0; pr=list(zip(hc,hn))
+            for _ in range(300):
+                S=[random.choice(pr) for _ in range(n)]
+                if sum(y for x,y in S)>sum(x for x,y in S): wn+=1
+            if nl>=3 and wn/300>=0.85: best['mkw']=wb; changed=True; log_.append(f"mkw 過關(段 {nl}/4、bootstrap {wn/300:.0%})→ 更新為 {wb}")
+            else: log_.append(f"mkw 未過關(段 {nl}/4、bootstrap {wn/300:.0%})→ 維持")
+        else: log_.append("mkw:改善不足 → 維持")
+    else: log_.append(f"mkw:實戰樣本 {len(PRE)} 場不足 300 → 維持")
+except Exception as e:
+    log_.append("mkw 調參失敗:"+str(e)); best.setdefault('mkw',CUR.get('mkw',0.7))
 out={**best,'updated':datetime.datetime.now(datetime.timezone.utc).isoformat()[:16]+'Z','changed':changed,'holdout_n':len(hold_cur),'brier_cur':round(base_hold,4),'brier_best':round(top[1],4),'log':log_,
      'history':(CUR.get('history') or [])[-11:]+[{'t':datetime.datetime.now(datetime.timezone.utc).isoformat()[:10],'changed':changed,'cur':round(base_hold,4),'best':round(top[1],4),'p':top[2]}]}
 json.dump(out,open('tune.json','w'),ensure_ascii=False)
-print("\n".join(log_)); print("→",{k:best.get(k) for k in ('half','xgw','shr','xik','hk','sw','dm','t3h','adw')},"changed" if changed else "unchanged")
+print("\n".join(log_)); print("→",{k:best.get(k) for k in ('half','xgw','shr','xik','hk','sw','dm','t3h','adw','mkw')},"changed" if changed else "unchanged")
