@@ -57,7 +57,7 @@ js += `\n;window.__FEED={sb:{},st:{},inj:{}};
   const slim=ev=>{ try{ const c=(ev.competitions||[])[0]||{}; return {
     id:ev.id, date:ev.date, weather:ev.weather||c.weather||undefined,
     competitions:[{ status:c.status, venue:c.venue?{fullName:c.venue.fullName||c.venue.displayName}:undefined,
-      odds:(c.odds&&c.odds[0])?[{provider:c.odds[0].provider,details:c.odds[0].details,moneyline:c.odds[0].moneyline,homeTeamOdds:c.odds[0].homeTeamOdds,awayTeamOdds:c.odds[0].awayTeamOdds,drawOdds:c.odds[0].drawOdds}]:[],
+      odds:(c.odds&&c.odds[0])?[{provider:c.odds[0].provider,details:c.odds[0].details,moneyline:c.odds[0].moneyline,homeTeamOdds:c.odds[0].homeTeamOdds,awayTeamOdds:c.odds[0].awayTeamOdds,drawOdds:c.odds[0].drawOdds,overUnder:c.odds[0].overUnder,total:c.odds[0].total,overOdds:c.odds[0].overOdds,underOdds:c.odds[0].underOdds}]:[],
       competitors:(c.competitors||[]).map(x=>({homeAway:x.homeAway,score:x.score,winner:x.winner,records:x.records,team:x.team?{id:x.team.id,displayName:x.team.displayName,logo:x.team.logo,abbreviation:x.team.abbreviation}:{}})) }] };
   }catch(e){ return null; } };
   jget=async function(url,live){ const j=await j0(url,live);

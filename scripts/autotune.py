@@ -365,7 +365,46 @@ try:
     else: log_.append(f"mkw:實戰樣本 {len(PRE)} 場不足 300 → 維持")
 except Exception as e:
     log_.append("mkw 調參失敗:"+str(e)); best.setdefault('mkw',CUR.get('mkw',0.7))
+
+# ===== v9:市場總進球混合權重 mtw(前端 e227)=====
+#   用實戰快照裡記錄的大小球盤(odds.ou=[線, 大球機率])+ 混合前 λ。目標 = 實際比分的對數損失(比分機率表準不準)。
+#   e227 起才開始記錄盤口,累積滿 300 場才啟動;前 70% 挑選、後 30% 驗證:改善 ≥0.003、4 段 ≥3 勝、bootstrap ≥85% 才換。
+try:
+    OUR=[]
+    for s in LG:
+        o=s.get('odds') or {}; ou=o.get('ou'); P=s['pred']
+        if not (ou and P.get('lh0') and P.get('la0') and o.get('h') and o.get('d') and o.get('a')): continue
+        L=int(ou[0]); po=ou[1]; lo,hi=.3,7.
+        for _ in range(40):
+            mid=(lo+hi)/2; cdf=sum(exp(-mid)*mid**k/_fac(k) for k in range(L+1))
+            if 1-cdf<po: lo=mid
+            else: hi=mid
+        OUR.append((P['lh0'],P['la0'],(lo+hi)/2,o,P.get('rho') or 0,min(s['hs'],Kc-1),min(s['as'],Kc-1)))
+    mt_cur=CUR.get('mtw',0.7); best['mtw']=mt_cur; mkw_=best.get('mkw',0.7)
+    def nll(w,S):
+        out=[]
+        for lh,la,Tm,o,rho,h,a in S:
+            T0=lh+la; T1=exp((1-w)*log(T0)+w*log(Tm)); x,y=lh*T1/T0,la*T1/T0; mh,ma=mfit(T1,o)
+            g=g_(exp((1-mkw_)*log(x)+mkw_*log(mh)),exp((1-mkw_)*log(y)+mkw_*log(ma)),rho); out.append(-log(max(1e-9,float(g[h,a]))))
+        return out
+    if len(OUR)>=300:
+        cut=int(len(OUR)*0.7); A_,B_=OUR[:cut],OUR[cut:]
+        trs={w:sum(nll(w,A_))/len(A_) for w in [0.0,0.3,0.5,0.7,1.0]}; wb=min(trs,key=trs.get)
+        hc=nll(mt_cur,B_); hn=nll(wb,B_); gc=sum(hc)/len(hc)-sum(hn)/len(hn)
+        log_.append(f"市場總進球權重 mtw(實戰 {len(OUR)} 場):現行 {mt_cur} 驗證對數損失 {sum(hc)/len(hc):.4f};訓練最佳 {wb} {sum(hn)/len(hn):.4f}")
+        if wb!=mt_cur and gc>=0.003:
+            n=len(hc); seg=n//4; nl=sum(1 for i in range(4) if sum(hn[i*seg:(i+1)*seg] if i<3 else hn[3*seg:])<sum(hc[i*seg:(i+1)*seg] if i<3 else hc[3*seg:]))
+            random.seed(9); wn=0; pr=list(zip(hc,hn))
+            for _ in range(300):
+                S_=[random.choice(pr) for _ in range(n)]
+                if sum(y for x,y in S_)<sum(x for x,y in S_): wn+=1
+            if nl>=3 and wn/300>=0.85: best['mtw']=wb; changed=True; log_.append(f"mtw 過關(段 {nl}/4、bootstrap {wn/300:.0%})→ 更新為 {wb}")
+            else: log_.append(f"mtw 未過關(段 {nl}/4、bootstrap {wn/300:.0%})→ 維持")
+        else: log_.append("mtw:改善不足 → 維持")
+    else: log_.append(f"mtw:有盤口紀錄的實戰樣本 {len(OUR)} 場,未滿 300 → 維持 {mt_cur}")
+except Exception as e:
+    log_.append("mtw 調參失敗:"+str(e)); best.setdefault('mtw',CUR.get('mtw',0.7))
 out={**best,'updated':datetime.datetime.now(datetime.timezone.utc).isoformat()[:16]+'Z','changed':changed,'holdout_n':len(hold_cur),'brier_cur':round(base_hold,4),'brier_best':round(top[1],4),'log':log_,
      'history':(CUR.get('history') or [])[-11:]+[{'t':datetime.datetime.now(datetime.timezone.utc).isoformat()[:10],'changed':changed,'cur':round(base_hold,4),'best':round(top[1],4),'p':top[2]}]}
 json.dump(out,open('tune.json','w'),ensure_ascii=False)
-print("\n".join(log_)); print("→",{k:best.get(k) for k in ('half','xgw','shr','xik','hk','sw','dm','t3h','adw','mkw')},"changed" if changed else "unchanged")
+print("\n".join(log_)); print("→",{k:best.get(k) for k in ('half','xgw','shr','xik','hk','sw','dm','t3h','adw','mkw','mtw')},"changed" if changed else "unchanged")

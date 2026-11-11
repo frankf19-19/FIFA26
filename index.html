@@ -732,7 +732,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e226";
+const BUILD = "e227";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1909,13 +1909,22 @@ function predictLocal(homeName,awayName,mkt,lg,hid,aid,gid){   // e175:gid 用�
   const _lh0=lh, _la0=la; let _mkb=null;
   { const _TM=window.TUNE||{}; const MKW=(_TM.mkw!=null&&+_TM.mkw>=0&&+_TM.mkw<=1)?+_TM.mkw:0.7;
     if(mkt&&MKW>0&&+mkt.h>0&&+mkt.a>0&&+mkt.d>0){
+      /* e227:總進球也參考市場大小球盤(權重 tune.json 的 mtw,預設 0.7)。
+         補抓 1,408 場歷史盤口驗證:比分機率表的對數損失 3.056 → 3.032、實際比分落在前 5 名 43.2% → 44.0%;主比分全中不變(10.8% → 10.9%)。 */
+      let _mt=null;
+      { const MTW=(_TM.mtw!=null&&+_TM.mtw>=0&&+_TM.mtw<=1)?+_TM.mtw:0.7;
+        if(MTW>0&&Array.isArray(mkt.ou)&&+mkt.ou[0]>0&&+mkt.ou[1]>0.05&&+mkt.ou[1]<0.95){
+          const L=Math.floor(+mkt.ou[0]), po=+mkt.ou[1]; let lo2=0.3, hi2=7;
+          for(let it=0; it<40; it++){ const m2=(lo2+hi2)/2; let cdf=0; for(let k=0;k<=L;k++) cdf+=poisson(k,m2); if(1-cdf<po) lo2=m2; else hi2=m2; }
+          const Tm=(lo2+hi2)/2, T0=lh+la, T1=Math.exp((1-MTW)*Math.log(T0)+MTW*Math.log(Tm));
+          lh*=T1/T0; la*=T1/T0; _mt={w:MTW,t:+Tm.toFixed(2)}; } }
       const ts=(+mkt.h)+(+mkt.d)+(+mkt.a), tgt=(+mkt.h-(+mkt.a))/ts, T=lh+la;
       const sup=(x,y)=>{ let pH=0,pA=0,tt=0; for(let i=0;i<9;i++)for(let j=0;j<9;j++){ const q=poisson(i,x)*poisson(j,y); tt+=q; if(i>j)pH+=q; else if(i<j)pA+=q; } return (pH-pA)/tt; };
       let lo=-T*0.95, hi=T*0.95, mid=0;
       for(let it=0; it<36; it++){ mid=(lo+hi)/2; if(sup((T+mid)/2,(T-mid)/2)<tgt) lo=mid; else hi=mid; }
       const mh=Math.max(0.1,(T+mid)/2), ma=Math.max(0.1,(T-mid)/2);
       lh=Math.exp((1-MKW)*Math.log(lh)+MKW*Math.log(mh)); la=Math.exp((1-MKW)*Math.log(la)+MKW*Math.log(ma));
-      _mkb={w:MKW,mh:+mh.toFixed(2),ma:+ma.toFixed(2)};
+      _mkb={w:MKW,mh:+mh.toFixed(2),ma:+ma.toFixed(2),mt:_mt};
     } }
   // Dixon-Coles 低分修正:獨立卜瓦松會低估 0-0/1-1(和局),高估 1-0/0-1
   const RHO=(cl&&cl.rho!=null)?cl.rho:0;   // e160:calib v13 起雲端逐聯賽最大概似擬合 rho(樣本收縮);過去寫死 -0.13 是猜的,實測 1975 場合併僅約 -0.01,寫死的負值把 1-1 灌水約 13%,造成精準比分過度集中 1-1 → 無實測值時改用 0(標準卜瓦松)
@@ -2357,7 +2366,7 @@ function analysisRows(hn,an,p,lg,hid,aid){
   rows.push(["主場加成", `係數 ${((((window.CLOUD||{}).leagues||{})[lg]||{}).ha??0.24).toFixed(2)}${HA_TUNE?` ${HA_TUNE>0?"+":""}${HA_TUNE.toFixed(3)}(近 30 天帳本校正)`:""}` + (Math.abs(HA_TUNE)>0.005
     ? `(依實際主勝率自動校準,基準 0.24)`
     : `<span style="color:var(--muted);font-size:11px">(全站通用基準值,尚未依此聯賽校準)</span>`)]);
-  if(p.mkb) rows.push(["市場賠率", `<span style="color:var(--gold)">已混入市場強弱判斷 ${Math.round(p.mkb.w*100)}%(e226)</span> —— 市場報價 主 ${p.mkp?p.mkp.H:"?"}% · 和 ${p.mkp?p.mkp.D:"?"}% · 客 ${p.mkp?p.mkp.A:"?"}%;總進球維持模型,只把兩隊強弱差往市場靠。混合前預期進球 ${p.lh0}/${p.la0} → 混合後 ${p.lh}/${p.la}`]);
+  if(p.mkb) rows.push(["市場賠率", `<span style="color:var(--gold)">已混入市場強弱判斷 ${Math.round(p.mkb.w*100)}%(e226)</span> —— 市場報價 主 ${p.mkp?p.mkp.H:"?"}% · 和 ${p.mkp?p.mkp.D:"?"}% · 客 ${p.mkp?p.mkp.A:"?"}%;${p.mkb.mt?`總進球也參考大小球盤(市場 ${p.mkb.mt.t} 球,權重 ${Math.round(p.mkb.mt.w*100)}%)`:"總進球維持模型"},兩隊強弱差往市場靠。混合前預期進球 ${p.lh0}/${p.la0} → 混合後 ${p.lh}/${p.la}`]);
   else if(PURE_MODE&&p.mkp) rows.push(["市場賠率", `<span style="color:var(--gold)">純模型模式:預測完全不採用賠率</span> —— 本場市場報價 主 ${p.mkp.H}% · 和 ${p.mkp.D}% · 客 ${p.mkp.A}%,僅作為對照與「對戰莊家」計分,不影響預測`]);
   else if(PURE_MODE) rows.push(["市場賠率", `<span style="color:var(--gold)">純模型模式:預測完全不採用賠率</span>`]);
   else if(p.mk&&p.mkp) rows.push(["市場賠率", `市場 主 ${p.mkp.H}% · 和 ${p.mkp.D}% · 客 ${p.mkp.A}% ｜ 純模型 主 ${p.pure.H}% · 和 ${p.pure.D}% · 客 ${p.pure.A}%(融合:模型 ${Math.round((1-(p.mw||MKT_W))*100)}% + 市場 ${Math.round((p.mw||MKT_W)*100)}%,該聯賽實測最佳)`]);
@@ -3664,7 +3673,15 @@ function parseEvents(data){
         // e142:ESPN 2026 新格式 moneyline.{home,away,draw}.close.odds("-110"/"+285");舊格式 homeTeamOdds.moneyLine 仍相容
         const nl=s=>{ const x=o.moneyline&&o.moneyline[s]; const v=x&&((x.close&&x.close.odds)||(x.open&&x.open.odds)); return v!=null?parseFloat(String(v).replace("+","")):null; };
         const hh=conv(nl("home")!=null?nl("home"):ml(o.homeTeamOdds)), aa=conv(nl("away")!=null?nl("away"):ml(o.awayTeamOdds)), dd=conv(nl("draw")!=null?nl("draw"):ml(o.drawOdds));
-        if(hh&&aa&&dd){const s=hh+aa+dd; return {h:hh/s,d:dd/s,a:aa/s};}
+        /* e227:(1) Bet365 格式只有十進位賠率(homeTeamOdds.value),之前讀不到 → 英冠等聯賽沒有賠率可混;現在補讀。
+                 (2) 一併記錄大小球盤(線、去水後的大球機率),供總進球混合與每週驗證。 */
+        const dv=x=>(x&&+x.value>1)?1/(+x.value):null;
+        const H=hh||dv(o.homeTeamOdds), A=aa||dv(o.awayTeamOdds), D=dd||dv(o.drawOdds);
+        if(H&&A&&D){const s=H+A+D; const r={h:H/s,d:D/s,a:A/s};
+          try{ const L=+o.overUnder; const tv=k=>{ const x=o.total&&o.total[k]; const v=x&&((x.close&&x.close.odds)||(x.open&&x.open.odds)); return v!=null?parseFloat(String(v).replace("+","")):null; };
+            const po=conv(tv("over")!=null?tv("over"):(o.overOdds!=null?+o.overOdds:null)), pu=conv(tv("under")!=null?tv("under"):(o.underOdds!=null?+o.underOdds:null));
+            if(L>0&&po&&pu) r.ou=[L,+(po/(po+pu)).toFixed(4)]; }catch(e){}
+          return r;}
         return null;
       }catch(e){return null;}})(),
     });
