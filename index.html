@@ -310,6 +310,12 @@
     -webkit-background-clip:text;background-clip:text;color:transparent}
   .stat .num.small{font-weight:300;font-size:clamp(22px,5vw,32px);background:none;color:var(--chalk)}
   .stat .lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:var(--muted);margin-top:6px}
+  .sysline{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:2px 14px;font-size:10.5px;padding:4px 2px 0;line-height:1.6;opacity:.85}
+  .sysline span:empty{display:none}
+  @media (max-width:600px){ .tp-alt{display:none} .sysline{font-size:10px;gap:0 10px} }
+  .sp-line{font-size:12px;line-height:1.7;margin:6px 0 2px;padding:6px 8px;border-radius:8px;background:rgba(255,255,255,.03)}
+  .sp-panel summary::-webkit-details-marker{display:none}
+  .stat .sub{font-family:var(--mono);font-size:10px;color:var(--muted);opacity:.8;margin-top:3px}
   .status{width:100%;text-align:center;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;
     color:var(--muted);padding-top:9px;margin-left:0}
   .status.err{color:var(--miss)}
@@ -638,16 +644,20 @@
         <button class="btn" id="loadBtn"><span class="ico">⟳</span> 更新</button>
       </div>
       <div id="todayLine"></div>
-      <div id="cloudTag" style="text-align:center;font-family:var(--mono);font-size:11px;color:var(--teal);padding:2px 0 0"></div>
-      <div id="healthTag" title="系統自我診斷(每 30 分鐘)" style="text-align:center;font-family:var(--cond);font-size:11px;color:var(--muted);padding:2px 0 0;cursor:pointer"></div>
-      <div id="hiddenNote" style="text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted);padding:3px 2px 0;line-height:1.6"></div>
+      <!-- e228:三行系統狀態合併成一行(手機自動換行),降低視覺雜訊 -->
+      <div class="sysline">
+        <span id="cloudTag" style="font-family:var(--mono);color:var(--teal)"></span>
+        <span id="healthTag" title="系統自我診斷(每 30 分鐘)" style="font-family:var(--cond);color:var(--muted);cursor:pointer"></span>
+        <span id="hiddenNote" style="font-family:var(--mono);color:var(--muted)"></span>
+      </div>
     </div>
 
     <div class="score-row">
-      <div class="stat"><div class="num" id="scPct">—</div><div class="lbl">勝負命中</div></div>
-      <div class="stat"><div class="num small" id="scRec">0/0</div><div class="lbl">已驗證</div></div>
-      <div class="stat"><div class="num small" id="scBrier">—</div><div class="lbl">BRIER</div></div>
-      <div class="stat"><div class="num small" id="scExact" title="理論天花板約 11%(最常見比分 1-1 也只出現約一成);8% 以上即屬優秀">—</div><div class="lbl">精準比分</div></div>
+      <!-- e228:正確比分是首要目標 → 放第一、最大;其餘依序勝負命中、驗證場數、機率誤差 -->
+      <div class="stat"><div class="num" id="scExact" title="主比分完全猜中的比例。單一比分理論天花板約 12%(最常見的 1-1 也只出現約一成)">—</div><div class="lbl">正確比分</div><div class="sub" id="scExactN"></div></div>
+      <div class="stat"><div class="num small" id="scPct">—</div><div class="lbl">勝負命中</div><div class="sub" id="scRec"></div></div>
+      <div class="stat"><div class="num small" id="scN">0</div><div class="lbl">已驗證場次</div></div>
+      <div class="stat"><div class="num small" id="scBrier" title="Brier 分數:勝/和/負機率與實際結果的誤差,越低越準(莊家約 0.56)">—</div><div class="lbl">機率誤差</div></div>
       <div class="status" id="status"></div>
     </div>
   </header>
@@ -732,7 +742,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e227";
+const BUILD = "e228";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -2088,7 +2098,7 @@ function renderAltDuel(){
    全部無法穩定提升單一比分全中(11.5~11.8%,雜訊內),上限在預期進球本身。但模型的比分機率是準的:
    最高一格平均 11.5% → 實際 11.5%;前 5 個比分合計平均 48.5% → 實際 48.3%。
    所以完整呈現整張比分分佈:最可能 5 個比分(約一半比賽的實際比分會落在這 5 個裡)+ 0~4 球機率格。 */
-function scorePanel(p,g,done){
+function scorePanel(p,g,done,extra){
   try{
     if(p==null||!(+p.lh>0)||!(+p.la>0)) return "";
     const tab=scoreTable(+p.lh,+p.la,p.rho);               // [主,客,%] 由高到低
@@ -2114,7 +2124,7 @@ function scorePanel(p,g,done){
     const big=100-tab.filter(x=>x[0]<=4&&x[1]<=4).reduce((a,x)=>a+x[2],0);
     const hp=hd&&P[hd]!=null?P[hd]:null;
     const note=`<div style="color:var(--muted);font-size:11px;margin-top:4px;line-height:1.6">格子 = 每個比分的機率(%),★/金框 = 主比分${act?",綠框 = 實際比分":""};任一隊 5 球以上合計 ${big.toFixed(1)}%。${hp!=null?`主比分 ${p.sj}-${p.si} 機率 ${hp.toFixed(1)}%;`:""}歷史驗證:模型給的比分機率與實際命中一致(最高格 11.5% ↔ 實際 11.5%),前 5 個比分合計約涵蓋 48% 的比賽。</div>`;
-    return `<details class="tg-rv sp-panel" onclick="event.stopPropagation()" style="font-size:12px;border-left-color:rgba(120,200,160,.4)"><summary style="cursor:pointer;list-style:none">📊 完整比分預測(客-主) ${top5.map(chip).join("")}<span style="color:var(--muted)">前 5 合計 ${cov.toFixed(0)}%</span>${res} <span style="color:var(--muted);font-size:10.5px">▾ 機率格</span></summary>${grid}${note}</details>`;
+    return `<details class="tg-rv sp-panel" onclick="event.stopPropagation()" style="font-size:12px;border-left-color:rgba(120,200,160,.4)"><summary style="cursor:pointer;list-style:none">📊 完整比分預測(客-主) ${top5.map(chip).join("")}<span style="color:var(--muted)">前 5 合計 ${cov.toFixed(0)}%</span>${res} <span style="color:var(--muted);font-size:10.5px">▾ 機率格與依據</span></summary>${extra||""}${grid}${note}</details>`;
   }catch(e){ return ""; }
 }
 /* e219:進球水位 —— 模型對「這場會進幾球」的判斷。單一比分天生集中在 1-1/2-1/1-0(球越多、組合越多、每格越薄),
@@ -3100,14 +3110,17 @@ function renderTodaySection(){
           <button class="an-btn" data-an="${g.id}">詳細分析 ▾</button>
         </div>
         ${h2hStrip(snap, g)}
-        ${scorePanel(p,g,done)}${(()=>{ const gl=goalLevelLine(p); return gl?`<div class="tg-rv" style="font-size:12px;border-left-color:rgba(230,190,90,.35)">${gl}</div>`:""; })()}
-        ${(()=>{ if(!done){ const sr=scoreReasonLine(p,zhName(g.hn),zhName(g.an));   // e145:未完賽 → 顯示比分理由
-            return sr?`<div class="tg-rv" style="color:var(--muted)">💡 ${sr}</div>`:""; }
+        ${(()=>{ /* e228:卡片精簡 —— 進球水位、比分理由收進「完整比分預測」展開區;賽後複盤改為可展開 */
+          const gl=goalLevelLine(p), sr=done?"":scoreReasonLine(p,zhName(g.hn),zhName(g.an));
+          const extra=(gl?`<div class="sp-line">${gl}</div>`:"")+(sr?`<div class="sp-line" style="color:var(--muted)">💡 ${sr}</div>`:"");
+          return scorePanel(p,g,done,extra); })()}
+        ${(()=>{ if(!done) return "";
           const rv=(typeof makeReview==="function")?makeReview(g):null;
           if(!rv||!rv.text) return "";
           if(rv.pending) return `<div class="tg-rv" style="color:var(--muted)">⏳ ${rv.text}</div>`;
-          return `<div class="tg-rv ${rv.good?"ok":"bad"}">${rv.good?"✓":"✗"} ${rv.text}</div>`
-            + (rv.brain?`<div class="tg-rv" style="border-left-color:var(--gold);color:var(--ink2);line-height:1.75;margin-top:6px">🧠 <b>賽後複盤</b><br>${rv.brain}</div>`:"");
+          const ic=rv.good===true?"✓":(rv.good===false?"✗":"ℹ"), cls=rv.good===true?"ok":(rv.good===false?"bad":"");
+          return `<div class="tg-rv ${cls}"${rv.good==null?' style="color:var(--muted)"':''}>${ic} ${rv.text}</div>`
+            + (rv.brain?`<details class="tg-rv sp-panel" onclick="event.stopPropagation()" style="border-left-color:var(--gold);color:var(--ink2);line-height:1.75;margin-top:6px"><summary style="cursor:pointer;list-style:none">🧠 <b>賽後複盤</b> <span style="color:var(--muted);font-size:10.5px">▾ 展開</span></summary>${rv.brain}</details>`:"");
         })()}
         <div class="an-box" id="an-${g.id}">${ana}</div>
       </div>`}`;
@@ -4195,9 +4208,11 @@ function renderScorecard(){
   const brier=n?ids.reduce((s,k)=>s+sc[k].brier,0)/n:0;
   { const ex2=ids.filter(k=>sc[k].score===true).length;
     const el2=document.getElementById("scExact");
-    if(el2) el2.textContent=n?`${ex2}/${n}(${(100*ex2/n).toFixed(1)}%)`:"—"; }
+    if(el2) el2.textContent=n?`${(100*ex2/n).toFixed(1)}%`:"—";
+    const en=document.getElementById("scExactN"); if(en) en.textContent=n?`${ex2} / ${n} 場`:""; }
   document.getElementById("scPct").textContent=n?Math.round(hit/n*100)+"%":"—";
-  document.getElementById("scRec").textContent=hit+"/"+n;
+  document.getElementById("scRec").textContent=n?`${hit} / ${n} 場`:"";
+  { const e=document.getElementById("scN"); if(e) e.textContent=n.toLocaleString(); }
   document.getElementById("scBrier").textContent=n?brier.toFixed(2):"—";
 }
 
@@ -4268,7 +4283,11 @@ function makeReview(g){
   const s=scGet()[g.id]; if(!s||!s.pred) return null;
   // e189:尚未評分(完場但雲端還沒對帳)→ 不寫檢討,否則會出現 undefined/NaN;等 30 分鐘內的雲端評分
   if(s.hs==null||s.as==null||s.hit==null) return {text:"完場,等待雲端評分(每 30 分鐘一輪)。評分後這裡會出現逐場檢討。",good:null,pending:true};
-  if(s.void) return {text:"此場早期預測自相矛盾(顯示異常),整筆作廢——不計入命中率、驗證數與 Brier。之後的新預測依 v2 制度誠實計分。",good:false};
+  if(s.void){   // e228:依作廢原因顯示(之前一律顯示「早期預測自相矛盾」,低資料場次也被誤標)
+    const vt=s.vr==="lowdq"?"資料有限的場次(兩隊可用數據太少)—— 照常預測與記錄,但另計,不進主要命中率與 Brier,避免拉低/灌水正式成績。"
+      :(s.vr==="orphan"?"超過 14 天查不到賽果(延期或取消)—— 作廢,不計入任何統計。"
+      :"此場早期預測自相矛盾(顯示異常),整筆作廢——不計入命中率、驗證數與 Brier。");
+    return {text:vt,good:s.vr==="lowdq"?null:false}; }
   const p=s.pred, hz=s.hz, az=s.az;
   const parts=[];
   const exact=!!s.hit&&((s.v>=2)&&p.si!=null&&p.si===s.hs&&p.sj===s.as);   // e168:全中必須方向也對
@@ -4334,7 +4353,7 @@ function gameCard(g){
     const snap0=scGet()[g.id];
     let hitFlag, exact=false, pillDone=false;
     if(snap0&&snap0.void){
-      pill=`<span class="pill wait" title="早期預測自相矛盾(顯示異常),整筆作廢,不計入命中率與 Brier">不計</span>`;
+      pill=`<span class="pill wait" title="${snap0.vr==="lowdq"?"資料有限:另計,不進主要命中率":"作廢,不計入命中率與 Brier"}">${snap0.vr==="lowdq"?"另計":"不計"}</span>`;
     }else if(snap0&&snap0.pred){
       hitFlag=!!snap0.hit;
       exact=hitFlag&&(snap0.score===true||((snap0.v>=2)&&snap0.pred.si!=null&&snap0.pred.si===g.hs&&snap0.pred.sj===g.as));   // e168
@@ -5087,6 +5106,9 @@ function hideTeam(){
     const sy=window.__listScroll; window.__listScroll=null;
     if(sy!=null){ window.scrollTo(0,sy); setTimeout(()=>{ try{ window.scrollTo(0,sy); }catch(e){} },60); }
   }
+  /* e228:以下是開機程式(全域點擊事件、錯誤提示、校準資料下載),過去誤放在 hideTeam 裡,
+     每次重新整理比賽都會重抓 586KB 的 calib.json、並重複加掛點擊事件。改為整頁只執行一次。 */
+  if(!window.__booted){ window.__booted=true;
   AD_CACHE=adGet(); MKT_W=mktWGet(); mktWTune();
   try{ if(!localStorage.getItem("euroADv2")){                   // e132 一次性:舊累積的攻防/評級修正壓回一半
     for(const k in AD_CACHE){ const o=AD_CACHE[k]; if(o){ o.a=Math.max(0.85,Math.min(1.18,1+((+o.a||1)-1)*0.5)); o.d=Math.max(0.85,Math.min(1.18,1+((+o.d||1)-1)*0.5)); } }
@@ -5178,6 +5200,7 @@ function hideTeam(){
     }
     try{ const el=document.getElementById("cloudTag"); if(el){ el.textContent="☁ 雲端校準載入失敗(重整再試)"; el.style.color="var(--miss)"; } }catch(e){}   // e192:不再有本機快取
   })();
+  }   // e228:開機程式結束
   applyView();
 }
 
