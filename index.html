@@ -97,7 +97,7 @@
   .topline .sp{flex:1}
   .buildtag{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--gold);
     border:1px solid var(--gold);padding:2px 10px;border-radius:999px;opacity:.9}
-  .brand{text-align:center;padding:2px 0 18px;animation:fadeup .8s ease-out both}
+  .brand{text-align:center;padding:2px 0 18px}
   .mast-en{font-family:var(--cond);font-weight:600;font-size:clamp(10px,2vw,12px);
     letter-spacing:.62em;text-indent:.62em;text-transform:uppercase;color:var(--gold);margin-bottom:14px}
   .wordmark{font-family:var(--cond);font-weight:200;font-size:clamp(30px,6vw,46px);
@@ -310,6 +310,9 @@
     -webkit-background-clip:text;background-clip:text;color:transparent}
   .stat .num.small{font-weight:300;font-size:clamp(22px,5vw,32px);background:none;color:var(--chalk)}
   .stat .lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.2em;color:var(--muted);margin-top:6px}
+  .tp-meta{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:2px 6px;align-self:center}
+  .tp-meta>span{margin-left:0 !important}
+  @media (max-width:600px){ .tp-meta{grid-column:1/-1;justify-content:flex-end;font-size:10px} }
   .sysline{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:2px 14px;font-size:10.5px;padding:4px 2px 0;line-height:1.6;opacity:.85}
   .sysline span:empty{display:none}
   @media (max-width:600px){ .tp-alt{display:none} .sysline{font-size:10px;gap:0 10px} }
@@ -742,7 +745,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e228";
+const BUILD = "e229";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -1484,6 +1487,8 @@ function ymd(d){return d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+St
 function isoDate(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 
 /* ================= Poisson 預測 ================= */
+/* e229:ESPN 隊徽原圖是 500px PNG,畫面只顯示 22~32px → 改用 ESPN 縮圖服務(64px),每張省約 90% 流量 */
+function logo64(u){ try{ if(!u) return ""; const m=String(u).match(/^https?:\/\/a\.espncdn\.com(\/i\/teamlogos\/[^?]+\.png)/); return m?`https://a.espncdn.com/combiner/i?img=${m[1]}&w=64&h=64`:u; }catch(e){ return u||""; } }
 function poisson(k,l){let e=Math.exp(-l),f=1;for(let i=2;i<=k;i++)f*=i;return e*Math.pow(l,k)/f;}
 /* e144:給「比分依據」用 —— 依 λ 重建比分矩陣(與 predict 同一套 Poisson + Dixon-Coles),回傳排序後的比分機率 */
 function scoreTable(lh,la,rho){
@@ -2716,6 +2721,8 @@ function applyView(force){
     const tb0=document.getElementById("todayTab"); if(tb0) tb0.classList.toggle("on", VIEW==="today");
     return;
   }
+  { const ln=document.getElementById("lgName");   // e229:今日總覽時刊頭不再顯示單一聯賽名(之前固定顯示 MLS)
+    if(ln){ if(VIEW==="today") ln.textContent="今日全部聯賽"; else { const L=LEAGUES.find(x=>x.id===curLeague); if(L&&L.full) ln.textContent=L.full; } } }
   if(VIEW==="today"){
     secs.forEach(id=>{const el=document.getElementById(id); if(el) el.classList.add("hidden");});
     if(t && t.dataset.has==="1") t.classList.remove("hidden");
@@ -3090,13 +3097,13 @@ function renderTodaySection(){
         ${(()=>{ const D=dispSc(p,l.id)||{i:p.si,j:p.sj}; const S3=(D.legacy&&D.sc3)?D.sc3:p.sc3;
           return `<span class="tp-sc" title="客 ${D.j} - 主 ${D.i}${S3&&S3[0]?` · 機率 ${S3[0].p}%`:""}">${D.j} - ${D.i}</span>${D.legacy?`<span class="tp-old" title="這是 e168 前鎖定的舊預測:當時的比分取「全部比分中最高的一格」(原為 ${p.sj} - ${p.si}),會與看好方向矛盾。此處已依凍結的預期進球換算成與看好方向一致的比分;命中/未中的判定完全不受影響,一律以「看好」為準。">舊制比分</span>`:""}${S3&&S3.length>1?`<span class="tp-alt" title="Top-3 波膽:單一比分天花板約 12%,三格合計約 30%">${S3[0].p}% · 次選 ${S3.slice(1).map(c=>`${c.j}-${c.i} ${c.p}%`).join(" · ")}</span>`:""}`; })()}
         <span class="tp-side hm">${Math.round(p.H)}%</span>
-        <span class="tp-conf" style="color:${conf}">信心 ${p.conf}</span>${(()=>{try{
+        <span class="tp-meta"><span class="tp-conf" style="color:${conf}">信心 ${p.conf}</span>${(()=>{try{
           if(!snap||!snap.odds0||!snap.odds) return "";
           const d0=snap.odds0, d1=snap.odds;
           const mv2=[["主",(d1.h-d0.h)*100],["和",(d1.d-d0.d)*100],["客",(d1.a-d0.a)*100]].sort((x,y)=>Math.abs(y[1])-Math.abs(x[1]))[0];
           if(Math.abs(mv2[1])<4) return "";
           return `<span style="font-family:var(--mono);font-size:10px;color:${mv2[1]>0?"var(--hit)":"var(--miss)"};margin-left:6px" title="開盤至今市場隱含機率變動(聰明錢流向)">📈 ${mv2[0]}${mv2[1]>0?"+":""}${mv2[1].toFixed(0)}pt</span>`;
-        }catch(e){ return ""; }})()}${(__started&&snap&&(snap.fzT||snap.tU||snap.t))?`<span style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:6px" title="預測已於開賽時封存,之後不再變動">🔒 ${new Date(snap.fzT||snap.tU||snap.t).toTimeString().slice(0,5)}</span>`:''}
+        }catch(e){ return ""; }})()}${(__started&&snap&&(snap.fzT||snap.tU||snap.t))?`<span style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:6px" title="預測已於開賽時封存,之後不再變動">🔒 ${new Date(snap.fzT||snap.tU||snap.t).toTimeString().slice(0,5)}</span>`:''}</span>
         <div class="tg-pred">
           <b class="tp-pick">看好 ${pickSide?`<span class="ha ${pickSide==="主"?"hm":"aw"}">${pickSide}</span> `:""}${pickZh}</b>${(()=>{ try{ const pk=(p.si!=null&&p.sj!=null)?(p.si>p.sj?"H":(p.si===p.sj?"D":"A")):null; const mx=(p.H>=p.D&&p.H>=p.A)?"H":((p.A>=p.D&&p.A>=p.H)?"A":"D"); if(pk&&pk!==mx){ const nm={H:"主勝",D:"和局",A:"客勝"}; return `<span class="tp-old" style="border-style:solid;color:var(--gold);border-color:rgba(230,190,90,.45)" title="比分優先模式:看好方向由「最可能的單一比分」推導。三向機率加總最高的其實是 ${nm[mx]}(${Math.round({H:p.H,D:p.D,A:p.A}[mx])}%),但單一比分裡 ${p.si}-${p.sj} 這一格機率最高。實測這個規則全中 11.7%、Top-3 28.5%,優於方向優先的 9.8%、24.2%;代價是方向命中約 −6 個百分點。">比分推導 · 三向最高 ${nm[mx]}</span>`; } }catch(e){} return ""; })()}
           <span class="tp-bar"><i class="a" style="width:${p.A}%"></i><i class="d" style="width:${p.D}%"></i><i class="h" style="width:${p.H}%"></i></span>
@@ -3671,7 +3678,7 @@ function parseEvents(data){
       id:ev.id, date:ev.date, localIso: isoDate(new Date(ev.date)), ts:new Date(ev.date).getTime(),   // e140:補 date 欄位,開賽凍結改以真實開球時間觸發
       hn:home.team.displayName, an:away.team.displayName,
       hid:home.team.id, aid:away.team.id,
-      hlogo:home.team.logo||"", alogo:away.team.logo||"",
+      hlogo:logo64(home.team.logo), alogo:logo64(away.team.logo),
       hs:home.score!=null?parseInt(home.score):null, as:away.score!=null?parseInt(away.score):null,
       state:st.state||"pre",             // pre / in / post
       completed:!!st.completed,
@@ -4284,7 +4291,7 @@ function makeReview(g){
   // e189:尚未評分(完場但雲端還沒對帳)→ 不寫檢討,否則會出現 undefined/NaN;等 30 分鐘內的雲端評分
   if(s.hs==null||s.as==null||s.hit==null) return {text:"完場,等待雲端評分(每 30 分鐘一輪)。評分後這裡會出現逐場檢討。",good:null,pending:true};
   if(s.void){   // e228:依作廢原因顯示(之前一律顯示「早期預測自相矛盾」,低資料場次也被誤標)
-    const vt=s.vr==="lowdq"?"資料有限的場次(兩隊可用數據太少)—— 照常預測與記錄,但另計,不進主要命中率與 Brier,避免拉低/灌水正式成績。"
+    const vt=s.vr==="lowdq"?"資料有限場次:照常記錄,但另計,不進主要成績。"
       :(s.vr==="orphan"?"超過 14 天查不到賽果(延期或取消)—— 作廢,不計入任何統計。"
       :"此場早期預測自相矛盾(顯示異常),整筆作廢——不計入命中率、驗證數與 Brier。");
     return {text:vt,good:s.vr==="lowdq"?null:false}; }
@@ -4444,11 +4451,11 @@ function renderStandings(data){
       const rank=val(e,"rank")||i+1;
       const gp=val(e,"gamesPlayed"), w=val(e,"wins"), d=val(e,"ties")||val(e,"draws"), l=val(e,"losses");
       const gf=val(e,"pointsFor"), ga=val(e,"pointsAgainst"), gd=val(e,"pointDifferential"), pts=val(e,"points");
-      const _so={rank,gp,w,d,l,gf,ga,gd,pts,logo:(t.logos&&t.logos[0]&&t.logos[0].href)||""};
+      const _so={rank,gp,w,d,l,gf,ga,gd,pts,logo:logo64((t.logos&&t.logos[0]&&t.logos[0].href)||"")};
       STAND_CACHE[norm(nm)]=_so;
       if(t.id!=null) STAND_CACHE["#"+t.id]=_so;      // ID 鍵:名稱寫法不一致時的可靠後盾
       const cls = i<4?"ucl":(groups.length===1&&i>=g.entries.length-3?"rel":"");
-      const logo=t.logos&&t.logos[0]?`<img src="${t.logos[0].href}" onerror="this.style.display='none'">`:"";
+      const logo=t.logos&&t.logos[0]?`<img src="${logo64(t.logos[0].href)}" loading="lazy" onerror="this.style.display='none'">`:"";
       return `<tr class="${cls}"><td>${rank}</td><td data-team="${nm}">${logo}${zhName(nm)}</td>
         <td>${gp}</td><td>${w}</td><td>${d}</td><td>${l}</td><td>${gf}</td><td>${ga}</td><td>${gd}</td><td>${pts}</td></tr>`;
     }).join("");
