@@ -18,10 +18,10 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - run: npm i jsdom@24 --no-save --silent
-      - name: predict loop
+      - name: predict loop (full pass every 30 min, lineup pass every 10 min, up to ~5.5h)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }} (full pass every 30 min, lineup pass every 10 min, up to ~5.5h)
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           git config user.name  "pred-bot"
           git config user.email "bot@users.noreply.github.com"
