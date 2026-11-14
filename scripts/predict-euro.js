@@ -272,6 +272,15 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
   } catch (e) {}
   const out = { updated: new Date().toISOString(), n: Object.keys(sc).length, graded: graded.length, hit, sc, byKey, params, seeded: state.seeded || 0, ...(feed?{feed}:{}), ...(espnCors?{espnCors}:{}) };
   fs.writeFileSync(OUT, JSON.stringify(out));
+  // v15:網頁用的精簡版 —— 拿掉網頁用不到的研究紀錄(factors 先發名單/xG 細節、shadow 候選),
+  //      完整版 cloud-pred.json 照舊保留給回測/稽核。網頁下載量與手機 localStorage 佔用都大幅下降。
+  try {
+    const DROP = ["factors", "shadowExact", "shadowXg", "shadowInjury"];
+    const slim = o => { if (!o || typeof o !== "object") return o; const r = { ...o }; for (const k of DROP) delete r[k]; return r; };
+    const lsc = {};
+    for (const id in sc) { const s = sc[id]; if (!s) continue; const r = { ...s }; if (r.pred) r.pred = slim(r.pred); if (r.fz) r.fz = slim(r.fz); delete r.oddsObservedAt; lsc[id] = r; }
+    fs.writeFileSync("cloud-pred-lite.json", JSON.stringify({ ...out, sc: lsc, lite: 1 }));
+  } catch (e) { console.log("lite 失敗:", e.message); }
   console.log(`完成:新預測/更新 ${nPred} 場 · 鎖定 ${nLock} 場 · 評分檢查 ${nDone} 場 · 帳本 ${out.n} 筆 · 已評分 ${graded.length}(命中 ${hit})`);
   process.exit(0);
 })().catch(e => { console.log("失敗:", e.stack || e.message); process.exit(0); });

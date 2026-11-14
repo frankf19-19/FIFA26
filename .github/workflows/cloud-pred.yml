@@ -36,7 +36,7 @@ jobs:
             else
               LINEUP_PASS=1 node scripts/predict-euro.js || echo "lineup pass failed (continue)"
             fi
-            git add cloud-pred.json health.json
+            git add cloud-pred.json cloud-pred-lite.json health.json
             git diff --cached --quiet || git commit -m "cloud prediction"
             git pull --rebase origin main || { git rebase --abort || true; git pull --no-rebase -X ours origin main; }
             git push || { git pull --rebase origin main; git push; }

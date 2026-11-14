@@ -313,6 +313,13 @@
   .tp-meta{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:2px 6px;align-self:center}
   .tp-meta>span{margin-left:0 !important}
   @media (max-width:600px){ .tp-meta{grid-column:1/-1;justify-content:flex-end;font-size:10px} }
+  /* e231:手機刊頭 —— 主題按鈕縮小、版本標籤縮成小字,不再佔兩行 */
+  @media (max-width:600px){
+    .topline{gap:5px;flex-wrap:nowrap}
+    .lg.th{font-size:12px;padding:2px 6px}
+    .buildtag{font-size:8.5px;padding:1px 6px;letter-spacing:.04em;opacity:.7}
+    .tl-brand{font-size:11px;letter-spacing:.18em}
+  }
   .sysline{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:2px 14px;font-size:10.5px;padding:4px 2px 0;line-height:1.6;opacity:.85}
   .sysline span:empty{display:none}
   @media (max-width:600px){ .tp-alt{display:none} .sysline{font-size:10px;gap:0 10px} }
@@ -745,7 +752,7 @@
 
 <script>
 /* ================= 設定 ================= */
-const BUILD = "e230";
+const BUILD = "e231";
 const LEAGUES = [
   /* ===== 大改第一階段:僅保留資料齊全的 10 個核心聯賽(全部 core,永不被稽核移除)===== */
   {id:"eng.1", zh:"英超",  full:"英格蘭超級足球聯賽", core:1},
@@ -5377,8 +5384,14 @@ function _keepScroll(fn){
 });
 async function loadCloudPred(){
   try{
-    const r=await fetch("cloud-pred.json?_="+Date.now(),{cache:"no-store"}); if(!r.ok) return false;
+    /* e231:先抓精簡版(拿掉網頁用不到的研究紀錄,約小 1/3),沒有才退回完整版。
+       合併進本機帳本前也把研究欄位去掉 —— 完整帳本已近 4MB,iPhone 的 localStorage 上限約 5MB,存不下時帳本寫入會靜默失敗。 */
+    let r=await fetch("cloud-pred-lite.json?_="+Date.now(),{cache:"no-store"}).catch(()=>null);
+    if(!r||!r.ok) r=await fetch("cloud-pred.json?_="+Date.now(),{cache:"no-store"});
+    if(!r.ok) return false;
     const j=await r.json(); if(!j||!j.sc) return false;
+    if(!j.lite){ const DROP=["factors","shadowExact","shadowXg","shadowInjury"];
+      for(const id in j.sc){ const c=j.sc[id]; if(!c) continue; for(const part of ["pred","fz"]) if(c[part]){ for(const k of DROP) delete c[part][k]; } delete c.oddsObservedAt; } }
     CLOUD_PRED=j;
     // 帳本合併:雲端有的以雲端為準(所有裝置一致);雲端沒有的保留本機
     const mine=scGet(); let n=0;
