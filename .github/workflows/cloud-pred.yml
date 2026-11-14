@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  issues: write
 concurrency:
   group: euro-cloud-pred
   cancel-in-progress: false
@@ -17,7 +18,10 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - run: npm i jsdom@24 --no-save --silent
-      - name: predict loop (full pass every 30 min, lineup pass every 10 min, up to ~5.5h)
+      - name: predict loop
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }} (full pass every 30 min, lineup pass every 10 min, up to ~5.5h)
         run: |
           git config user.name  "pred-bot"
           git config user.email "bot@users.noreply.github.com"
@@ -27,10 +31,12 @@ jobs:
             git pull --rebase origin main || { git rebase --abort || true; git pull --no-rebase -X theirs origin main; }
             if [ $(( I % 3 )) -eq 0 ]; then
               node scripts/predict-euro.js || echo "predict failed (continue)"
+              # 自我診斷併進這個常駐迴圈:獨立排程被 GitHub 節流到 5~6 小時才跑一次
+              node scripts/health.js || echo "health failed (continue)"
             else
               LINEUP_PASS=1 node scripts/predict-euro.js || echo "lineup pass failed (continue)"
             fi
-            git add cloud-pred.json
+            git add cloud-pred.json health.json
             git diff --cached --quiet || git commit -m "cloud prediction"
             git pull --rebase origin main || { git rebase --abort || true; git pull --no-rebase -X ours origin main; }
             git push || { git pull --rebase origin main; git push; }
